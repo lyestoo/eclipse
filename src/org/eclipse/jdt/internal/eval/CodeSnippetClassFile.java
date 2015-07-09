@@ -4,9 +4,10 @@ package org.eclipse.jdt.internal.eval;
  * (c) Copyright IBM Corp. 2000, 2001.
  * All Rights Reserved.
  */
+import org.eclipse.jdt.core.compiler.IProblem;
+import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.ClassFile;
 import org.eclipse.jdt.internal.compiler.CompilationResult;
-import org.eclipse.jdt.internal.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.FieldReference;
@@ -43,7 +44,7 @@ public CodeSnippetClassFile(
 	header[headerOffset++] = (byte) (0xCAFEBABEL >> 16);
 	header[headerOffset++] = (byte) (0xCAFEBABEL >> 8);
 	header[headerOffset++] = (byte) (0xCAFEBABEL >> 0);
-	if (((SourceTypeBinding) referenceBinding).scope.environment().options.targetJDK == CompilerOptions.JDK1_2) {
+	if (((SourceTypeBinding) referenceBinding).scope.environment().options.targetJDK >= CompilerOptions.JDK1_2) {
 		// Compatible with JDK 1.2
 		header[headerOffset++] = 0;
 		// minorVersion = 0 means we just need to offset the current offset by 2
@@ -156,7 +157,7 @@ public static void createProblemType(TypeDeclaration typeDeclaration, Compilatio
 	if ((fields != null) && (fields != NoFields)) {
 		for (int i = 0, max = fields.length; i < max; i++) {
 			if (fields[i].constant == null) {
-				FieldReference.getConstantFor(fields[i], false, null, 0);
+				FieldReference.getConstantFor(fields[i], false, null, null, 0);
 			}
 		}
 		classFile.addFieldInfos();

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002 IBM Corporation and others.
+ * Copyright (c) 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -12,10 +12,14 @@
 package org.eclipse.jdt.core.dom;
 
 import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
+import org.eclipse.jdt.internal.compiler.lookup.BaseTypes;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.util.CharOperation;
 
+/**
+ * Internal implementation of type bindings.
+ */
 class TypeBinding implements ITypeBinding {
 
 	private static final String NO_NAME = ""; //$NON-NLS-1$	
@@ -359,7 +363,7 @@ class TypeBinding implements ITypeBinding {
 		return false;
 	}
 
-	/*
+	/**
 	 * @see IBinding#isSynthetic()
 	 */
 	public boolean isSynthetic() {
@@ -370,7 +374,28 @@ class TypeBinding implements ITypeBinding {
 	 * @see IBinding#getKey()
 	 */
 	public String getKey() {
-		return null;
+		if (isLocal()) {
+			return null;
+		}
+		if (this.binding.isClass() || this.binding.isInterface()) {
+			StringBuffer buffer = new StringBuffer();
+			buffer
+				.append(getPackage().getName())
+				.append('.')
+				.append(getName());
+			return buffer.toString();
+		} else if (this.binding.isArrayType()) {
+			return this.getElementType().getKey() + this.getDimensions();
+		}
+		// this is a primitive type
+		return this.getName();
+	}
+
+	/**
+	 * @see ITypeBinding#isNullType()
+	 */
+	public boolean isNullType() {
+		return this.binding == BaseTypes.NullBinding;
 	}
 
 }

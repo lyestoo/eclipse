@@ -1,14 +1,22 @@
+/*******************************************************************************
+ * Copyright (c) 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
+
 package org.eclipse.jdt.core.dom;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.Compiler;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.env.*;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.*;
+import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.core.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
@@ -16,6 +24,7 @@ import org.eclipse.jdt.internal.compiler.lookup.PackageBinding;
 import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.parser.SourceTypeConverter;
 import org.eclipse.jdt.internal.compiler.problem.*;
+import org.eclipse.jdt.internal.compiler.util.CharOperation;
 
 import java.io.*;
 import java.util.*;
@@ -110,6 +119,12 @@ class CompilationUnitResolver extends Compiler {
 			.getSearchableNameEnvironment();
 	}
 
+	protected static INameEnvironment getNameEnvironment(IJavaProject javaProject)
+		throws JavaModelException {
+		return (SearchableEnvironment) ((JavaProject) javaProject)
+			.getSearchableNameEnvironment();
+	}
+	
 	/*
 	 * Answer the component to which will be handed back compilation results from the compiler
 	 */
@@ -125,21 +140,33 @@ class CompilationUnitResolver extends Compiler {
 		IAbstractSyntaxTreeVisitor visitor)
 		throws JavaModelException {
 
+		char[] fileName = unitElement.getElementName().toCharArray();
 		CompilationUnitResolver compilationUnitVisitor =
 			new CompilationUnitResolver(
 				getNameEnvironment(unitElement),
 				getHandlingPolicy(),
 				JavaCore.getOptions(),
 				getRequestor(),
-				getProblemFactory(visitor));
+				getProblemFactory(fileName, visitor));
 
 		CompilationUnitDeclaration unit = null;
 		try {
+			String encoding = (String) JavaCore.getOptions().get(CompilerOptions.OPTION_Encoding);
+			if ("".equals(encoding)) encoding = null; //$NON-NLS-1$
+
+			IPackageFragment packageFragment = (IPackageFragment)unitElement.getAncestor(IJavaElement.PACKAGE_FRAGMENT);
+			char[][] expectedPackageName = null;
+			if (packageFragment != null){
+				expectedPackageName = CharOperation.splitOn('.', packageFragment.getElementName().toCharArray());
+			}
+			
 			unit =
 				compilationUnitVisitor.resolve(
 					new BasicCompilationUnit(
 						unitElement.getSource().toCharArray(),
-						unitElement.getElementName()));
+						expectedPackageName,
+						new String(fileName),
+						encoding));
 			return unit;
 		} finally {
 			if (unit != null) {
@@ -161,11 +188,31 @@ class CompilationUnitResolver extends Compiler {
 					new DefaultProblemFactory(Locale.getDefault())),
 			false,
 			compilerOptions.assertMode);
-		org.eclipse.jdt.internal.compiler.env.ICompilationUnit sourceUnit = new org.eclipse.jdt.internal.compiler.batch.CompilationUnit(source, "");//$NON-NLS-1$
-		return parser.parse(sourceUnit, new CompilationResult(sourceUnit, 0, 0));
+		org.eclipse.jdt.internal.compiler.env.ICompilationUnit sourceUnit = 
+			new org.eclipse.jdt.internal.compiler.batch.CompilationUnit(
+				source, 
+				"", //$NON-NLS-1$
+				compilerOptions.defaultEncoding);
+		CompilationUnitDeclaration compilationUnitDeclaration = parser.dietParse(sourceUnit, new CompilationResult(sourceUnit, 0, 0));
+		
+		if (compilationUnitDeclaration.ignoreMethodBodies) {
+			compilationUnitDeclaration.ignoreFurtherInvestigation = true;
+			// if initial diet parse did not work, no need to dig into method bodies.
+			return compilationUnitDeclaration; 
+		}
+		
+		//fill the methods bodies in order for the code to be generated
+		//real parse of the method....
+		parser.scanner.setSource(source);
+		org.eclipse.jdt.internal.compiler.ast.TypeDeclaration[] types = compilationUnitDeclaration.types;
+		if (types != null) {
+			for (int i = types.length; --i >= 0;)
+				types[i].parseMethod(parser, compilationUnitDeclaration);
+		}
+		return compilationUnitDeclaration;
 	}
 
-	protected static IProblemFactory getProblemFactory(final IAbstractSyntaxTreeVisitor visitor) {
+	protected static IProblemFactory getProblemFactory(final char[] fileName, final IAbstractSyntaxTreeVisitor visitor) {
 
 		return new DefaultProblemFactory(Locale.getDefault()) {
 			public IProblem createProblem(
@@ -186,10 +233,48 @@ class CompilationUnitResolver extends Compiler {
 						startPosition,
 						endPosition,
 						lineNumber);
-				visitor.acceptProblem(problem);
+				// only consider problems associated with resolved file
+				if (CharOperation.equals(originatingFileName, fileName)){
+					visitor.acceptProblem(problem);
+				}
 				return problem;
 			}
 		};
 	}
 
-	}
+	public static CompilationUnitDeclaration resolve(
+		char[] source,
+		String unitName,
+		IJavaProject javaProject,
+		IAbstractSyntaxTreeVisitor visitor)
+		throws JavaModelException {
+	
+		CompilationUnitResolver compilationUnitVisitor =
+			new CompilationUnitResolver(
+				getNameEnvironment(javaProject),
+				getHandlingPolicy(),
+				JavaCore.getOptions(),
+				getRequestor(),
+				getProblemFactory(unitName.toCharArray(), visitor));
+	
+		CompilationUnitDeclaration unit = null;
+		try {
+			String encoding =
+				(String) JavaCore.getOptions().get(CompilerOptions.OPTION_Encoding);
+			if ("".equals(encoding)) { //$NON-NLS-1$
+				encoding = null;
+			}
+
+			char[][] expectedPackageName = null;
+	
+			unit =
+				compilationUnitVisitor.resolve(
+					new BasicCompilationUnit(source, expectedPackageName, unitName, encoding));
+			return unit;
+		} finally {
+			if (unit != null) {
+				unit.cleanUp();
+			}
+		}
+	}	
+}

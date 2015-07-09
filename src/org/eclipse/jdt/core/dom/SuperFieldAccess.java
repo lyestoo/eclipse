@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -51,6 +51,13 @@ public class SuperFieldAccess extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return SUPER_FIELD_ACCESS;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		SuperFieldAccess result = new SuperFieldAccess(target);
 		result.setName((SimpleName) ASTNode.copySubtree(target, getName()));
@@ -61,14 +68,9 @@ public class SuperFieldAccess extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof SuperFieldAccess)) {
-			return false;
-		}
-		SuperFieldAccess o = (SuperFieldAccess) other;
-		return 
-			(ASTNode.equalNodes(getName(), o.getName())
-			&& ASTNode.equalNodes(getQualifier(), o.getQualifier()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -99,8 +101,8 @@ public class SuperFieldAccess extends Expression {
 	 * 
 	 * @param name the qualifier name node, or <code>null</code> if 
 	 *    there is none
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setQualifier(Name name) {
 		// a SuperFieldAccess cannot occur inside a Name - no cycle check
@@ -126,8 +128,8 @@ public class SuperFieldAccess extends Expression {
 	 * expression.
 	 * 
 	 * @param fieldName the field name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setName(SimpleName fieldName) {
 		if (fieldName == null) {

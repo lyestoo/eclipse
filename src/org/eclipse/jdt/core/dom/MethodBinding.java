@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002 IBM Corporation and others.
+ * Copyright (c) 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -11,6 +11,9 @@
 
 package org.eclipse.jdt.core.dom;
 
+/**
+ * Internal implementation of method bindings.
+ */
 class MethodBinding implements IMethodBinding {
 
 	private static final ITypeBinding[] NO_PARAMETERS = new ITypeBinding[0];
@@ -127,7 +130,7 @@ class MethodBinding implements IMethodBinding {
 		return this.binding.isDeprecated();
 	}
 
-	/*
+	/**
 	 * @see IBinding#isSynthetic()
 	 */
 	public boolean isSynthetic() {
@@ -138,7 +141,24 @@ class MethodBinding implements IMethodBinding {
 	 * @see IBinding#getKey()
 	 */
 	public String getKey() {
-		return null;
+		StringBuffer buffer = new StringBuffer();
+		buffer.append(getReturnType().getKey());
+		if (!isConstructor()) {
+			buffer.append(this.getName());
+			buffer.append('/');
+		}
+		buffer.append(this.getDeclaringClass().getKey());
+		ITypeBinding[] parameters = getParameterTypes();
+		buffer.append('(');
+		for (int i = 0, max = parameters.length; i < max; i++) {
+			buffer.append(parameters[i].getKey());
+		}
+		buffer.append(')');
+		ITypeBinding[] thrownExceptions = getExceptionTypes();
+		for (int i = 0, max = thrownExceptions.length; i < max; i++) {
+			buffer.append(thrownExceptions[i].getKey());
+		}
+		return buffer.toString();
 	}
 
 }

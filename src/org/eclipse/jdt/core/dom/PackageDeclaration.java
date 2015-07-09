@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -47,6 +47,13 @@ public class PackageDeclaration extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return PACKAGE_DECLARATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		PackageDeclaration result = new PackageDeclaration(target);
 		result.setName((Name) getName().clone(target));
@@ -56,12 +63,9 @@ public class PackageDeclaration extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof PackageDeclaration)) {
-			return false;
-		}
-		PackageDeclaration o = (PackageDeclaration) other;
-		return ASTNode.equalNodes(getName(), o.getName());
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -92,8 +96,8 @@ public class PackageDeclaration extends ASTNode {
 	 * Sets the package name of this package declaration to the given name.
 	 * 
 	 * @param name the new package name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setName(Name name) {
 		if (name == null) {
@@ -101,6 +105,21 @@ public class PackageDeclaration extends ASTNode {
 		}
 		replaceChild(this.packageName, name, false);
 		this.packageName = name;
+	}
+	
+	/**
+	 * Resolves and returns the binding for the package declared in this package
+	 * declaration.
+	 * <p>
+	 * Note that bindings are generally unavailable unless requested when the
+	 * AST is being built.
+	 * </p>
+	 * 
+	 * @return the binding, or <code>null</code> if the binding cannot be 
+	 *    resolved
+	 */	
+	public IPackageBinding resolveBinding() {
+		return getAST().getBindingResolver().resolvePackage(this);
 	}
 	
 	/* (omit javadoc for this method)

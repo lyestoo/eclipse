@@ -166,8 +166,10 @@ public class QualifiedNameReference extends NameReference {
 		BlockScope currentScope,
 		FlowContext flowContext,
 		FlowInfo flowInfo) {
+
 		return analyseCode(currentScope, flowContext, flowInfo, true);
 	}
+	
 	public FlowInfo analyseCode(
 		BlockScope currentScope,
 		FlowContext flowContext,
@@ -529,7 +531,7 @@ public class QualifiedNameReference extends NameReference {
 		int length = tokens.length;
 		if (index == length) { //	restrictiveFlag == FIELD
 			constant =
-				FieldReference.getConstantFor((FieldBinding) binding, false, this, index - 1);
+				FieldReference.getConstantFor((FieldBinding) binding, false, this, scope, index - 1);
 			return type;
 		}
 		// allocation of the fieldBindings array	and its respective constants
@@ -540,7 +542,7 @@ public class QualifiedNameReference extends NameReference {
 		// fill the first constant (the one of the binding)
 		constant =
 			((bits & FIELD) != 0)
-				? FieldReference.getConstantFor((FieldBinding) binding, false, this, index - 1)
+				? FieldReference.getConstantFor((FieldBinding) binding, false, this, scope, index - 1)
 				: ((VariableBinding) binding).constant;
 		// save first depth, since will be updated by visibility checks of other bindings
 		int firstDepth = (bits & DepthMASK) >> DepthSHIFT;
@@ -549,6 +551,8 @@ public class QualifiedNameReference extends NameReference {
 			char[] token = tokens[index];
 			if (type == null)
 				return null; // could not resolve type prior to this point
+
+			bits &= ~DepthMASK; // flush previous depth if any			
 			FieldBinding field = scope.getField(type, token, this);
 			int place = index - indexOfFirstFieldBinding;
 			otherBindings[place] = field;
@@ -557,7 +561,7 @@ public class QualifiedNameReference extends NameReference {
 				if (isFieldUseDeprecated(field, scope))
 					scope.problemReporter().deprecatedField(field, this);
 				Constant someConstant =
-					FieldReference.getConstantFor(field, false, this, place);
+					FieldReference.getConstantFor(field, false, this, scope, place);
 				// constant propagation can only be performed as long as the previous one is a constant too.
 				if (constant != NotAConstant) {
 					constant = someConstant;

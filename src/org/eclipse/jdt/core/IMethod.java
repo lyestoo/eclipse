@@ -1,8 +1,15 @@
+/**********************************************************************
+Copyright (c) 2000, 2001, 2002 IBM Corp. and others.
+All rights reserved.   This program and the accompanying materials
+are made available under the terms of the Common Public License v0.5
+which accompanies this distribution, and is available at
+http://www.eclipse.org/legal/cpl-v05.html
+ 
+Contributors:
+     IBM Corporation - initial API and implementation
+**********************************************************************/
 package org.eclipse.jdt.core;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
+
 import org.eclipse.jdt.internal.core.*;
 
 /**
@@ -98,4 +105,33 @@ String getSignature() throws JavaModelException;
  *      exception occurs while accessing its corresponding resource.
  */
 boolean isConstructor() throws JavaModelException;
+/**
+ * Returns whether this method is a main method.
+ * It is a main method if:
+ * <ul>
+ * <li>its name is equal to <code>"main"</code></li>
+ * <li>its return type is <code>void</code></li>
+ * <li>it is <code>static</code> and <code>public</code></li>
+ * <li>it defines one parameter whose type's simple name is </code>String[]</code></li>
+ * </ul>
+ * 
+ * @exception JavaModelException if this element does not exist or if an
+ *      exception occurs while accessing its corresponding resource.
+ * @since 2.0
+ */
+boolean isMainMethod() throws JavaModelException;
+/**
+ * Returns whether this method is similar to the given method.
+ * Two methods are similar if:
+ * <ul>
+ * <li>their element names are equal</li>
+ * <li>they have the same number of parameters</li>
+ * <li>the simple names of their parameter types are equal</li>
+ * <ul>
+ * This is a handle-only method.
+ * 
+ * @see Signature#getSimpleName
+ * @since 2.0
+ */
+boolean isSimilar(IMethod method);
 }

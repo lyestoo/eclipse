@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -43,6 +43,13 @@ public class SimpleType extends Type {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return SIMPLE_TYPE;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		SimpleType result = new SimpleType(target);
 		result.setName((Name) ((ASTNode) getName()).clone(target));
@@ -52,14 +59,11 @@ public class SimpleType extends Type {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof SimpleType)) {
-			return false;
-		}
-		SimpleType o = (SimpleType) other;
-		return ASTNode.equalNodes(getName(), o.getName());
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
-	
+
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
@@ -88,8 +92,8 @@ public class SimpleType extends Type {
 	 * Sets the name of this simple type to the given name.
 	 * 
 	 * @param typeName the new name of this simple type
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setName(Name typeName) {
 		if (typeName == null) {

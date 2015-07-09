@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002 IBM Corporation and others.
+ * Copyright (c) 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -22,7 +22,7 @@ public class Javadoc extends ASTNode {
 	 * The javadoc comment string, including opening and closing comment 
 	 * delimiters; defaults to an unspecified, but legal, Javadoc comment.
 	 */
-	private String comment = "/** */";
+	private String comment = "/** */";//$NON-NLS-1$
 	
 	/**
 	 * Creates a new AST node for a Javadoc comment owned by the given AST.
@@ -42,6 +42,13 @@ public class Javadoc extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return JAVADOC;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		Javadoc result = new Javadoc(target);
 		result.setComment(getComment());
@@ -51,14 +58,11 @@ public class Javadoc extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof Javadoc)) {
-			return false;
-		}
-		Javadoc o = (Javadoc) other;
-		return getComment().equals(o.getComment());
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
-	
+
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
@@ -83,7 +87,7 @@ public class Javadoc extends ASTNode {
 	 * and any embedded line breaks.
 	 * 
 	 * @param javadocComment the javadoc comment string
-	 * @exception $precondition-violation:invalid-javadoc-comment$
+	 * @exception IllegalArgumentException if the Java comment string is invalid
 	 */
 	public void setComment(String javadocComment) {
 		if (javadocComment == null) {

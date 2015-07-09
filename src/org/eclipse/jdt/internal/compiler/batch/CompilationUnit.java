@@ -13,8 +13,20 @@ public class CompilationUnit implements ICompilationUnit {
 	public char[] contents;
 	public char[] fileName;
 	public char[] mainTypeName;
-public CompilationUnit(char[] contents, String fileName) {
+	String encoding;
+	
+public CompilationUnit(char[] contents, String fileName, String encoding) {
 	this.contents = contents;
+	if (File.separator.equals("/")) { //$NON-NLS-1$
+		if (fileName.indexOf("\\") != -1) { //$NON-NLS-1$
+			fileName = fileName.replace('\\', File.separatorChar);
+		}
+	} else {
+		// the file separator is \
+		if (fileName.indexOf('/') != -1) {
+			fileName = fileName.replace('/', File.separatorChar);
+		}
+	}
 	this.fileName = fileName.toCharArray();
 
 	int start = fileName.lastIndexOf("/") + 1; //$NON-NLS-1$
@@ -26,6 +38,7 @@ public CompilationUnit(char[] contents, String fileName) {
 		end = fileName.length();
 
 	this.mainTypeName = fileName.substring(start, end).toCharArray();
+	this.encoding = encoding;
 }
 public char[] getContents() {
 	if (contents != null)
@@ -33,7 +46,7 @@ public char[] getContents() {
 
 	// otherwise retrieve it
 	try {
-		return Util.getFileCharContent(new File(new String(fileName)));
+		return Util.getFileCharContent(new File(new String(fileName)), encoding);
 	} catch (IOException e) {
 	}
 	return new char[0];

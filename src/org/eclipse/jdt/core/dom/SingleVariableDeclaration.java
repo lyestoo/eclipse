@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -94,6 +94,13 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return SINGLE_VARIABLE_DECLARATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		SingleVariableDeclaration result = new SingleVariableDeclaration(target);
 		result.setModifiers(getModifiers());
@@ -107,16 +114,9 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof SingleVariableDeclaration)) {
-			return false;
-		}
-		SingleVariableDeclaration o = (SingleVariableDeclaration) other;
-		return 
-			((getModifiers() == o.getModifiers())
-			&& ASTNode.equalNodes(getType(), o.getType())
-			&& ASTNode.equalNodes(getName(), o.getName())
-			&& ASTNode.equalNodes(getInitializer(), o.getInitializer()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 	
 	/* (omit javadoc for this method)
@@ -157,7 +157,7 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 * 
 	 * @return the bit-wise or of <code>Modifier</code> constants
 	 * @see Modifier
-	 * @exception $precondition-violation:illegal-modifiers$
+	 * @exception IllegalArgumentException if the modifiers are illegal
 	 */ 
 	public void setModifiers(int modifiers) {
 		if ((modifiers & ~LEGAL_MODIFIERS) != 0) {
@@ -167,10 +167,8 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 		this.modifiers = modifiers;
 	}
 
-	/**
-	 * Returns the name of the variable declared in this variable declaration.
-	 * 
-	 * @return the variable name node
+	/* (omit javadoc for this method)
+	 * Method declared on VariableDeclaration.
 	 */ 
 	public SimpleName getName() {
 		if (variableName == null) {
@@ -180,13 +178,8 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 		return variableName;
 	}
 		
-	/**
-	 * Sets the name of the variable declared in this variable declaration 
-	 * to the given name.
-	 * 
-	 * @param variableName the new variable name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	/* (omit javadoc for this method)
+	 * Method declared on VariableDeclaration.
 	 */ 
 	public void setName(SimpleName variableName) {
 		if (variableName == null) {
@@ -214,8 +207,8 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 * the given type.
 	 * 
 	 * @param type the new type
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setType(Type type) {
 		if (type == null) {
@@ -225,25 +218,15 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 		this.type = type;
 	}
 
-	/**
-	 * Returns the initializer of this variable declaration, or 
-	 * <code>null</code> if there is none.
-	 * 
-	 * @return the initializer expression node, or <code>null</code> if 
-	 *    there is none
+	/* (omit javadoc for this method)
+	 * Method declared on VariableDeclaration.
 	 */ 
 	public Expression getInitializer() {
 		return optionalInitializer;
 	}
 	
-	/**
-	 * Sets or clears the initializer of this variable declaration.
-	 * 
-	 * @param initializer the initializer expression node, or <code>null</code>
-	 *    if there is none
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	/* (omit javadoc for this method)
+	 * Method declared on VariableDeclaration.
 	 */ 
 	public void setInitializer(Expression initializer) {
 		// a SingleVariableDeclaration may occur inside an Expression 

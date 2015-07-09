@@ -6,6 +6,9 @@ package org.eclipse.jdt.internal.codeassist;
  */
 import java.util.*;
 
+import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.core.compiler.InvalidInputException;
+import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.codeassist.impl.*;
 import org.eclipse.jdt.internal.codeassist.select.*;
 import org.eclipse.jdt.internal.compiler.*;
@@ -28,17 +31,22 @@ import org.eclipse.jdt.internal.compiler.impl.*;
  */
 public final class SelectionEngine extends Engine implements ISearchRequestor {
 
+	public static boolean DEBUG = false;
+	
 	SelectionParser parser;
-	ISearchableNameEnvironment nameEnvironment;
 	ISelectionRequestor requestor;
 
-	CompilationUnitScope unitScope;
 	boolean acceptedAnswer;
 
 	private int actualSelectionStart;
 	private int actualSelectionEnd;
 	private char[] qualifiedSelection;
 	private char[] selectedIdentifier;
+	
+	private char[][][] acceptedClasses;
+	private char[][][] acceptedInterfaces;
+	int acceptedClassesCount;
+	int acceptedInterfacesCount;
 
 	/**
 	 * The SelectionEngine is responsible for computing the selected object.
@@ -46,15 +54,15 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 	 * It requires a searchable name environment, which supports some
 	 * specific search APIs, and a requestor to feed back the results to a UI.
 	 *
-	 *  @param environment com.ibm.codeassist.java.api.INameEnvironment
+	 *  @param nameEnvironment org.eclipse.jdt.internal.codeassist.ISearchableNameEnvironment
 	 *      used to resolve type/package references and search for types/packages
 	 *      based on partial names.
 	 *
-	 *  @param requestor com.ibm.codeassist.java.api.ISelectionRequestor
+	 *  @param requestor org.eclipse.jdt.internal.codeassist.ISelectionRequestor
 	 *      since the engine might produce answers of various forms, the engine 
 	 *      is associated with a requestor able to accept all possible completions.
 	 *
-	 *  @param options com.ibm.compiler.java.api.ConfigurableOptions
+	 *  @param settings java.util.Map
 	 *		set of options used to configure the code assist engine.
 	 */
 	public SelectionEngine(
@@ -82,6 +90,9 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 
 	/**
 	 * One result of the search consists of a new class.
+	 * @param packageName char[]
+	 * @param className char[]
+	 * @param modifiers int
 	 *
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
@@ -89,7 +100,6 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 	 *    The default package is represented by an empty array.
 	 */
 	public void acceptClass(char[] packageName, char[] className, int modifiers) {
-
 		if (CharOperation.equals(className, selectedIdentifier)) {
 			if (qualifiedSelection != null
 				&& !CharOperation.equals(
@@ -97,11 +107,29 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 					CharOperation.concat(packageName, className, '.'))) {
 				return;
 			}
-			requestor.acceptClass(
-				packageName,
-				className,
-				mustQualifyType(CharOperation.splitOn('.', packageName), className));
-			acceptedAnswer = true;
+			
+			if(mustQualifyType(packageName, className)) {
+				char[][] acceptedClass = new char[2][];
+				acceptedClass[0] = packageName;
+				acceptedClass[1] = className;
+				
+				if(acceptedClasses == null) {
+					acceptedClasses = new char[10][][];
+					acceptedClassesCount = 0;
+				}
+				int length = acceptedClasses.length;
+				if(length == acceptedClassesCount) {
+					System.arraycopy(acceptedClasses, 0, acceptedClasses = new char[(length + 1)* 2][][], 0, length);
+				}
+				acceptedClasses[acceptedClassesCount++] = acceptedClass;
+				
+			} else {
+				requestor.acceptClass(
+					packageName,
+					className,
+					false);
+				acceptedAnswer = true;
+			}
 		}
 	}
 
@@ -125,17 +153,36 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 					CharOperation.concat(packageName, interfaceName, '.'))) {
 				return;
 			}
-			requestor.acceptInterface(
-				packageName,
-				interfaceName,
-				mustQualifyType(CharOperation.splitOn('.', packageName), interfaceName));
-			acceptedAnswer = true;
+			
+			if(mustQualifyType(packageName, interfaceName)) {
+				char[][] acceptedInterface= new char[2][];
+				acceptedInterface[0] = packageName;
+				acceptedInterface[1] = interfaceName;
+				
+				if(acceptedInterfaces == null) {
+					acceptedInterfaces = new char[10][][];
+					acceptedInterfacesCount = 0;
+				}
+				int length = acceptedInterfaces.length;
+				if(length == acceptedInterfacesCount) {
+					System.arraycopy(acceptedInterfaces, 0, acceptedInterfaces = new char[(length + 1) * 2][][], 0, length);
+				}
+				acceptedInterfaces[acceptedInterfacesCount++] = acceptedInterface;
+				
+			} else {
+				requestor.acceptInterface(
+					packageName,
+					interfaceName,
+					false);
+				acceptedAnswer = true;
+			}
 		}
 	}
 
 	/**
 	 * One result of the search consists of a new package.
-	 *
+	 * @param packageName char[]
+	 * 
 	 * NOTE - All package names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
 	 *    The default package is represented by an empty array.
@@ -143,9 +190,36 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 	public void acceptPackage(char[] packageName) {
 	}
 
+	private void acceptQualifiedTypes() {
+		if(acceptedClasses != null){
+			acceptedAnswer = true;
+			for (int i = 0; i < acceptedClassesCount; i++) {
+				requestor.acceptClass(
+					acceptedClasses[i][0],
+					acceptedClasses[i][1],
+					true);
+			}
+			acceptedClasses = null;
+			acceptedClassesCount = 0;
+		}
+		if(acceptedInterfaces != null){
+			acceptedAnswer = true;
+			for (int i = 0; i < acceptedInterfacesCount; i++) {
+				requestor.acceptInterface(
+					acceptedInterfaces[i][0],
+					acceptedInterfaces[i][1],
+					true);
+			}
+			acceptedInterfaces = null;
+			acceptedInterfacesCount = 0;
+		}
+	}
+	
 	/**
 	 * One result of the search consists of a new type.
-	 *
+	 * @param packageName char[]
+	 * @param typeName char[]
+	 * 
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
 	 *    Nested type names are in the qualified form "A.M".
@@ -161,54 +235,119 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 		int selectionEnd) {
 
 		Scanner scanner = new Scanner();
-		scanner.setSourceBuffer(source);
-		scanner.resetTo(selectionStart, selectionEnd);
-
+		scanner.setSource(source);
+		
 		int lastIdentifierStart = -1;
 		int lastIdentifierEnd = -1;
-		int token, identCount = 0;
 		char[] lastIdentifier = null;
-		boolean expectingIdentifier = true;
-		StringBuffer entireSelection =
-			new StringBuffer(selectionEnd - selectionStart + 1);
-		do {
+		int token, identCount = 0;
+		StringBuffer entireSelection = new StringBuffer(selectionEnd - selectionStart + 1);
+		
+		if(selectionStart > selectionEnd){
+			
+			// compute start position of current line
+			int currentPosition = selectionStart - 1;
+			int nextCharacterPosition = selectionStart;
+			char currentCharacter = ' ';
 			try {
-				token = scanner.getNextToken();
-			} catch (InvalidInputException e) {
+				while(currentPosition > 0 || currentCharacter == '\r' || currentCharacter == '\n'){
+					
+					if(source[currentPosition] == '\\' && source[currentPosition+1] == 'u') {
+						int pos = currentPosition + 2;
+						int c1 = 0, c2 = 0, c3 = 0, c4 = 0;
+						while (source[pos] == 'u') {
+							pos++;
+						}
+						if ((c1 = Character.getNumericValue(source[pos++])) > 15
+							|| c1 < 0
+							|| (c2 = Character.getNumericValue(source[pos++])) > 15
+							|| c2 < 0
+							|| (c3 = Character.getNumericValue(source[pos++])) > 15
+							|| c3 < 0
+							|| (c4 = Character.getNumericValue(source[pos++])) > 15
+							|| c4 < 0) {
+							return false;
+						} else {
+							currentCharacter = (char) (((c1 * 16 + c2) * 16 + c3) * 16 + c4);
+							nextCharacterPosition = pos;
+						}
+					} else {
+						currentCharacter = source[currentPosition];
+						nextCharacterPosition = currentPosition+1;
+					}
+					
+					if(currentCharacter == '\r' || currentCharacter == '\n') {
+						break;
+					}
+					currentPosition--;
+				}
+			}
+			catch (ArrayIndexOutOfBoundsException e) {
 				return false;
 			}
-			switch (token) {
-				case TerminalSymbols.TokenNamethis :
-				case TerminalSymbols.TokenNamesuper :
-				case TerminalSymbols.TokenNameIdentifier :
-					if (!expectingIdentifier)
-						return false;
-					lastIdentifier = scanner.getCurrentTokenSource();
+			
+			// compute start and end of the last token
+			scanner.resetTo(nextCharacterPosition, selectionEnd);
+			do {
+				try {
+					token = scanner.getNextToken();
+				} catch (InvalidInputException e) {
+					return false;
+				}
+				if((token == ITerminalSymbols.TokenNamethis ||
+					token == ITerminalSymbols.TokenNamesuper ||
+					token == ITerminalSymbols.TokenNameIdentifier) &&
+					scanner.startPosition <= selectionStart &&
+					selectionStart <= scanner.currentPosition) {
 					lastIdentifierStart = scanner.startPosition;
 					lastIdentifierEnd = scanner.currentPosition - 1;
-					if(lastIdentifierEnd > selectionEnd) {
-						lastIdentifierEnd = selectionEnd;
-						lastIdentifier = CharOperation.subarray(lastIdentifier, 0,lastIdentifierEnd - lastIdentifierStart + 1);
-					}
-					entireSelection.append(lastIdentifier);
-						
-					identCount++;
-					expectingIdentifier = false;
-					break;
-				case TerminalSymbols.TokenNameDOT :
-					if (expectingIdentifier)
-						return false;
-					entireSelection.append('.');
-					expectingIdentifier = true;
-					break;
-				case TerminalSymbols.TokenNameEOF :
-					if (expectingIdentifier)
-						return false;
-					break;
-				default :
+					lastIdentifier = scanner.getCurrentTokenSource();
+				}
+			} while (token != ITerminalSymbols.TokenNameEOF);
+		} else {
+			scanner.resetTo(selectionStart, selectionEnd);
+	
+			boolean expectingIdentifier = true;
+			
+			do {
+				try {
+					token = scanner.getNextToken();
+				} catch (InvalidInputException e) {
 					return false;
-			}
-		} while (token != TerminalSymbols.TokenNameEOF);
+				}
+				switch (token) {
+					case ITerminalSymbols.TokenNamethis :
+					case ITerminalSymbols.TokenNamesuper :
+					case ITerminalSymbols.TokenNameIdentifier :
+						if (!expectingIdentifier)
+							return false;
+						lastIdentifier = scanner.getCurrentTokenSource();
+						lastIdentifierStart = scanner.startPosition;
+						lastIdentifierEnd = scanner.currentPosition - 1;
+						if(lastIdentifierEnd > selectionEnd) {
+							lastIdentifierEnd = selectionEnd;
+							lastIdentifier = CharOperation.subarray(lastIdentifier, 0,lastIdentifierEnd - lastIdentifierStart + 1);
+						}
+						entireSelection.append(lastIdentifier);
+							
+						identCount++;
+						expectingIdentifier = false;
+						break;
+					case ITerminalSymbols.TokenNameDOT :
+						if (expectingIdentifier)
+							return false;
+						entireSelection.append('.');
+						expectingIdentifier = true;
+						break;
+					case ITerminalSymbols.TokenNameEOF :
+						if (expectingIdentifier)
+							return false;
+						break;
+					default :
+						return false;
+				}
+			} while (token != ITerminalSymbols.TokenNameEOF);
+		}
 		if (lastIdentifierStart > 0) {
 			actualSelectionStart = lastIdentifierStart;
 			actualSelectionEnd = lastIdentifierEnd;
@@ -224,36 +363,11 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 		return parser;
 	}
 
-	private boolean mustQualifyType(
-		char[][] packageName,
-		char[] readableTypeName) {
-
-		// If there are no types defined into the current CU yet.
-		if (unitScope == null) return true;
-		if (CharOperation.equals(unitScope.fPackage.compoundName, packageName))
-			return false;
-
-		ImportBinding[] imports = unitScope.imports;
-		for (int i = 0, length = imports.length; i < length; i++) {
-			if (imports[i].onDemand) {
-				if (CharOperation.equals(imports[i].compoundName, packageName))
-					return false; // how do you match p1.p2.A.* ?
-			} else
-				if (CharOperation.equals(imports[i].readableName(), readableTypeName)) {
-					return false;
-				}
-		}
-		return true;
-	}
-
 	/**
 	 * Ask the engine to compute the selection at the specified position
 	 * of the given compilation unit.
-	 *
-	 *  @return void
-	 *      the selection result is answered through a requestor.
-	 *
-	 *  @param unit com.ibm.compiler.java.api.env.ICompilationUnit
+
+	 *  @param sourceUnit org.eclipse.jdt.internal.compiler.env.ICompilationUnit
 	 *      the source of the current compilation unit.
 	 *
 	 *  @param selectionSourceStart int
@@ -266,6 +380,17 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 		int selectionSourceEnd) {
 
 		char[] source = sourceUnit.getContents();
+		
+		if(DEBUG) {
+			System.out.print("SELECTION IN "); //$NON-NLS-1$
+			System.out.print(sourceUnit.getFileName());
+			System.out.print(" FROM "); //$NON-NLS-1$
+			System.out.print(selectionSourceStart);
+			System.out.print(" TO "); //$NON-NLS-1$
+			System.out.println(selectionSourceEnd);
+			System.out.println("SELECTION - Source :"); //$NON-NLS-1$
+			System.out.println(source);
+		}
 		if (!checkSelection(source, selectionSourceStart, selectionSourceEnd))
 			return;
 		try {
@@ -275,6 +400,11 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 				parser.dietParse(sourceUnit, result, actualSelectionStart, actualSelectionEnd);
 
 			if (parsedUnit != null) {
+				if(DEBUG) {
+					System.out.println("SELECTION - Diet AST :"); //$NON-NLS-1$
+					System.out.println(parsedUnit.toString());
+				}
+				
 				// scan the package & import statements first
 				if (parsedUnit.currentPackage instanceof SelectionOnPackageReference) {
 					char[][] tokens =
@@ -290,24 +420,40 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 							char[][] tokens = ((SelectionOnImportReference) importReference).tokens;
 							requestor.acceptPackage(CharOperation.concatWith(tokens, '.'));
 							nameEnvironment.findTypes(CharOperation.concatWith(tokens, '.'), this);
-							if (!acceptedAnswer)
-								nameEnvironment.findTypes(selectedIdentifier, this);
-							// try with simple type name
+							// accept qualified types only if no unqualified type was accepted
+							if(!acceptedAnswer) {
+								acceptQualifiedTypes();
+								if (!acceptedAnswer) {
+									nameEnvironment.findTypes(selectedIdentifier, this);
+									// try with simple type name
+									if(!acceptedAnswer) {
+										acceptQualifiedTypes();
+									}
+								}
+							}
 							return;
 						}
 					}
 				}
 				if (parsedUnit.types != null) {
 					lookupEnvironment.buildTypeBindings(parsedUnit);
-					if (parsedUnit.scope != null) {
+					if ((this.unitScope = parsedUnit.scope)  != null) {
 						try {
 							lookupEnvironment.completeTypeBindings(parsedUnit, true);
 							parsedUnit.scope.faultInTypes();
 							selectDeclaration(parsedUnit);
 							parseMethod(parsedUnit, selectionSourceStart);
+							if(DEBUG) {
+								System.out.println("SELECTION - AST :"); //$NON-NLS-1$
+								System.out.println(parsedUnit.toString());
+							}
 							parsedUnit.resolve();
 						} catch (SelectionNodeFound e) {
 							if (e.binding != null) {
+								if(DEBUG) {
+									System.out.println("SELECTION - Selection binding:"); //$NON-NLS-1$
+									System.out.println(e.binding.toString());
+								}
 								// if null then we found a problem in the selection node
 								selectFrom(e.binding);
 							}
@@ -319,6 +465,11 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 			// thus use the selected source and perform a textual type search
 			if (!acceptedAnswer) {
 				nameEnvironment.findTypes(selectedIdentifier, this);
+				
+				// accept qualified types only if no unqualified type was accepted
+				if(!acceptedAnswer) {
+					acceptQualifiedTypes();
+				}
 			}
 		} catch (IndexOutOfBoundsException e) { // work-around internal failure - 1GEMF6D		
 		} catch (AbortCompilation e) { // ignore this exception for now since it typically means we cannot find java.lang.Object
@@ -376,7 +527,8 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 						? methodBinding.declaringClass.sourceName()
 						: methodBinding.selector,
 					parameterPackageNames,
-					parameterTypeNames);
+					parameterTypeNames,
+					methodBinding.isConstructor());
 				acceptedAnswer = true;
 			} else
 				if (binding instanceof FieldBinding) {
@@ -401,17 +553,17 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 								PackageBinding packageBinding = (PackageBinding) binding;
 								requestor.acceptPackage(packageBinding.readableName());
 								acceptedAnswer = true;
-							}
+							} else
+								if(binding instanceof BaseTypeBinding) {
+									acceptedAnswer = true;
+								}
 	}
 
 	/**
 	 * Asks the engine to compute the selection of the given type
 	 * from the source type.
 	 *
-	 *  @return void
-	 *      the selection result is answered through a requestor.
-	 *
-	 *  @param sourceType com.ibm.compiler.java.api.env.ISourceType
+	 *  @param sourceType org.eclipse.jdt.internal.compiler.env.ISourceType
 	 *      a source form of the current type in which code assist is invoked.
 	 *
 	 *  @param typeName char[]
@@ -421,7 +573,6 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 	public void selectType(ISourceType sourceType, char[] typeName) {
 		try {
 			acceptedAnswer = false;
-			qualifiedSelection = typeName;
 
 			// find the outer most type
 			ISourceType outerType = sourceType;
@@ -442,6 +593,10 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 			this.parser.problemReporter(), result);
 
 			if (parsedUnit != null && parsedUnit.types != null) {
+				if(DEBUG) {
+					System.out.println("SELECTION - Diet AST :"); //$NON-NLS-1$
+					System.out.println(parsedUnit.toString());
+				}
 				// find the type declaration that corresponds to the original source type
 				char[] packageName = sourceType.getPackageName();
 				char[] sourceTypeName = sourceType.getQualifiedName();
@@ -467,6 +622,7 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 						field.type = new SelectionOnSingleTypeReference(typeName, -1);
 						// position not used
 					} else {
+						qualifiedSelection = typeName;
 						char[][] previousIdentifiers = CharOperation.splitOn('.', typeName, 0, dot - 1);
 						char[] selectionIdentifier =
 							CharOperation.subarray(typeName, dot + 1, typeName.length);
@@ -493,6 +649,10 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 							parsedUnit.resolve();
 						} catch (SelectionNodeFound e) {
 							if (e.binding != null) {
+								if(DEBUG) {
+									System.out.println("SELECTION - Selection binding :"); //$NON-NLS-1$
+									System.out.println(e.binding.toString());
+								}
 								// if null then we found a problem in the selection node
 								selectFrom(e.binding);
 							}
@@ -505,6 +665,11 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 			if (!acceptedAnswer) {
 				if (this.selectedIdentifier != null) {
 					nameEnvironment.findTypes(typeName, this);
+					
+					// accept qualified types only if no unqualified type was accepted
+					if(!acceptedAnswer) {
+						acceptQualifiedTypes();
+					}
 				}
 			}
 		} catch (AbortCompilation e) { // ignore this exception for now since it typically means we cannot find java.lang.Object
@@ -547,9 +712,16 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 		}
 		AbstractMethodDeclaration[] methods = typeDeclaration.methods;
 		for (int i = 0, length = methods == null ? 0 : methods.length; i < length; i++){
-			if (methods[i].selector == assistIdentifier){
-				throw new SelectionNodeFound(methods[i].binding);
-			}
+			AbstractMethodDeclaration method = methods[i];
+			if (method.selector == assistIdentifier){
+				if(method.binding != null) {
+					throw new SelectionNodeFound(method.binding);
+				} else {
+					if(method.scope != null) {
+						throw new SelectionNodeFound(new MethodBinding(method.modifiers, method.selector, null, null, null, method.scope.referenceType().binding));
+					}
+				}
+		}
 		}
 	}
 }

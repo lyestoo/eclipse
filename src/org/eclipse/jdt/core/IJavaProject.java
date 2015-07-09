@@ -1,9 +1,14 @@
+/**********************************************************************
+Copyright (c) 2000, 2001, 2002 IBM Corp. and others.
+All rights reserved.   This program and the accompanying materials
+are made available under the terms of the Common Public License v0.5
+which accompanies this distribution, and is available at
+http://www.eclipse.org/legal/cpl-v05.html
+ 
+Contributors:
+     IBM Corporation - initial API and implementation
+**********************************************************************/
 package org.eclipse.jdt.core;
-
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
@@ -91,6 +96,34 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 */
 	IPackageFragmentRoot findPackageFragmentRoot(IPath path)
 		throws JavaModelException;
+	/**
+	 * Returns the first type found following this project's classpath 
+	 * with the given fully qualified name or <code>null</code> if none is found.
+	 * The fully qualified name is a dot-separated name. For example,
+	 * a class B defined as a member type of a class A in package x.y should have a 
+	 * the fully qualified name "x.y.A.B".
+	 * 
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource
+	 * @see IType#getFullyQualifiedName(char)
+	 * @since 2.0
+	 */
+	IType findType(String fullyQualifiedName) throws JavaModelException;
+	/**
+	 * Returns the first type found following this project's classpath 
+	 * with the given package name and type qualified name
+	 * or <code>null</code> if none is found.
+	 * The package name is a dot-separated name.
+	 * The type qualified name is also a dot-separated name. For example,
+	 * a class B defined as a member type of a class A should have the 
+	 * type qualified name "A.B".
+	 * 
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource
+	 * @see IType#getTypeQualifiedName(char)
+	 * @since 2.0
+	 */
+	IType findType(String packageName, String typeQualifiedName) throws JavaModelException;
 
 	/**
 	 * Returns all of the existing package fragment roots that exist
@@ -152,9 +185,14 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * have more than one root (if that project has more than on root
 	 * containing source), and classpath entries within the current
 	 * project identify a single root.
-	 *
-	 * If the classpath entry denotes a variable, it will be resolved and returning
+	 * <p>
+	 * If the classpath entry denotes a variable, it will be resolved and return
 	 * the roots of the target entry (empty if not resolvable).
+	 * <p>
+	 * If the classpath entry denotes a container, it will be resolved and return
+	 * the roots corresponding to the set of container entries (empty if not resolvable).
+	 * 
+	 * @see IClasspathContainer
 	 */
 	IPackageFragmentRoot[] getPackageFragmentRoots(IClasspathEntry entry);
 
@@ -212,10 +250,12 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * A classpath variable provides an indirection level for better sharing a classpath. As an example, it allows
 	 * a classpath to no longer refer directly to external JARs located in some user specific location. The classpath
 	 * can simply refer to some variables defining the proper locations of these external JARs.
+	 *  <p>
+	 * Note that in case the project isn't yet opened, the classpath will directly be read from the associated <tt>.classpath</tt> file.
 	 * <p>
 	 * @exception JavaModelException in one of the corresponding situation:
 	 * <ul>
-	 *    <li> this element does not exist </li>
+	 *    <li> an exception occurs while accessing the associated <tt>.classpath</tt> file </li>
 	 *    <li> an exception occurs while accessing its corresponding resource </li>
 	 * </ul>
 	 * @see IClasspathEntry
@@ -255,8 +295,7 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * </ul>
 	 * @see IClasspathEntry 
 	 */
-	IClasspathEntry[] getResolvedClasspath(boolean ignoreUnresolvedVariable)
-		throws JavaModelException;
+	IClasspathEntry[] getResolvedClasspath(boolean ignoreUnresolvedVariable) throws JavaModelException;
 
 	/**
 	 * Returns whether this project has been built at least once and thus whether it has a build state.
@@ -264,13 +303,22 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	boolean hasBuildState();
 
 	/**
-	 * Returns whether setting this projec's classpath to the given classpath entries
+	 * Returns whether setting this project's classpath to the given classpath entries
 	 * would result in a cycle.
 	 *
-	 * If the set of entries contains some variables, these are resolved in order to determine
+	 * If the set of entries contains some variables, those are resolved in order to determine
 	 * cycles.
 	 */
 	boolean hasClasspathCycle(IClasspathEntry[] entries);
+/**
+ * Returns whether the given element is on the classpath of this project.
+ * 
+ * @exception JavaModelException if this element does not exist or if an
+ *		exception occurs while accessing its corresponding resource
+ * 
+ * @since 2.0
+ */
+boolean isOnClasspath(IJavaElement element) throws JavaModelException;
 
 	/**
 	 * Creates a new evaluation context.

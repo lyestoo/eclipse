@@ -3,8 +3,10 @@ package org.eclipse.jdt.internal.compiler.problem;
  * (c) Copyright IBM Corp. 2000, 2001.
  * All Rights Reserved.
  */
-import java.text.*;
+import java.text.*; 
 import java.util.*;
+
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.util.CharOperation;
 
@@ -33,14 +35,23 @@ public DefaultProblemFactory(Locale loc) {
 }
 /**
  * Answer a new IProblem created according to the parameters value
- * @param originatingFileName the name of the file name from which the problem is originated
- * @param problemId the problem id
- * @param arguments the arguments needed to set the error message
- * @param severity the severity of the problem
- * @param startPosition the starting position of the problem
- * @param endPosition the end position of the problem
- * @param lineNumber the line on which the problem occured
- * @return com.ibm.compiler.java.api.IProblem
+ * <ul>
+ * <li>originatingFileName the name of the file name from which the problem is originated
+ * <li>problemId the problem id
+ * <li>arguments the arguments needed to set the error message
+ * <li>severity the severity of the problem
+ * <li>startPosition the starting position of the problem
+ * <li>endPosition the end position of the problem
+ * <li>lineNumber the line on which the problem occured
+ * </ul>
+ * @param originatingFileName char[]
+ * @param problemId int
+ * @param arguments String[]
+ * @param severity int
+ * @param startPosition int
+ * @param endPosition int
+ * @param lineNumber int
+ * @return org.eclipse.jdt.internal.compiler.IProblem
  */
 public IProblem createProblem(
 	char[] originatingFileName, 
@@ -71,7 +82,7 @@ public Locale getLocale() {
 public final String getLocalizedMessage(int id, String[] problemArguments) {
 	StringBuffer output = new StringBuffer(80);
 	String message = 
-		messageTemplates[(id & ProblemIrritants.IgnoreCategoriesMask)]; 
+		messageTemplates[(id & IProblem.IgnoreCategoriesMask)]; 
 	if (message == null) {
 		return "Unable to retrieve the error message for problem id: " //$NON-NLS-1$
 			+ id
@@ -96,7 +107,7 @@ public final String getLocalizedMessage(int id, String[] problemArguments) {
 					output.append(message.substring(end + 1, start + 1));
 				} catch (ArrayIndexOutOfBoundsException e) {
 					return "Corrupted compiler resources for problem id: " //$NON-NLS-1$
-						+ (id & ProblemIrritants.IgnoreCategoriesMask)
+						+ (id & IProblem.IgnoreCategoriesMask)
 						+ ". Check compiler resources.";  //$NON-NLS-1$
 				}
 			} else {
@@ -111,8 +122,8 @@ public final String getLocalizedMessage(int id, String[] problemArguments) {
 	return output.toString();
 }
 /**
- * @return com.ibm.compiler.java.problem.LocalizedProblem
- * @param problem com.ibm.compiler.java.problem.Problem
+ * @param problem org.eclipse.jdt.internal.compiler.IProblem
+ * @return String
  */
 public final String localizedMessage(IProblem problem) {
 	return getLocalizedMessage(problem.getID(), problem.getArguments());
@@ -129,6 +140,7 @@ public static String[] loadMessageTemplates(Locale loc) {
 		try {
 			templates[i] = bundle.getString(String.valueOf(i));
 		} catch (MissingResourceException e) {
+			// available ID
 		}
 	}
 	return templates;

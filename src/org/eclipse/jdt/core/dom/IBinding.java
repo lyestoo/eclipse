@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002 IBM Corporation and others.
+ * Copyright (c) 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -113,8 +113,6 @@ public interface IBinding {
 	 * 
 	 * @return <code>true</code> if this binding is synthetic, and 
 	 *    <code>false</code> otherwise
-	 * @deprecated This method is likely to be removed. The binding mechanism
-	 *   will not reveal synthetic binding to clients.
 	 */
 	public boolean isSynthetic();
 	

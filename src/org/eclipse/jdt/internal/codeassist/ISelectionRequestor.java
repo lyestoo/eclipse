@@ -4,6 +4,7 @@ package org.eclipse.jdt.internal.codeassist;
  * (c) Copyright IBM Corp. 2000, 2001.
  * All Rights Reserved.
  */
+import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.*;
 
 /**
@@ -12,13 +13,15 @@ import org.eclipse.jdt.internal.compiler.*;
 public interface ISelectionRequestor {
 	/**
 	 * Code assist notification of a class selection.
+	 * @param packageName char[]
+	 * 		Declaring package name of the class.
 	 * 
-	 * @return void - Nothing is answered back to code assist engine
-	 *
-	 * @param packageName char[] - Declaring package name of the class.
-	 * @param className char[] - Name of the class.
-	 * @param needQualification boolean - Flag indicating if the type name 
-	 *    must be qualified by its package name (depending on imports).
+	 * @param className char[]
+	 * 		Name of the class.
+	 * 
+	 * @param needQualification boolean
+	 * 		Flag indicating if the type name 
+	 *    	must be qualified by its package name (depending on imports).
 	 *
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
@@ -32,10 +35,7 @@ public interface ISelectionRequestor {
 
 	/**
 	 * Code assist notification of a compilation error detected during selection.
-	 *
-	 *  @return void - Nothing is answered back to code assist engine
-	 *
-	 *  @param error com.ibm.compiler.java.api.problem.IProblem
+	 *  @param error org.eclipse.jdt.internal.compiler.IProblem
 	 *      Only problems which are categorized as errors are notified to the requestor,
 	 *		warnings are silently ignored.
 	 *		In case an error got signaled, no other completions might be available,
@@ -49,12 +49,14 @@ public interface ISelectionRequestor {
 
 	/**
 	 * Code assist notification of a field selection.
-	 *
-	 * @return void - Nothing is answered back to code assist engine
-	 *
-	 * @param declaringTypePackageName char[] - Name of the package in which the type that contains this field is declared.
-	 * @param declaringTypeName char[] - Name of the type declaring this new field.
-	 * @param name char[] - Name of the field.
+	 * @param declaringTypePackageName char[]
+	 * 		Name of the package in which the type that contains this field is declared.
+	 * 
+	 * @param declaringTypeName char[]
+	 * 		Name of the type declaring this new field.
+	 * 
+	 * @param name char[]
+	 * 		Name of the field.
 	 *
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
@@ -68,13 +70,15 @@ public interface ISelectionRequestor {
 
 	/**
 	 * Code assist notification of an interface selection.
-	 *
-	 * @return void - Nothing is answered back to code assist engine
-	 *
-	 * @param packageName char[] - Declaring package name of the interface.
-	 * @param interfaceName char[] - Name of the interface.
-	 * @param needQualification boolean - Flag indicating if the type name 
-	 *    must be qualified by its package name (depending on imports).
+	 * @param packageName char[]
+	 * 		Declaring package name of the interface.
+	 * 
+	 * @param interfaceName char[]
+	 * 		Name of the interface.
+	 * 
+	 * @param needQualification boolean
+	 * 		Flag indicating if the type name 
+	 *    	must be qualified by its package name (depending on imports).
 	 *
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
@@ -88,16 +92,25 @@ public interface ISelectionRequestor {
 
 	/**
 	 * Code assist notification of a method selection.
-	 *
-	 * @return void - Nothing is answered back to code assist engine
-	 *
-	 * @param declaringTypePackageName char[] - Name of the package in which the type that contains this new method is declared.
-	 * @param declaringTypeName char[] - Name of the type declaring this new method.
-	 * @param selector char[] - Name of the new method.
-	 * @param parameterPackageNames char[][] -  Names of the packages in which the parameter types are declared.
-	 *    Should contain as many elements as parameterTypeNames.
-	 * @param parameterTypeNames char[][] - Names of the parameters types.
-	 *    Should contain as many elements as parameterPackageNames.
+	 * @param declaringTypePackageName char[]
+	 * 		Name of the package in which the type that contains this new method is declared.
+	 * 
+	 * @param declaringTypeName char[]
+	 * 		Name of the type declaring this new method.
+	 * 
+	 * @param selector char[]
+	 * 		Name of the new method.
+	 * 
+	 * @param parameterPackageNames char[][]
+	 * 		Names of the packages in which the parameter types are declared.
+	 *    	Should contain as many elements as parameterTypeNames.
+	 * 
+	 * @param parameterTypeNames char[][]
+	 * 		Names of the parameters types.
+	 *    	Should contain as many elements as parameterPackageNames.
+	 * 
+	 *  @param isConstructor boolean
+	 * 		Answer if the method is a constructor.
 	 *
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
@@ -111,14 +124,13 @@ public interface ISelectionRequestor {
 		char[] declaringTypeName,
 		char[] selector,
 		char[][] parameterPackageNames,
-		char[][] parameterTypeNames);
+		char[][] parameterTypeNames,
+		boolean isConstructor);
 
 	/**
 	 * Code assist notification of a package selection.
-	 *
-	 * @return void - Nothing is answered back to code assist engine
-	 *
-	 * @param packageName char[] - The package name.
+	 * @param packageName char[]
+	 * 		The package name.
 	 *
 	 * NOTE - All package names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".

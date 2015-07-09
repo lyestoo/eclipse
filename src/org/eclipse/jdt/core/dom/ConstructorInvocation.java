@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -45,6 +45,13 @@ public class ConstructorInvocation extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return CONSTRUCTOR_INVOCATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		ConstructorInvocation result = new ConstructorInvocation(target);
 		result.setLeadingComment(getLeadingComment());
@@ -55,12 +62,9 @@ public class ConstructorInvocation extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof ConstructorInvocation)) {
-			return false;
-		}
-		ConstructorInvocation o = (ConstructorInvocation) other;
-		return ASTNode.equalLists(arguments(), o.arguments());
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -83,6 +87,21 @@ public class ConstructorInvocation extends Statement {
 	 */ 
 	public List arguments() {
 		return arguments;
+	}
+
+	/**
+	 * Resolves and returns the binding for the constructor invoked by this
+	 * expression.
+	 * <p>
+	 * Note that bindings are generally unavailable unless requested when the
+	 * AST is being built.
+	 * </p>
+	 * 
+	 * @return the constructor binding, or <code>null</code> if the binding
+	 *    cannot be resolved
+	 */	
+	public IMethodBinding resolveConstructorBinding() {
+		return getAST().getBindingResolver().resolveConstructor(this);
 	}
 
 	/* (omit javadoc for this method)

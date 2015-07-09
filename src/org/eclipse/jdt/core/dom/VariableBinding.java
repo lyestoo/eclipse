@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -13,6 +13,9 @@ package org.eclipse.jdt.core.dom;
 
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 
+/**
+ * Internal implementation of variable bindings.
+ */
 class VariableBinding implements IVariableBinding {
 
 	private org.eclipse.jdt.internal.compiler.lookup.VariableBinding binding;
@@ -95,7 +98,7 @@ class VariableBinding implements IVariableBinding {
 		return false;
 	}
 
-	/*
+	/**
 	 * @see IBinding#isSynthetic()
 	 */
 	public boolean isSynthetic() {
@@ -109,14 +112,21 @@ class VariableBinding implements IVariableBinding {
 	 * @see IBinding#getKey()
 	 */
 	public String getKey() {
+		if (isField()) {
+			StringBuffer buffer = new StringBuffer();
+			if (this.getDeclaringClass() != null) {
+				buffer.append(this.getDeclaringClass().getKey());
+			}
+			buffer.append(this.getName());
+			return buffer.toString();
+		}			
 		return null;
 	}
 	
 	/*
-	 * @see IVariableBinding#getId()
+	 * @see IVariableBinding#getVariableId()
 	 */
 	public int getVariableId() {
-		// FIXME - should return id from old binding
 		return this.binding.id;
 	}
 

@@ -126,6 +126,19 @@ public int depth(){
 /*
  * Answer the enclosing method node, or null if none
  */
+public RecoveredInitializer enclosingInitializer(){
+	RecoveredElement current = this;
+	while (current != null){
+		if (current instanceof RecoveredInitializer){
+			return (RecoveredInitializer) current;
+		}
+		current = current.parent;
+	}
+	return null;
+}
+/*
+ * Answer the enclosing method node, or null if none
+ */
 public RecoveredMethod enclosingMethod(){
 	RecoveredElement current = this;
 	while (current != null){
@@ -196,7 +209,7 @@ public int previousAvailableLineEnd(int position){
 	Scanner scanner = parser.scanner;
 	if (scanner.lineEnds == null) return position;
 	
-	int index = scanner.searchLineNumber(position);
+	int index = scanner.getLineNumber(position);
 	if (index < 2) return position;
 	int previousLineEnd = scanner.lineEnds[index-2];
 

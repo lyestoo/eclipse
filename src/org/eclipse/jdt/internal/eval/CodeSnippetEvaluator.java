@@ -4,11 +4,14 @@ package org.eclipse.jdt.internal.eval;
  * (c) Copyright IBM Corp. 2000, 2001.
  * All Rights Reserved.
  */
+import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.Compiler;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.env.*;
 import org.eclipse.jdt.internal.compiler.classfmt.*;
 import org.eclipse.jdt.internal.compiler.util.CharOperation;
+import org.eclipse.jdt.internal.compiler.util.Util;
+
 import java.util.*;
 
 /**
@@ -159,7 +162,7 @@ private CodeSnippetToCuMapper getMapper() {
 			
 		}
 		this.mapper = new CodeSnippetToCuMapper(
-			this.codeSnippet,
+			this.codeSnippet, 
 			this.context.packageName,
 			this.context.imports,
 			getClassName(),

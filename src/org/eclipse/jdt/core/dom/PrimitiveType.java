@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -167,6 +167,13 @@ public class PrimitiveType extends Type {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return PRIMITIVE_TYPE;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		PrimitiveType result = new PrimitiveType(target);
 		result.setPrimitiveTypeCode(getPrimitiveTypeCode());
@@ -176,14 +183,11 @@ public class PrimitiveType extends Type {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof PrimitiveType)) {
-			return false;
-		}
-		PrimitiveType o = (PrimitiveType) other;
-		return (getPrimitiveTypeCode() == o.getPrimitiveTypeCode());
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
-	
+
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
@@ -207,7 +211,7 @@ public class PrimitiveType extends Type {
 	 * 
 	 * @param typeCode one of the primitive type code constants declared in 
 	 *    this class
-	 * @exception $precondition-violation:invalid-argument$
+	 * @exception IllegalArgumentException if the argument is incorrect
 	 */
 	public void setPrimitiveTypeCode(PrimitiveType.Code typeCode) {
 		if (typeCode == null) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -143,6 +143,13 @@ public class PrefixExpression extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return PREFIX_EXPRESSION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		PrefixExpression result = new PrefixExpression(target);
 		result.setOperator(getOperator());
@@ -153,14 +160,9 @@ public class PrefixExpression extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof PrefixExpression)) {
-			return false;
-		}
-		PrefixExpression o = (PrefixExpression) other;
-		return 
-			(getOperator().equals(o.getOperator())
-			&& ASTNode.equalNodes(getOperand(), o.getOperand()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -188,7 +190,7 @@ public class PrefixExpression extends Expression {
 	 * Sets the operator of this prefix expression.
 	 * 
 	 * @param operator the operator
-	 * @exception $precondition-violation:invalid-argument$
+	 * @exception IllegalArgumentException if the argument is incorrect
 	 */ 
 	public void setOperator(PrefixExpression.Operator operator) {
 		if (operator == null) {
@@ -215,9 +217,9 @@ public class PrefixExpression extends Expression {
 	 * Sets the operand of this prefix expression.
 	 * 
 	 * @param expression the operand expression node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setOperand(Expression expression) {
 		if (expression == null) {

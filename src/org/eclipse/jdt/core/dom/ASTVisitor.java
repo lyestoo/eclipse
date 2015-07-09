@@ -1,3 +1,14 @@
+/*******************************************************************************
+ * Copyright (c) 2001 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
+
 package org.eclipse.jdt.core.dom;
 
 /**
@@ -21,6 +32,22 @@ package org.eclipse.jdt.core.dom;
  * nothing. Subclasses may reimplement this method as needed.</li>
  * </ul>
  * </p>
+ * In addition, there are a pair of methods for visiting AST nodes in the 
+ * abstract, regardless of node type:
+ * <ul>
+ * <li><code>public void preVisit(ASTNode node)</code> - Visits
+ * the given node to perform some arbitrary operation. 
+ * This method is invoked prior to the appropriate type-specific
+ * <code>visit</code> method.
+ * The default implementation of this method does nothing.
+ * Subclasses may reimplement this method as needed.</li>
+ * <li><code>public void postVisit(ASTNode node)</code> - Visits
+ * the given node to perform some arbitrary operation. 
+ * This method is invoked after the appropriate type-specific
+ * <code>endVisit</code> method.
+ * The default implementation of this method does nothing.
+ * Subclasses may reimplement this method as needed.</li>
+ * </ul>
  * <p>
  * For nodes with list-valued properties, the child nodes within the list
  * are visited in order. For nodes with multiple properties, the child nodes
@@ -69,6 +96,34 @@ package org.eclipse.jdt.core.dom;
  * @see ASTNode#accept
  */
 public abstract class ASTVisitor {
+	
+	/**
+	 * Visits the given AST node prior to the type-specific visit.
+	 * (before <code>visit</code>).
+	 * <p>
+	 * The default implementation does nothing. Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param node the node to visit
+	 */
+	public void preVisit(ASTNode node) {
+	}
+	
+	/**
+	 * Visits the given AST node following the type-specific visit
+	 * (after <code>endVisit</code>).
+	 * <p>
+	 * The default implementation does nothing. Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param node the node to visit
+	 */
+	public void postVisit(ASTNode node) {
+	}
+
+	public boolean visit(AnonymousClassDeclaration node) {
+		return true;
+	}
 	public boolean visit(ArrayAccess node) {
 		return true;
 	}
@@ -145,6 +200,9 @@ public abstract class ASTVisitor {
 		return true;
 	}
 	public boolean visit(InfixExpression node) {
+		return true;
+	}
+	public boolean visit(InstanceofExpression node) {
 		return true;
 	}
 	public boolean visit(Initializer node) {
@@ -250,6 +308,8 @@ public abstract class ASTVisitor {
 		return true;
 	}
 
+	public void endVisit(AnonymousClassDeclaration node) {
+	}
 	public void endVisit(ArrayAccess node) {
 	}
 	public void endVisit(ArrayCreation node) {
@@ -301,6 +361,8 @@ public abstract class ASTVisitor {
 	public void endVisit(ImportDeclaration node) {
 	}
 	public void endVisit(InfixExpression node) {
+	}
+	public void endVisit(InstanceofExpression node) {
 	}
 	public void endVisit(Initializer node) {
 	}

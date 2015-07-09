@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002 IBM Corporation and others.
+ * Copyright (c) 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -26,18 +26,34 @@ import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
  */
 class BindingResolver {
 	
+	protected long modificationCount;
 	/**
-	 * Constructor for BindingResolver.
+	 * Creates a binding resolver.
 	 */
 	BindingResolver() {
 	}
 
 	/**
-	 * Allows the user to store objects inside the binding resolver.
-	 * @param node an ASTNode
-	 * @param binding org.eclipse.jdt.internal.compiler.ast.ASTNode
+	 * Store the number of modifications done using the ast. This is used to validate
+	 * resolveBinding methods. If the number changed, all resolve bindings methods
+	 * simply return null.
 	 */
-	void store(ASTNode node, org.eclipse.jdt.internal.compiler.ast.AstNode oldASTNode) {
+	protected void storeModificationCount(long modificationCount) {
+		this.modificationCount = modificationCount;
+	}
+	
+	/**
+	 * Allows the user to store information about the given old/new pair of
+	 * AST nodes.
+	 * <p>
+	 * The default implementation of this method does nothing.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param newNode the new AST node
+	 * @param oldNode the old AST node
+	 */
+	void store(ASTNode newNode, org.eclipse.jdt.internal.compiler.ast.AstNode oldASTNode) {
 	}
 
 	/**
@@ -122,6 +138,28 @@ class BindingResolver {
 	 *    if no binding is available
 	 */
 	ITypeBinding resolveType(TypeDeclaration type) {
+		return null;
+	}
+	
+	/**
+	 * Resolves the given anonymous class declaration and returns the binding
+	 * for it.
+	 * <p>
+	 * The implementation of <code>AnonymousClassDeclaration.resolveBinding</code> 
+	 * forwards to this method. How the declaration resolves is often a 
+	 * function of the context in which the declaration node is embedded as well
+	 * as the declaration subtree itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param type the anonymous class declaration of interest
+	 * @return the binding for the given class declaration, or <code>null</code>
+	 *    if no binding is available
+	 */
+	ITypeBinding resolveType(AnonymousClassDeclaration type) {
 		return null;
 	}
 	
@@ -214,9 +252,115 @@ class BindingResolver {
 	}
 	
 	/**
-	 * Finds the corresponding AST node in the given compilation unit from 
-	 * which the given binding originated. Returns <code>null</code> if the
-	 * binding does not correspond to any node in this compilation unit.
+	 * Resolves the given import declaration and returns the binding for it.
+	 * <p>
+	 * The implementation of <code>ImportDeclaration.resolveBinding</code>
+	 * forwards to this method.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param importDeclaration the import declaration of interest
+	 * @return the binding for the given package declaration, or 
+	 * @return the package binding (for on-demand imports) or type binding
+	 *    (for single-type imports), or <code>null</code> if no binding is
+	 *    available
+	 */
+	IBinding resolveImport(ImportDeclaration importDeclaration) {
+		return null;
+	}
+	
+	/**
+	 * Resolves the given package declaration and returns the binding for it.
+	 * <p>
+	 * The implementation of <code>PackageDeclaration.resolveBinding</code>
+	 * forwards to this method.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param pkg the package declaration of interest
+	 * @return the binding for the given package declaration, or 
+	 *    <code>null</code> if no binding is available
+	 */
+	IPackageBinding resolvePackage(PackageDeclaration pkg) {
+		return null;
+	}
+	
+	/**
+	 * Resolves and returns the binding for the constructor being invoked.
+	 * <p>
+	 * The implementation of
+	 * <code>ConstructorInvocation.resolveConstructor</code>
+	 * forwards to this method. Which constructor is invoked is often a function
+	 * of the context in which the expression node is embedded as well as
+	 * the expression subtree itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param expression the expression of interest
+	 * @return the binding for the constructor being invoked, or 
+	 *    <code>null</code> if no binding is available
+	 */
+	IMethodBinding resolveConstructor(ConstructorInvocation expression) {
+		return null;
+	}
+	
+	/**
+	 * Resolves and returns the binding for the constructor being invoked.
+	 * <p>
+	 * The implementation of
+	 * <code>SuperConstructorInvocation.resolveConstructor</code>
+	 * forwards to this method. Which constructor is invoked is often a function
+	 * of the context in which the expression node is embedded as well as
+	 * the expression subtree itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param expression the expression of interest
+	 * @return the binding for the constructor being invoked, or 
+	 *    <code>null</code> if no binding is available
+	 */
+	IMethodBinding resolveConstructor(SuperConstructorInvocation expression) {
+		return null;
+	}
+	
+	/**
+	 * Resolves and returns the binding for the constructor being invoked.
+	 * <p>
+	 * The implementation of
+	 * <code>ClassInstanceCreation.resolveConstructor</code>
+	 * forwards to this method. Which constructor is invoked is often a function
+	 * of the context in which the expression node is embedded as well as
+	 * the expression subtree itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param expression the expression of interest
+	 * @return the binding for the constructor being invoked, or 
+	 *    <code>null</code> if no binding is available
+	 */
+	IMethodBinding resolveConstructor(ClassInstanceCreation expression) {
+		return null;
+	}
+	
+	/**
+	 * Finds the corresponding AST node from which the given binding originated.
+	 * Returns <code>null</code> if the binding does not correspond to any node
+	 * in the compilation unit.
 	 * <p>
 	 * The following table indicates the expected node type for the various
 	 * different kinds of bindings:
@@ -238,30 +382,75 @@ class BindingResolver {
 	 * </ul>
 	 * </p>
 	 * <p>
-	 * Note that bindings are generally unavailable unless requested when the
-	 * AST is being built.
+	 * The implementation of <code>CompilationUnit.findDeclaringNode</code>
+	 * forwards to this method.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
 	 * </p>
 	 * 
 	 * @param binding the binding
 	 * @return the corresponding node where the bindings is declared, 
 	 *    or <code>null</code> if none
 	 */
-	public ASTNode findDeclaringNode(IBinding binding) {
+	ASTNode findDeclaringNode(IBinding binding) {
 		return null;
 	}
 
-	protected ITypeBinding getTypeBinding(org.eclipse.jdt.internal.compiler.lookup.TypeBinding referenceBinding) {
+	/**
+	 * Returns the new type binding corresponding to the given old type binding.
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param referenceBinding the old type binding
+	 * @return the new type binding
+	 */
+	ITypeBinding getTypeBinding(org.eclipse.jdt.internal.compiler.lookup.TypeBinding referenceBinding) {
 		return null;
 	}
-	protected IPackageBinding getPackageBinding(org.eclipse.jdt.internal.compiler.lookup.PackageBinding packageBinding) {
+
+	/**
+	 * Returns the new package binding corresponding to the given old package binding.
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param packageBinding the old package binding
+	 * @return the new package binding
+	 */
+	IPackageBinding getPackageBinding(org.eclipse.jdt.internal.compiler.lookup.PackageBinding packageBinding) {
 		return null;
 	}		
 
-	protected IMethodBinding getMethodBinding(org.eclipse.jdt.internal.compiler.lookup.MethodBinding methodBinding) {
+	/**
+	 * Returns the new method binding corresponding to the given old method binding.
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param methodBinding the old method binding
+	 * @return the new method binding
+	 */
+	IMethodBinding getMethodBinding(org.eclipse.jdt.internal.compiler.lookup.MethodBinding methodBinding) {
 		return null;
 	}
 	
-	protected IVariableBinding getVariableBinding(org.eclipse.jdt.internal.compiler.lookup.VariableBinding binding) {
+	/**
+	 * Returns the new variable binding corresponding to the given old variable binding.
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param variableBinding the old variable binding
+	 * @return the new variable binding
+	 */
+	IVariableBinding getVariableBinding(org.eclipse.jdt.internal.compiler.lookup.VariableBinding binding) {
 		return null;
 	}
 }

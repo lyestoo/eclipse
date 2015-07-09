@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -11,6 +11,7 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -131,6 +132,13 @@ public class MethodDeclaration extends BodyDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return METHOD_DECLARATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		MethodDeclaration result = new MethodDeclaration(target);
 		result.setJavadoc(
@@ -152,20 +160,9 @@ public class MethodDeclaration extends BodyDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof MethodDeclaration)) {
-			return false;
-		}
-		MethodDeclaration o = (MethodDeclaration) other;
-		return 
-			((getModifiers() == o.getModifiers())
-			&& (isConstructor() == o.isConstructor())
-			&& ASTNode.equalNodes(getJavadoc(), o.getJavadoc())
-			&& ASTNode.equalNodes(getReturnType(), o.getReturnType())
-			&& ASTNode.equalNodes(getName(), o.getName())
-			&& ASTNode.equalLists(parameters(), o.parameters())
-			&& ASTNode.equalLists(thrownExceptions(), o.thrownExceptions())
-			&& ASTNode.equalNodes(getBody(), o.getBody()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 	
 	/* (omit javadoc for this method)
@@ -229,7 +226,7 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * 
 	 * @param modifiers the bit-wise or of Modifier constants
 	 * @see Modifier
-	 * @exception $precondition-violation:illegal-modifiers$
+	 * @exception IllegalArgumentException if the modifiers are illegal
 	 */ 
 	public void setModifiers(int modifiers) {
 		if ((modifiers & ~LEGAL_MODIFIERS) != 0) {
@@ -262,8 +259,8 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * the name of the class.
 	 * 
 	 * @param methodName the new method name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setName(SimpleName methodName) {
 		if (methodName == null) {
@@ -324,8 +321,8 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * </p>
 	 * 
 	 * @param type the new return type, possibly the void primitive type
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setReturnType(Type type) {
 		if (type == null) {
@@ -361,9 +358,9 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * 
 	 * @param body the block node, or <code>null</code> if 
 	 *    there is none
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setBody(Block body) {
 		// a MethodDeclaration may occur in a Block - must check cycles
@@ -384,6 +381,29 @@ public class MethodDeclaration extends BodyDeclaration {
 	 */	
 	public IMethodBinding resolveBinding() {
 		return getAST().getBindingResolver().resolveMethod(this);
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	void appendDebugString(StringBuffer buffer) {
+		buffer.append("MethodDeclaration[");//$NON-NLS-1$
+		buffer.append(isConstructor() ? "constructor " : "method ");//$NON-NLS-2$//$NON-NLS-1$
+		buffer.append(getName().getIdentifier());
+		buffer.append("(");//$NON-NLS-1$
+		for (Iterator it = parameters().iterator(); it.hasNext(); ) {
+			SingleVariableDeclaration d = (SingleVariableDeclaration) it.next();
+			d.getType().appendPrintString(buffer);
+			if (it.hasNext()) {
+				buffer.append(";");//$NON-NLS-1$
+			}
+		}
+		buffer.append(")");//$NON-NLS-1$
+		if (!isConstructor()) {
+			buffer.append(" returns ");//$NON-NLS-1$
+			getReturnType().appendPrintString(buffer);
+		}
+		buffer.append("]");//$NON-NLS-1$
 	}
 
 	/* (omit javadoc for this method)

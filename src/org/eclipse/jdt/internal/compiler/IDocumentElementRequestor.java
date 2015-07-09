@@ -1,10 +1,12 @@
 package org.eclipse.jdt.internal.compiler;
 
+import org.eclipse.jdt.core.compiler.IProblem;
+
 /*
  * (c) Copyright IBM Corp. 2000, 2001.
  * All Rights Reserved.
  */
-/*
+/**
  * Part of the source element parser responsible for building the output.
  * It gets notified of structural information as they are detected, relying
  * on the requestor to assemble them together, based on the notifications it got.
@@ -31,8 +33,6 @@ package org.eclipse.jdt.internal.compiler;
  * - accept<Element>
  */
  
-import org.eclipse.jdt.internal.compiler.IProblem;
-
 public interface IDocumentElementRequestor {
 /**
  * @param declarationStart - a source position corresponding to the start of the package
@@ -319,9 +319,9 @@ void enterInterface(
  * @param parameterNames - a list of the names of the parameters
  * @param parametersEnd - a source position corresponding to the last character of the
  *  parameter list
- * @extendedReturnTypeDimensionCount - the array dimension count as supplied on the
+ * @param extendedReturnTypeDimensionCount - the array dimension count as supplied on the
  *  end of the parameter list, i.e. public int foo()[] {}
- * @extendedReturnTypeDimensionEnd - a source position corresponding to the last character
+ * @param extendedReturnTypeDimensionEnd - a source position corresponding to the last character
  *  of the extended return type dimension. This position should be -1 in case there is no extended
  *  dimension for the type.
  * @param exceptionTypes - a list of the exception types

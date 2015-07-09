@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002 IBM Corporation and others.
+ * Copyright (c) 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -12,13 +12,14 @@
 package org.eclipse.jdt.core.dom;
 
 /**
- * A type binding represents a class type, interface type, array type, or a 
- * primitive type (including the special return type <code>void</code>).
+ * A type binding represents a class type, interface type, array type, a 
+ * primitive type (including the special return type <code>void</code>), or the
+ * null type.
  * <p>
  * This interface is not intended to be implemented by clients.
  * </p>
  * 
- * @see ITypeBinding#getDeclaredClasses
+ * @see ITypeBinding#getDeclaredTypes()
  * @since 2.0
  */
 public interface ITypeBinding extends IBinding {
@@ -33,16 +34,34 @@ public interface ITypeBinding extends IBinding {
 	 * </p>
 	 * <p>
 	 * The set of primitive types is mutually exclusive with the sets of
-	 * array types and with the sets of class and interface types.
+	 * array types, with the sets of class and interface types, and with the null type.
 	 * </p>
+	 * 
+	 * @return <code>true</code> if this type binding is for a primitive type,
+	 *   and <code>false</code> otherwise
 	 *
-	 * @see #isArray
-	 * @see #isClass
-	 * @see #isInterface
-	 * @see #wellKnownType
+	 * @see #isArray()
+	 * @see #isClass()
+	 * @see #isInterface()
 	 */
 	public boolean isPrimitive();
 
+	/**
+	 * Returns whether this type binding represents the null type.
+	 * <p>
+	 * The null type is the type of a <code>NullLiteral</code> node.
+	 * </p>
+	 * <p>
+	 * The null type is mutually exclusive with the sets of
+	 * array types, with the sets of class and interface types, and 
+	 * with the set of primitive types .
+	 * </p>
+	 * 
+	 * @return <code>true</code> if this type binding is for the null type,
+	 *   and <code>false</code> otherwise
+	 */
+	public boolean isNullType();
+	
 	/**
 	 * Returns whether this type binding represents an array type.
 	 * <p>
@@ -52,9 +71,9 @@ public interface ITypeBinding extends IBinding {
 	 *
 	 * @return <code>true</code> if this type binding is for an array type,
 	 *   and <code>false</code> otherwise
-	 * @see #isClass
-	 * @see #isInterface
-	 * @see #isPrimitive
+	 * @see #isClass()
+	 * @see #isInterface()
+	 * @see #isPrimitive()
 	 */
 	public boolean isArray();
 	
@@ -81,15 +100,15 @@ public interface ITypeBinding extends IBinding {
 	 * Returns whether this type binding represents a class type.
 	 * <p>
 	 * The set of class types is mutually exclusive with the sets of
-	 * primive types, array types, and interface types.
+	 * primive types, array types, interface types, and the null type.
 	 * </p>
 	 *
 	 * @return <code>true</code> if this object represents a class,
 	 *    and <code>false</code> otherwise
 	 *
-	 * @see #isArray
-	 * @see #isInterface
-	 * @see #isPrimitive
+	 * @see #isArray()
+	 * @see #isInterface()
+	 * @see #isPrimitive()
 	 */
 	public boolean isClass();
 	
@@ -97,15 +116,15 @@ public interface ITypeBinding extends IBinding {
 	 * Returns whether this type binding represents an interface type.
 	 * <p>
 	 * The set of interface types is mutually exclusive with the sets of
-	 * primive types, array types, and class types.
+	 * primive types, array types, class types, and the null type.
 	 * </p>
 	 *
 	 * @return <code>true</code> if this object represents an interface,
 	 *    and <code>false</code> otherwise
 	 *
-	 * @see #isArray
-	 * @see #isClass
-	 * @see #isPrimitive
+	 * @see #isArray()
+	 * @see #isClass()
+	 * @see #isPrimitive()
 	 */
 	public boolean isInterface();
 	
@@ -117,10 +136,11 @@ public interface ITypeBinding extends IBinding {
 	 * types, the name is the unqualified name of the component type followed by "[]".
 	 * If this represents an anonymous class, it returns an empty string (note that
 	 * it is impossible to have an array type with an anonymous class as element type).
+	 * For the null type, it returns "null".
 	 * </p>
 	 * 
-	 * @return the unqualified name of the type represented by this binding, or an
-	 *    empty string this is an anonymous type
+	 * @return the unqualified name of the type represented by this binding, an
+	 *    empty string this is an anonymous type, or "null" for the null type
 	 */
 	public String getName();
 			
@@ -130,7 +150,7 @@ public interface ITypeBinding extends IBinding {
 	 * 
 	 * @return the binding for the package in which this class or interface is
 	 *   declared, or <code>null</code> if this type binding represents a 
-	 *   primitive type or an array type
+	 *   primitive type, an array type, or the null type.
 	 */
 	public IPackageBinding getPackage();
 	
@@ -142,8 +162,8 @@ public interface ITypeBinding extends IBinding {
 	 * interface of which it is a member. The declaring class of a local class
 	 * or interface (including anonymous classes) is the innermost class or
 	 * interface containing the expression or statement in which this type is
-	 * declared. Array types, primitive types, and top level types have no 
-	 * declaring class.
+	 * declared. Array types, primitive types, the null type, and top level types 
+	 * have no declaring class.
 	 * </p>
 	 * 
 	 * @return the binding of the class or interface that declares this type,
@@ -162,8 +182,8 @@ public interface ITypeBinding extends IBinding {
 	 * returned.
 	 * </p>
 	 * <p>
-	 * If this type binding represents an interface, an array type, or a
-	 * primitive type, then <code>null</code> is returned. 
+	 * If this type binding represents an interface, an array type, a
+	 * primitive type, or the null type, then <code>null</code> is returned. 
 	 * </p>
 	 *
 	 * @return the superclass of the class represented by this type binding,
@@ -190,8 +210,8 @@ public interface ITypeBinding extends IBinding {
 	 * </p>
 	 * <p>
 	 * If the class implements no interfaces, or the interface extends no 
-	 * interfaces, or if this type binding represents an array type or a
-	 * primitive type, this method returns an array of length 0.
+	 * interfaces, or if this type binding represents an array type, a
+	 * primitive type, or the null type, this method returns an array of length 0.
 	 * </p>
 	 *
 	 * @return the list of type bindings for the interfaces extended by this
@@ -305,7 +325,7 @@ public interface ITypeBinding extends IBinding {
 	 * and private classes and interfaces declared by the class, but excludes
 	 * inherited classes and interfaces. Returns an empty list if the
 	 * class declares no classes or interfaces as members, or if this type
-	 * binding represents an array type or a primitive type.
+	 * binding represents an array type, a primitive type, or the null type.
 	 * The resulting bindings are in no particular order.
 	 * 
 	 * @return the list of type bindings for the member types of this type,
@@ -327,7 +347,7 @@ public interface ITypeBinding extends IBinding {
 	 * 
 	 * @return the list of bindings for the field members of this type,
 	 *   or the empty list if this type does not have field members or is an
-	 *   array type or primitive type
+	 *   array type, primitive type, or the null type
 	 */
 	public IVariableBinding[] getDeclaredFields();
 	
@@ -348,8 +368,8 @@ public interface ITypeBinding extends IBinding {
 	
 	/**
 	 * Returns whether this type binding originated in source code.
-	 * Returns <code>false</code> for primitive types, array types, and
-	 * classes and interfaces whose information came from a pre-compiled binary
+	 * Returns <code>false</code> for primitive types, the null type, array types,
+	 * and classes and interfaces whose information came from a pre-compiled binary
 	 * class file.
 	 * 
 	 * @return <code>true</code> if the type is in source code,

@@ -14,8 +14,8 @@ public class Label {
 	public CodeStream codeStream;
 	final static int POS_NOT_SET = -1;
 	public int position = POS_NOT_SET; // position=POS_NOT_SET Then it's pos is not set.
-	int[] forwardReferences = new int[10]; // Add an overflow check here.
-	int forwardReferenceCount = 0;
+	public int[] forwardReferences = new int[10]; // Add an overflow check here.
+	public int forwardReferenceCount = 0;
 	private boolean isWide = false;
 public Label() {
 }
@@ -37,7 +37,7 @@ void addForwardReference(int iPos) {
 /**
  * Add a forward refrence for the array.
  */
-void appendForwardReferencesFrom(Label otherLabel) {
+public void appendForwardReferencesFrom(Label otherLabel) {
 	int otherCount = otherLabel.forwardReferenceCount;
 	if (otherCount == 0) return;
 	int length = forwardReferences.length;
@@ -156,10 +156,10 @@ public void place() { // Currently lacking wide support.
 							if (local.initializationPCs[((local.initializationCount - 1) << 1) + 1] == oldPosition) {
 								// we want to prevent interval of size 0 to have a negative size.
 								// see PR 1GIRQLA: ITPJCORE:ALL - ClassFormatError for local variable attribute
-								if (local.initializationPCs[((local.initializationCount - 1) << 1)] == oldPosition) {
-									local.initializationPCs[((local.initializationCount - 1) << 1)] = position;
-								}
 								local.initializationPCs[((local.initializationCount - 1) << 1) + 1] = position;
+							}
+							if (local.initializationPCs[(local.initializationCount - 1) << 1] == oldPosition) {
+								local.initializationPCs[(local.initializationCount - 1) << 1] = position;
 							}
 						}
 					}

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -52,6 +52,13 @@ public class ArrayAccess extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return ARRAY_ACCESS;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		ArrayAccess result = new ArrayAccess(target);
 		result.setArray((Expression) getArray().clone(target));
@@ -62,14 +69,9 @@ public class ArrayAccess extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof ArrayAccess)) {
-			return false;
-		}
-		ArrayAccess o = (ArrayAccess) other;
-		return 
-			(ASTNode.equalNodes(getArray(), o.getArray())
-			&& ASTNode.equalNodes(getIndex(), o.getIndex()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -102,9 +104,9 @@ public class ArrayAccess extends Expression {
 	 * Sets the array expression of this array access expression.
 	 * 
 	 * @param expression the array expression node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setArray(Expression expression) {
 		if (expression == null) {
@@ -133,9 +135,9 @@ public class ArrayAccess extends Expression {
 	 * Sets the index expression of this array access expression.
 	 * 
 	 * @param expression the index expression node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setIndex(Expression expression) {
 		if (expression == null) {

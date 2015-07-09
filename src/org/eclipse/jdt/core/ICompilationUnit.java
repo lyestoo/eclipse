@@ -1,9 +1,15 @@
+/**********************************************************************
+Copyright (c) 2000, 2001, 2002 IBM Corp. and others.
+All rights reserved.   This program and the accompanying materials
+are made available under the terms of the Common Public License v0.5
+which accompanies this distribution, and is available at
+http://www.eclipse.org/legal/cpl-v05.html
+ 
+Contributors:
+     IBM Corporation - initial API and implementation
+**********************************************************************/
 package org.eclipse.jdt.core;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.core.runtime.IProgressMonitor;
 
 /**
@@ -199,16 +205,5 @@ IType getType(String name);
  *		exception occurs while accessing its corresponding resource
  */
 IType[] getTypes() throws JavaModelException;
-/**
- * Returns an open working copy of this compilation unit.
- *
- * @param monitor a progress monitor used to report progress while opening this compilation unit
- * @param factory the factory that creates a buffer that is used to get the content of the working copy
- * @exception JavaModelException if the contents of this element can
- *   not be determined. Reasons include:
- * <ul>
- * <li> This Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
- * </ul>
- */
-IWorkingCopy getWorkingCopy(IProgressMonitor monitor, IBufferFactory factory) throws JavaModelException;
+
 }

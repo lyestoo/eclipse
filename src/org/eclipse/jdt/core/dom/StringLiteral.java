@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -11,24 +11,16 @@
 
 package org.eclipse.jdt.core.dom;
 
+import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.core.compiler.InvalidInputException;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
+
 /**
  * String literal nodes.
  * 
  * @since 2.0
  */
 public class StringLiteral extends Expression {
-
-	/**
-	 * String of characters that have a special escape equivalent.
-	 * Paralleled by QUOTED_SPECIALS.
-	 */
-	private static final String SPECIALS = "\b\t\n\f\r\"\'\\";//$NON-NLS-1$
-
-	/**
-	 * String of single-letter escape equivalents.
-	 * Parallel to SPECIALS.
-	 */
-	private static final String QUOTED_SPECIALS = "btnfr\"\'\\";//$NON-NLS-1$
 
 	/**
 	 * The literal string, including quotes and escapes; defaults to the 
@@ -52,6 +44,13 @@ public class StringLiteral extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return STRING_LITERAL;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		StringLiteral result = new StringLiteral(target);
 		result.setEscapedValue(getEscapedValue());
@@ -61,12 +60,9 @@ public class StringLiteral extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof StringLiteral)) {
-			return false;
-		}
-		StringLiteral o = (StringLiteral) other;
-		return ASTNode.equals(getEscapedValue(), o.getEscapedValue());
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -103,11 +99,25 @@ public class StringLiteral extends Expression {
 	 * 
 	 * @param token the string literal token, including enclosing double
 	 *    quotes and embedded escapes
-	 * @exception $precondition-violation:invalid-argument$
+	 * @exception IllegalArgumentException if the argument is incorrect
 	 */ 
 	public void setEscapedValue(String token) {
-		if (token == null || token.length() < 2
-		|| !token.startsWith("\"") || ! token.endsWith("\"")) {//$NON-NLS-1$//$NON-NLS-2$
+		if (token == null) {
+			throw new IllegalArgumentException();
+		}
+		Scanner scanner = getAST().scanner;
+		char[] source = token.toCharArray();
+		scanner.setSource(source);
+		scanner.resetTo(0, source.length);
+		try {
+			int tokenType = scanner.getNextToken();
+			switch(tokenType) {
+				case Scanner.TokenNameStringLiteral:
+					break;
+				default:
+					throw new IllegalArgumentException();
+			}
+		} catch(InvalidInputException e) {
 			throw new IllegalArgumentException();
 		}
 		modifying();
@@ -132,7 +142,7 @@ public class StringLiteral extends Expression {
 	 * 
 	 * @return the string value without enclosing double quotes and embedded
 	 *    escapes
-	 * @exception $postcondition-violation:invalid-literal$
+	 * @exception IllegalArgumentException if the literal value cannot be converted
 	 */ 
 	public String getLiteralValue() {
 		String s = getEscapedValue();
@@ -148,10 +158,86 @@ public class StringLiteral extends Expression {
 			}
 			if (c == '\\') {
 				// legal: b, t, n, f, r, ", ', \, 0, 1, 2, 3, 4, 5, 6, or 7
-				// FIXME
-				throw new RuntimeException("not implemented yet");//$NON-NLS-1$
+				char nextChar;
+				if ((i + 1) < len - 1) {
+					nextChar = s.charAt(i + 1);
+					i++;
+					switch(nextChar) {
+						case 'b' :
+							b.append('\b');
+							break;
+						case 't' :
+							b.append('\t');
+							break;
+						case 'n' :
+							b.append('\n');
+							break;
+						case 'f' :
+							b.append('\f');
+							break;
+						case 'r' :
+							b.append('\r');
+							break;
+						case '\"':
+							b.append('\"');
+							break;
+						case '\'':
+							b.append('\'');
+							break;
+						case '\\':
+							b.append('\\');
+							break;
+						case '0' :
+							b.append('\0');
+							break;
+						case '1' :
+							b.append('\1');
+							break;
+						case '2' :
+							b.append('\2');
+							break;
+						case '3' :
+							b.append('\3');
+							break;
+						case '4' :
+							b.append('\4');
+							break;
+						case '5' :
+							b.append('\5');
+							break;
+						case '6' :
+							b.append('\6');
+							break;
+						case '7' :
+							b.append('\7');
+							break;
+						case 'u' :
+							//handle the case of unicode.
+							int currentPosition = i + 1;
+							int c1 = 0, c2 = 0, c3 = 0, c4 = 0;
+							if ((c1 = Character.getNumericValue(s.charAt(currentPosition++))) > 15
+								|| c1 < 0
+								|| (c2 = Character.getNumericValue(s.charAt(currentPosition++))) > 15
+								|| c2 < 0
+								|| (c3 = Character.getNumericValue(s.charAt(currentPosition++))) > 15
+								|| c3 < 0
+								|| (c4 = Character.getNumericValue(s.charAt(currentPosition++))) > 15
+								|| c4 < 0){
+								throw new IllegalArgumentException("Invalid string literal"); //$NON-NLS-1$
+							} else {
+								b.append((char) (((c1 * 16 + c2) * 16 + c3) * 16 + c4));
+								i = currentPosition - 1;
+							}
+							break;
+						default:
+							throw new IllegalArgumentException("Invalid string literal");//$NON-NLS-1$
+					}
+				} else {
+					throw new IllegalArgumentException("Invalid string literal");//$NON-NLS-1$
+				}
+			} else {
+				b.append(c);
 			}
-			b.append(c);
 		}
 		return b.toString();			
 	}
@@ -175,7 +261,7 @@ public class StringLiteral extends Expression {
 	 * 
 	 * @param literal the string value without enclosing double quotes and 
 	 *    embedded escapes
-	 * @exception $precondition-violation:invalid-argument$
+	 * @exception IllegalArgumentException if the argument is incorrect
 	 */
 	public void setLiteralValue(String value) {
 		if (value == null) {
@@ -184,19 +270,63 @@ public class StringLiteral extends Expression {
 		int len = value.length();
 		StringBuffer b = new StringBuffer(len + 2);
 		
-		// FIXME - this does not do Unicode escaping
-		b.append('\"'); // opening delimiter
+		b.append("\""); // opening delimiter //$NON-NLS-1$
 		for (int i = 0; i < len; i++) {
 			char c = value.charAt(i);
-			int p = SPECIALS.indexOf(c);
-			if (p >= 0) {
-				b.append('\\');
-				b.append(QUOTED_SPECIALS.charAt(p));
-			} else {
-				b.append(c);
+			switch(c) {
+				case '\b' :
+					b.append("\\b"); //$NON-NLS-1$
+					break;
+				case '\t' :
+					b.append("\\t"); //$NON-NLS-1$
+					break;
+				case '\n' :
+					b.append("\\n"); //$NON-NLS-1$
+					break;
+				case '\f' :
+					b.append("\\f"); //$NON-NLS-1$
+					break;
+				case '\r' :
+					b.append("\\r"); //$NON-NLS-1$
+					break;
+				case '\"':
+					b.append("\\\""); //$NON-NLS-1$
+					break;
+				case '\'':
+					b.append("\\\'"); //$NON-NLS-1$
+					break;
+				case '\\':
+					b.append("\\\\"); //$NON-NLS-1$
+					break;
+				case '\0' :
+					b.append("\\0"); //$NON-NLS-1$
+					break;
+				case '\1' :
+					b.append("\\1"); //$NON-NLS-1$
+					break;
+				case '\2' :
+					b.append("\\2"); //$NON-NLS-1$
+					break;
+				case '\3' :
+					b.append("\\3"); //$NON-NLS-1$
+					break;
+				case '\4' :
+					b.append("\\4"); //$NON-NLS-1$
+					break;
+				case '\5' :
+					b.append("\\5"); //$NON-NLS-1$
+					break;
+				case '\6' :
+					b.append("\\6"); //$NON-NLS-1$
+					break;
+				case '\7' :
+					b.append("\\7"); //$NON-NLS-1$
+					break;			
+				default:
+					b.append(c);
 			}
 		}
-		b.append('\"'); // closing delimiter
+		b.append("\""); // closing delimiter //$NON-NLS-1$
 		setEscapedValue(b.toString());
 	}
 	/* (omit javadoc for this method)

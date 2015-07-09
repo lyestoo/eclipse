@@ -20,7 +20,6 @@ import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
 import org.eclipse.jdt.internal.codeassist.impl.*;
-import org.eclipse.jdt.internal.codeassist.complete.*;
 
 public class CompletionParser extends AssistParser {
 
@@ -28,13 +27,19 @@ public class CompletionParser extends AssistParser {
 
 	public int cursorLocation;
 	public char[][] labels; // the visible labels up to the cursor location
-
-
+	public AstNode assistNodeParent; // the parent node of assist node
 	/* the following fields are internal flags */
 	
 	boolean betweenNewAndLeftBraket; // whether we are between the keyword 'new' and the following left braket, ie. '[', '(' or '{'
 	boolean betweenCatchAndRightParen; // whether we are between the keyword 'catch' and the following ')'
 	boolean completionBehindDot; // true when completion identifier immediately follows a dot
+	
+	boolean nextTypeReferenceIsClass;
+	boolean nextTypeReferenceIsException;
+	boolean nextTypeReferenceIsInterface;
+	
+	int bracketDepth;
+	int throwBracketDepth;
 
 	// the stacks of types and qualifiers for invocations (ie. method invocations, allocation expressions and
 	// explicit constructor invocations). They use the same stack pointer as the selector stack (ie. invocationPtr)
@@ -130,7 +135,7 @@ protected void attachOrphanCompletionNode(){
 			if (method != null){
 				AbstractMethodDeclaration methodDecl = method.methodDeclaration;
 				if ((methodDecl.bodyStart == methodDecl.sourceEnd+1) // was missing opening brace
-					&& (scanner.searchLineNumber(orphan.sourceStart) == scanner.searchLineNumber(methodDecl.sourceEnd))){
+					&& (scanner.getLineNumber(orphan.sourceStart) == scanner.getLineNumber(methodDecl.sourceEnd))){
 					return;
 				}
 			}
@@ -141,7 +146,7 @@ protected void attachOrphanCompletionNode(){
 	}
 	
 	// the following code applies only in methods, constructors or initializers
-	if ((!this.inMethodStack[this.inMethodPtr] && !this.inInitializerStack[this.inInitializerPtr])) { 
+	if ((!this.inMethodStack[this.inMethodPtr] && !this.inFieldInitializationStack[this.inFieldInitializationPtr])) { 
 		return;
 	}
 	
@@ -155,7 +160,7 @@ protected void attachOrphanCompletionNode(){
 		if (method != null){
 			AbstractMethodDeclaration methodDecl = method.methodDeclaration;
 			if ((methodDecl.bodyStart == methodDecl.sourceEnd+1) // was missing opening brace
-				&& (scanner.searchLineNumber(expression.sourceStart) == scanner.searchLineNumber(methodDecl.sourceEnd))){
+				&& (scanner.getLineNumber(expression.sourceStart) == scanner.getLineNumber(methodDecl.sourceEnd))){
 				return;
 			}
 		}
@@ -197,12 +202,22 @@ private boolean checkCatchClause() {
 private boolean checkClassInstanceCreation() {
 	if (this.betweenNewAndLeftBraket) {
 		// completion on type inside an allocation expression
+		
+		if(this.throwBracketDepth != -1 && this.throwBracketDepth == this.bracketDepth) {
+			this.nextTypeReferenceIsException = true;	
+		}
 		TypeReference type = getTypeReference(0);
+		this.nextTypeReferenceIsException = false;
 		this.assistNode = type;
 		this.lastCheckPoint = type.sourceEnd + 1;
 		if (this.invocationType == ALLOCATION) {
-			// non qualified allocation expression: attach it later
-			this.isOrphanCompletionNode = true;
+			// non qualified allocation expression
+			AllocationExpression allocExpr = new AllocationExpression();
+			allocExpr.type = type;
+			allocExpr.sourceStart = type.sourceStart;
+			allocExpr.sourceEnd = type.sourceEnd;
+			pushOnExpressionStack(allocExpr);
+			this.isOrphanCompletionNode = false;
 		} else {
 			// qualified allocation expression
 			QualifiedAllocationExpression allocExpr = new QualifiedAllocationExpression();
@@ -453,8 +468,8 @@ private boolean checkRecoveredMethod() {
 		/* check if on line with an error already - to avoid completing inside 
 			illegal type names e.g.  int[<cursor> */
 		if (lastErrorEndPosition <= cursorLocation+1
-			&& scanner.searchLineNumber(lastErrorEndPosition) 
-				== scanner.searchLineNumber(((CompletionScanner)scanner).completedIdentifierStart)){
+			&& scanner.getLineNumber(lastErrorEndPosition) 
+				== scanner.getLineNumber(((CompletionScanner)scanner).completedIdentifierStart)){
 			return false;
 		}		
  		RecoveredMethod recoveredMethod = (RecoveredMethod)currentElement;
@@ -483,8 +498,8 @@ private boolean checkRecoveredType() {
 		/* check if on line with an error already - to avoid completing inside 
 			illegal type names e.g.  int[<cursor> */
 		if ((lastErrorEndPosition <= cursorLocation+1)
-			&& scanner.searchLineNumber(lastErrorEndPosition) 
-				== scanner.searchLineNumber(((CompletionScanner)scanner).completedIdentifierStart)){
+			&& scanner.getLineNumber(lastErrorEndPosition) 
+				== scanner.getLineNumber(((CompletionScanner)scanner).completedIdentifierStart)){
 			return false;
 		}
 		RecoveredType recoveredType = (RecoveredType)currentElement;
@@ -511,7 +526,7 @@ public void completionIdentifierCheck(){
 
 	// if not in a method in non diet mode and if not inside a field initializer, only record references attached to types
 	if (!(this.inMethodStack[this.inMethodPtr] && !this.diet)
-		&& !insideFieldInitializer()) return; 
+		&& !insideFieldInitialization()) return; 
 
 	/*
 	 	In some cases, the completion identifier may not have yet been consumed,
@@ -563,6 +578,16 @@ protected void consumeCaseLabel() {
 	}
 	super.consumeCaseLabel();
 }
+protected void consumeClassHeaderExtends() {
+	this.nextTypeReferenceIsClass = true;
+	super.consumeClassHeaderExtends();
+	this.nextTypeReferenceIsClass = false;
+}
+protected void consumeClassTypeElt() {
+	this.nextTypeReferenceIsException = true;
+	super.consumeClassTypeElt();
+	this.nextTypeReferenceIsException = false;
+}
 protected void consumeConditionalExpression(int op) {
 	Expression valueIfTrue = this.expressionStack[this.expressionPtr - 1];
 	if (valueIfTrue instanceof SingleNameReference || valueIfTrue instanceof QualifiedNameReference) {
@@ -594,6 +619,58 @@ protected void consumeConstructorHeaderName() {
 	}
 	this.restartRecovery = true;
 }
+protected void consumeEnterVariable() {
+	identifierPtr--;
+	identifierLengthPtr--;
+
+	boolean isLocalDeclaration = nestedMethod[nestedType] != 0;
+	int variableIndex = variablesCounter[nestedType];
+	int extendedDimension = intStack[intPtr + 1];
+	
+	if(isLocalDeclaration || indexOfAssistIdentifier() < 0 || variableIndex != 0 || extendedDimension != 0) {
+		identifierPtr++;
+		identifierLengthPtr++;
+		super.consumeEnterVariable();
+	} else {
+		restartRecovery = true;
+		
+		// recovery
+		if (currentElement != null) {
+			int nameSourceStart = (int)(identifierPositionStack[identifierPtr] >>> 32);
+			intPtr--;
+			
+			TypeReference type = getTypeReference(intStack[intPtr--]);
+			intPtr--;
+			
+			if (!(currentElement instanceof RecoveredType)
+				&& (currentToken == TokenNameDOT
+					|| (scanner.getLineNumber(type.sourceStart)
+							!= scanner.getLineNumber(nameSourceStart)))){
+				lastCheckPoint = nameSourceStart;
+				restartRecovery = true;
+				return;
+			}
+			
+			FieldDeclaration completionFieldDecl = new CompletionOnFieldType(type, false);
+			completionFieldDecl.modifiers = intStack[intPtr--];
+			assistNode = completionFieldDecl;
+			lastCheckPoint = type.sourceEnd + 1;
+			currentElement = currentElement.add(completionFieldDecl, 0);
+			lastIgnoredToken = -1;
+		}
+	}
+}
+protected void consumeExitVariableWithInitialization() {
+	super.consumeExitVariableWithInitialization();
+	
+	// does not keep the initialization if completion is not inside
+	AbstractVariableDeclaration variable = (AbstractVariableDeclaration) astStack[astPtr];
+	if (cursorLocation + 1 < variable.initialization.sourceStart ||
+		cursorLocation > variable.initialization.sourceEnd) {
+		variable.initialization = null;
+	}
+}
+
 /*
  * Copy of code from superclass with the following change:
  * If the cursor location is on the field access, then create a 
@@ -640,18 +717,63 @@ protected void consumeFormalParameter() {
 		listLength++;
 	} 	
 }
-
+protected void consumeInterfaceType() {
+	this.nextTypeReferenceIsInterface = true;
+	super.consumeInterfaceType();
+	this.nextTypeReferenceIsInterface = false;
+}
 protected void consumeMethodHeaderName() {
-	if (this.indexOfAssistIdentifier() < 0) {
-		super.consumeMethodHeaderName();
+	if(this.indexOfAssistIdentifier() < 0) {
+		identifierPtr--;
+		identifierLengthPtr--;
+		if(this.indexOfAssistIdentifier() != 0) {
+			identifierPtr++;
+			identifierLengthPtr++;
+			super.consumeMethodHeaderName();
+		} else {
+			restartRecovery = true;
+			
+			// recovery
+			if (currentElement != null) {
+				//name
+				char[] selector = identifierStack[identifierPtr + 1];
+				long selectorSource = identifierPositionStack[identifierPtr + 1];
+				
+				//type
+				TypeReference type = getTypeReference(intStack[intPtr--]);
+				((CompletionOnSingleTypeReference)type).isCompletionNode = false;
+				//modifiers
+				int declarationSourceStart = intStack[intPtr--];
+				int modifiers = intStack[intPtr--];
+				
+				if(scanner.getLineNumber(type.sourceStart) != scanner.getLineNumber((int) (selectorSource >>> 32))) {
+					FieldDeclaration completionFieldDecl = new CompletionOnFieldType(type, false);
+					completionFieldDecl.modifiers = modifiers;
+					assistNode = completionFieldDecl;
+					lastCheckPoint = type.sourceEnd + 1;
+					currentElement = currentElement.add(completionFieldDecl, 0);
+					lastIgnoredToken = -1;
+				} else {
+					CompletionOnMethodReturnType md = new CompletionOnMethodReturnType(type, this.compilationUnit.compilationResult);
+					md.selector = selector;
+					md.declarationSourceStart = declarationSourceStart;
+					md.modifiers = modifiers;
+					md.bodyStart = lParenPos+1;
+					listLength = 0; // initialize listLength before reading parameters/throws
+					assistNode = md;
+					this.lastCheckPoint = md.bodyStart;
+					currentElement = currentElement.add(md, 0);
+					lastIgnoredToken = -1;
+				}
+			}
+		}
 	} else {
 		// MethodHeaderName ::= Modifiersopt Type 'Identifier' '('
-		CompletionOnMethodName md = new CompletionOnMethodName();
+		CompletionOnMethodName md = new CompletionOnMethodName(this.compilationUnit.compilationResult);
 	
 		//name
 		md.selector = identifierStack[identifierPtr];
 		long selectorSource = identifierPositionStack[identifierPtr--];
-		identifierLengthPtr--;
 		//type
 		md.returnType = getTypeReference(intStack[intPtr--]);
 		//modifiers
@@ -672,8 +794,8 @@ protected void consumeMethodHeaderName() {
 		if (currentElement != null){
 			if (currentElement instanceof RecoveredType 
 				//|| md.modifiers != 0
-				|| (scanner.searchLineNumber(md.returnType.sourceStart)
-						== scanner.searchLineNumber(md.sourceStart))){
+				|| (scanner.getLineNumber(md.returnType.sourceStart)
+						== scanner.getLineNumber(md.sourceStart))){
 				lastCheckPoint = md.bodyStart;
 				currentElement = currentElement.add(md, 0);
 				lastIgnoredToken = -1;
@@ -681,9 +803,10 @@ protected void consumeMethodHeaderName() {
 				lastCheckPoint = md.sourceStart;
 				restartRecovery = true;
 			}
-		}		
+		}
 	}
 }
+
 
 protected void consumeMethodBody() {
 	super.consumeMethodBody();
@@ -720,12 +843,12 @@ protected void consumeToken(int token) {
 	if (token == TokenNameIdentifier
 			&& this.identifierStack[this.identifierPtr] == assistIdentifier()
 			&& this.currentElement == null
-			&& this.insideFieldInitializer()) {
-		this.scanner.eofPosition = cursorLocation+1;
+			&& this.insideFieldInitialization()) {
+		this.scanner.eofPosition = cursorLocation < Integer.MAX_VALUE ? cursorLocation+1 : cursorLocation;
 	}
 	
 	// if in a method or if in a field initializer 
-	if (this.inMethodStack[this.inMethodPtr] || this.inInitializerStack[this.inInitializerPtr]) {
+	if (this.inMethodStack[this.inMethodPtr] || this.inFieldInitializationStack[this.inFieldInitializationPtr]) {
 		switch (token) {
 			case TokenNameDOT:
 				switch (previous) {
@@ -788,6 +911,7 @@ protected void consumeToken(int token) {
 				break;
 			case TokenNameLPAREN:
 				this.betweenNewAndLeftBraket = false;
+				this.bracketDepth++;
 				if (this.invocationType == NO_RECEIVER || this.invocationType == NAME_RECEIVER) {
 					this.qualifier = this.expressionPtr; // remenber the last expression so that arguments are correctly computed
 				}
@@ -812,21 +936,31 @@ protected void consumeToken(int token) {
 				break;
 			case TokenNameLBRACE:
 				this.betweenNewAndLeftBraket = false;
+				this.bracketDepth++;
 				this.pushBlockInvocationPtr();
 				break;
 			case TokenNameLBRACKET:
 				this.betweenNewAndLeftBraket = false;
+				this.bracketDepth++;
 				break; 
 			case TokenNameRBRACE:
+				this.bracketDepth--;
 				if (this.blockInvocationPtr >= 0) this.blockInvocationPtr--;
 				break;
+			case TokenNameRBRACKET:
+				this.bracketDepth--;
+				break; 
 			case TokenNameRPAREN:
 				this.betweenCatchAndRightParen = false;
+				this.bracketDepth--;
 				break;
 			case TokenNameCOLON:
 				if (previous == TokenNameIdentifier) {
 					if (this.labelCounterPtr >= 0) this.labelCounterStack[this.labelCounterPtr]++;
 				}
+				break;
+			case TokenNamethrow:
+				this.throwBracketDepth= bracketDepth;
 				break;
 		}
 	}
@@ -899,23 +1033,37 @@ public NameReference createQualifiedAssistNameReference(char[][] previousIdentif
 					positions); 	
 }
 public TypeReference createQualifiedAssistTypeReference(char[][] previousIdentifiers, char[] name, long[] positions){
-	return this.betweenCatchAndRightParen // check for exception scenario 
+	return this.betweenCatchAndRightParen || this.nextTypeReferenceIsException // check for exception scenario 
 				? new CompletionOnQualifiedExceptionReference(
 					previousIdentifiers,  
 					name, 
 					positions)
-				: new CompletionOnQualifiedTypeReference(
-					previousIdentifiers, 
-					name, 
-					positions); 	
+				: this.nextTypeReferenceIsInterface
+					? new CompletionOnQualifiedInterfaceReference(
+						previousIdentifiers, 
+						name, 
+						positions)
+					: this.nextTypeReferenceIsClass
+						? new CompletionOnQualifiedClassReference(
+							previousIdentifiers, 
+							name, 
+							positions)
+						: new CompletionOnQualifiedTypeReference(
+							previousIdentifiers, 
+							name, 
+							positions); 	
 }
 public NameReference createSingleAssistNameReference(char[] name, long position) {
 	return new CompletionOnSingleNameReference(name, position);
 }
 public TypeReference createSingleAssistTypeReference(char[] name, long position) {
-	return this.betweenCatchAndRightParen // check for exception scenario 
+	return this.betweenCatchAndRightParen || this.nextTypeReferenceIsException // check for exception scenario 
 		? new CompletionOnExceptionReference(name, position) 
-		: new CompletionOnSingleTypeReference(name, position);
+		: this.nextTypeReferenceIsInterface
+			? new CompletionOnInterfaceReference(name, position) 
+			: this.nextTypeReferenceIsClass
+				? new CompletionOnClassReference(name, position) 
+				: new CompletionOnSingleTypeReference(name, position);
 }
 public CompilationUnitDeclaration dietParse(ICompilationUnit sourceUnit, CompilationResult compilationResult, int cursorLocation) {
 
@@ -967,6 +1115,8 @@ private void initializeForBlockStatements() {
 	this.completionBehindDot = false;
 	this.betweenNewAndLeftBraket = false;
 	this.betweenCatchAndRightParen = false;
+	this.bracketDepth = 0;
+	this.throwBracketDepth = -1;
 	this.invocationType = NO_RECEIVER;
 	this.qualifier = -1;
 	this.blockInvocationPtr = -1;
@@ -1013,7 +1163,7 @@ protected void pushBlockInvocationPtr() {
 		this.blockInvocationStack[++this.blockInvocationPtr] = this.invocationPtr+1;
 	} catch (IndexOutOfBoundsException e) {
 		int oldStackLength = this.blockInvocationStack.length;
-		int[] oldStack = this.labelCounterStack;
+		int[] oldStack = this.blockInvocationStack;
 		this.blockInvocationStack = new int[oldStackLength + StackIncrement];
 		System.arraycopy(oldStack, 0, this.blockInvocationStack, 0, oldStackLength);
 		this.blockInvocationStack[this.blockInvocationPtr] = this.invocationPtr+1;
@@ -1121,14 +1271,13 @@ public void resetAfterCompletion() {
  * decide which grammar goal is activated.
  */
 protected boolean resumeAfterRecovery() {
-
 	if (this.assistNode != null) {
 		/* if reached [eof] inside method body, but still inside nested type,
 			or inside a field initializer, should continue in diet mode until 
 			the end of the method body or compilation unit */
 		if ((scanner.eofPosition == cursorLocation+1)
 			&& (!(referenceContext instanceof CompilationUnitDeclaration) 
-				|| insideFieldInitializer())) {
+				|| insideFieldInitialization())) {
 
 			/*	disabled since does not handle possible field/message refs, i.e. Obj[ASSIST HERE]ect.registerNatives()		    
 			// consume extra tokens which were part of the qualified reference
@@ -1156,7 +1305,8 @@ protected boolean resumeAfterRecovery() {
 			/* restart in diet mode for finding sibling constructs */
 			if (currentElement.enclosingType() != null){
 				lastCheckPoint = this.assistNode.sourceEnd+1;
-				scanner.eofPosition = currentElement.topElement().sourceEnd()+1;
+				int end = currentElement.topElement().sourceEnd();
+				scanner.eofPosition = end < Integer.MAX_VALUE ? end + 1 : end;
 			} else {
 				this.resetStacks();
 				return false;	
@@ -1172,13 +1322,13 @@ public void setAssistIdentifier(char[] assistIdent){
  * Stores the labels left on the identifier stack if they have not been stored yet.
  */
 private void storeLabelsIfNeeded() {
-	int counter = this.labelCounterPtr >= 0 ? this.labelCounterStack[this.labelCounterPtr] : 0;
-	if (this.labels == null && this.identifierPtr >= 0) {
-		this.labels = new char[counter][];
-		System.arraycopy(this.identifierStack, this.identifierPtr - counter + 1, this.labels, 0, counter);
-	}
-	this.identifierPtr -= counter;
-	this.identifierLengthPtr -= counter; // labels have not been concatenated yet
+//	int counter = this.labelCounterPtr >= 0 ? this.labelCounterStack[this.labelCounterPtr] : 0;
+//	if (this.labels == null && this.identifierPtr >= 0) {
+//		this.labels = new char[counter][];
+//		System.arraycopy(this.identifierStack, this.identifierPtr - counter + 1, this.labels, 0, counter);
+//	}
+//	this.identifierPtr -= counter;
+//	this.identifierLengthPtr -= counter; // labels have not been concatenated yet
 }
 /*
  * Update recovery state based on current parser/scanner state

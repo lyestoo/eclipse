@@ -24,6 +24,29 @@ import org.eclipse.core.runtime.IProgressMonitor;
  * </p>
  */
 public interface IType extends IMember, IParent {
+/**
+ * Do code completion inside a code snippet in the context of the current type.
+ * 
+ * If the type can access to his source code and the insertion position is valid,
+ * then completion is performed againt source. Otherwise the completion is performed
+ * against type structure and given locals variables.
+ * 
+ * @param snippet the code snippet
+ * @param insertion the position with in source where the snippet
+ * is inserted. This position must not be in comments.
+ * A possible value is -1, if the position is not known.
+ * @param position the position with in snippet where the user 
+ * is performing code assist.
+ * @param localVariableTypesNames an array (possibly empty) of fully qualified 
+ * type names of local variables visible at the current scope
+ * @param localVariableNames an array (possibly empty) of local variable names 
+ * that are visible at the current scope
+ * @param localVariableModifiers an array (possible empty) of modifiers for 
+ * local variables
+ * @param isStatic whether the current scope is in a static context
+ * @param requestor the completion requestor
+ */
+void codeComplete(char[] snippet, int insertion, int position, char[][] localVariableTypeNames, char[][] localVariableNames, int[] localVariableModifiers, boolean isStatic, ICompletionRequestor requestor) throws JavaModelException;
 	
 /**
  * Creates and returns a field in this type with the
@@ -121,6 +144,21 @@ IMethod createMethod(String contents, IJavaElement sibling, boolean force, IProg
  * </ul>
  */
 IType createType(String contents, IJavaElement sibling, boolean force, IProgressMonitor monitor) throws JavaModelException;
+/** 
+ * Finds the methods in this type that correspond to
+ * the given method.
+ * A method m1 corresponds to another method m2 if:
+ * <ul>
+ * <li>m1 has the same element name as m2.
+ * <li>m1 has the same number of arguments as m2 and
+ *     the simple names of the argument types must be equals.
+ * <li>m1 exists.
+ * </ul>
+ * Returns <code>null</code> if no such methods can be found.
+ * 
+ * @since 2.0 
+ */		
+IMethod[] findMethods(IMethod method);
 /**
  * Returns the simple name of this type, unqualified by package or enclosing type.
  * This is a handle-only method.
@@ -152,6 +190,32 @@ IField[] getFields() throws JavaModelException;
  * @see IType#getTypeQualifiedName()
  */
 String getFullyQualifiedName();
+/**
+ * Returns the fully qualified name of this type, 
+ * including qualification for any containing types and packages.
+ * This is the name of the package, followed by <code>'.'</code>,
+ * followed by the type-qualified name using the <code>enclosingTypeSeparator<code>.
+ * 
+ * For example:
+ * <ul>
+ * <li>the fully qualified name of a class B defined as a member of a class A in a compilation unit A.java 
+ *     in a package x.y using the '.' separator is "x.y.A.B"</li>
+ * <li>the fully qualified name of a class B defined as a member of a class A in a compilation unit A.java 
+ *     in a package x.y using the '$' separator is "x.y.A$B"</li>
+ * <li>the fully qualified name of a binary type whose class file is x/y/A$B.class
+ *     using the '.' separator is "x.y.A.B"</li>
+ * <li>the fully qualified name of a binary type whose class file is x/y/A$B.class
+ *     using the '$' separator is "x.y.A$B"</li>
+ * <li>the fully qualified name of an anonymous binary type whose class file is x/y/A$1.class
+ *     using the '.' separator is "x.y.A$1"</li>
+ * </ul>
+ * 
+ * This is a handle-only method.
+ *
+ * @see IType#getTypeQualifiedName(char)
+ * @since 2.0
+ */
+String getFullyQualifiedName(char enclosingTypeSeparator);
 /**
  * Returns the Initializer with the specified position relative to
  * the order they are defined in the source.
@@ -233,6 +297,33 @@ IType getType(String name) ;
  * This is a handle-only method.
  */
 String getTypeQualifiedName();
+/**
+ * Returns the type-qualified name of this type, 
+ * including qualification for any enclosing types,
+ * but not including package qualification.
+ * This consists of the simple names of any enclosing types, 
+ * separated by the <code>enclosingTypeSeparator</code>, 
+ * followed by the simple name of this type.
+ * 
+ * For example:
+ * <ul>
+ * <li>the type qualified name of a class B defined as a member of a class A
+ *     using the '.' separator is "A.B"</li>
+ * <li>the type qualified name of a class B defined as a member of a class A
+ *     using the '$' separator is "A$B"</li>
+ * <li>the type qualified name of a binary type whose class file is A$B.class
+ *     using the '.' separator is "A.B"</li>
+ * <li>the type qualified name of a binary type whose class file is A$B.class
+ *     using the '$' separator is "A$B"</li>
+ * <li>the type qualified name of an anonymous binary type whose class file is A$1.class
+ *     using the '.' separator is "A$1"</li>
+ * </ul>
+ *
+ * This is a handle-only method.
+ * 
+ * @since 2.0
+ */
+String getTypeQualifiedName(char enclosingTypeSeparator);
 /**
  * Returns the immediate member types declared by this type.
  * The results are listed in the order in which they appear in the source or class file.

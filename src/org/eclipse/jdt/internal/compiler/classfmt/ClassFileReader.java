@@ -34,10 +34,17 @@ public class ClassFileReader extends ClassFileStruct implements AttributeNamesCo
 	private int classNameIndex;
 	private int innerInfoIndex;
 /**
- * @param classFileBytes actual bytes of a .class file
- * @param fileName actual name of the file that contains the bytes, can be null
+ * @param classFileBytes byte[]
+ * 		Actual bytes of a .class file
+ * 
+ * @param fileName char[]
+ * 		Actual name of the file that contains the bytes, can be null
+ * 
+ * @param fullyInitialize boolean
+ * 		Flag to fully initialize the new object
+ * @exception ClassFormatException
  */
-public ClassFileReader(byte classFileBytes[], char[] fileName) throws ClassFormatException {
+public ClassFileReader(byte[] classFileBytes, char[] fileName, boolean fullyInitialize) throws ClassFormatException {
 	// This method looks ugly but is actually quite simple, the constantPool is constructed
 	// in 3 passes.  All non-primitive constant pool members that usually refer to other members
 	// by index are tweaked to have their value in inst vars, this minor cost at read-time makes
@@ -191,12 +198,26 @@ public ClassFileReader(byte classFileBytes[], char[] fileName) throws ClassForma
 			}
 			readOffset += (6 + u4At(readOffset + 2));
 		}
+		if (fullyInitialize) {
+			this.initialize();
+		}
 	} catch (Exception e) {
 		throw new ClassFormatException(
 			ClassFormatException.ErrTruncatedInput, 
 			readOffset); 
 	}
 }
+
+/**
+ * @param classFileBytes Actual bytes of a .class file
+ * @param fileName	Actual name of the file that contains the bytes, can be null
+ * 
+ * @exception ClassFormatException
+ */
+public ClassFileReader(byte classFileBytes[], char[] fileName) throws ClassFormatException {
+	this(classFileBytes, fileName, false);
+}
+
 /**
  * 	Answer the receiver's access flags.  The value of the access_flags
  *	item is a mask of modifiers used with class and interface declarations.
@@ -232,7 +253,7 @@ public int[] getConstantPoolOffsets() {
  * or null if the receiver is a top level type.
  */
 public char[] getEnclosingTypeName() {
-	if (this.innerInfo != null) {
+	if (this.innerInfo != null && !this.isAnonymous()) {
 		return this.innerInfo.getEnclosingTypeName();
 	}
 	return null;
@@ -308,7 +329,14 @@ public IBinaryNestedType[] getMemberTypes() {
 		for (int i = startingIndex; i < length; i++) {
 			InnerClassInfo currentInnerInfo = this.innerInfos[i];
 			int outerClassNameIdx = currentInnerInfo.outerClassNameIndex;
-			if (outerClassNameIdx != 0 && outerClassNameIdx == this.classNameIndex) {
+			int innerNameIndex = currentInnerInfo.innerNameIndex;
+			/*
+			 * Checking that outerClassNameIDx is different from 0 should be enough to determine if an inner class
+			 * attribute entry is a member class, but due to the bug:
+			 * http://dev.eclipse.org/bugs/show_bug.cgi?id=14592
+			 * we needed to add an extra check. So we check that innerNameIndex is different from 0 as well.
+			 */
+			if (outerClassNameIdx != 0 && innerNameIndex != 0 && outerClassNameIdx == this.classNameIndex) {
 				memberTypes[memberTypeIndex++] = currentInnerInfo;
 			}
 		}
@@ -427,40 +455,100 @@ public boolean isNestedType() {
  * (c)1998 Object Technology International.
  * (c)1998 International Business Machines Corporation.
  *
- * @param file The file you want to read
- * @return org.eclipse.jdt.internal.compiler.classfmt.DietClassFile
+ * @param file java.io.File
+ * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
+ * @throws ClassFormatException
+ * @throws IOException
  */
 public static ClassFileReader read(File file) throws ClassFormatException, IOException {
-	byte classFileBytes[] = Util.getFileByteContent(file);
-	return new ClassFileReader(classFileBytes, file.getAbsolutePath().toCharArray());
+	return read(file, false);
 }
 /**
  * (c)1998 Object Technology International.
  * (c)1998 International Business Machines Corporation.
  *
- * @param String fileName
+ * @param file java.io.File
+ * @param fullyInitialize boolean
+ * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
+ * @throws ClassFormatException
+ * @throws IOException
+ */
+public static ClassFileReader read(File file, boolean fullyInitialize) throws ClassFormatException, IOException {
+	byte classFileBytes[] = Util.getFileByteContent(file);
+	ClassFileReader classFileReader = new ClassFileReader(classFileBytes, file.getAbsolutePath().toCharArray());
+	if (fullyInitialize) {
+		classFileReader.initialize();
+	}
+	return classFileReader;
+}
+/**
+ * (c)1998 Object Technology International.
+ * (c)1998 International Business Machines Corporation.
+ *
+ * @param fileName java.lang.String
+ * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
+ * @throws ClassFormatException
+ * @throws IOException
  */
 public static ClassFileReader read(String fileName) throws ClassFormatException, java.io.IOException {
-	return read(new File(fileName));
+	return read(fileName, false);
 }
 /**
  * (c)1998 Object Technology International.
  * (c)1998 International Business Machines Corporation.
  *
- * @param java.util.zip.ZipFile zip
- * @param java.lang.String filename
- * @return org.eclipse.jdt.internal.compiler.classfmt.DietClassFile
+ * @param fileName java.lang.String
+ * @param fullyInitialize boolean
+ * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
+ * @throws ClassFormatException
+ * @throws IOException
+ */
+public static ClassFileReader read(String fileName, boolean fullyInitialize) throws ClassFormatException, java.io.IOException {
+	return read(new File(fileName), fullyInitialize);
+}
+/**
+ * (c)1998 Object Technology International.
+ * (c)1998 International Business Machines Corporation.
+ *
+ * @param zip java.util.zip.ZipFile
+ * @param filename java.lang.String
+ * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
+ * @throws ClassFormatException
+ * @throws IOException
  */
 public static ClassFileReader read(
 	java.util.zip.ZipFile zip, 
 	String filename)
 	throws ClassFormatException, java.io.IOException {
+		return read(zip, filename, false);
+}
+/**
+ * (c)1998 Object Technology International.
+ * (c)1998 International Business Machines Corporation.
+ *
+ * @param zip java.util.zip.ZipFile
+ * @param filename java.lang.String
+ * @param fullyInitialize boolean
+ * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
+ * @throws ClassFormatException
+ * @throws IOException
+ */
+public static ClassFileReader read(
+	java.util.zip.ZipFile zip, 
+	String filename,
+	boolean fullyInitialize)
+	throws ClassFormatException, java.io.IOException {
 	java.util.zip.ZipEntry ze = zip.getEntry(filename);
 	if (ze == null)
 		return null;
 	byte classFileBytes[] = Util.getZipEntryByteContent(ze, zip);
-	return new ClassFileReader(classFileBytes, filename.toCharArray());
+	ClassFileReader classFileReader = new ClassFileReader(classFileBytes, filename.toCharArray());
+	if (fullyInitialize) {
+		classFileReader.initialize();
+	}
+	return classFileReader;
 }
+
 /**
  * (c)1998 Object Technology International.
  * (c)1998 International Business Machines Corporation.
@@ -734,5 +822,28 @@ private boolean hasStructuralMethodChanges(MethodInfo currentMethodInfo, MethodI
 				return true;
 	}
 	return false;
-}			
+}
+/**
+ * This method is used to fully initialize the contents of the receiver. All methodinfos, fields infos
+ * will be therefore fully initialized and we can get rid of the bytes.
+ */
+private void initialize() {
+	for (int i = 0, max = fieldsCount; i < max; i++) {
+		fields[i].initialize();
+	}
+	for (int i = 0, max = methodsCount; i < max; i++) {
+		methods[i].initialize();
+	}
+	if (innerInfos != null) {
+		for (int i = 0, max = innerInfos.length; i < max; i++) {
+			innerInfos[i].initialize();
+		}
+	}
+	this.reset();
+}
+protected void reset() {
+	this.constantPoolOffsets = null;
+	super.reset();
+}
+
 }

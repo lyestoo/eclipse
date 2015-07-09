@@ -14,6 +14,7 @@ public class MethodInfo extends ClassFileStruct implements IBinaryMethod, Attrib
 	private char[][] exceptionNames;
 	private int[] constantPoolOffsets;
 	private boolean isDeprecated;
+	private boolean isSynthetic;
 	private int accessFlags;
 	private char[] name;
 	private char[] signature;
@@ -84,11 +85,11 @@ public int getModifiers() {
 	if (accessFlags == -1) {
 		// compute the accessflag. Don't forget the deprecated attribute
 		accessFlags = u2At(0);
-		readDeprecatedAttributes();
+		readDeprecatedAndSyntheticAttributes();
 		if (isDeprecated) {
 			accessFlags |= AccDeprecated;
 		}
-		if (isSynthetic()) {
+		if (isSynthetic) {
 			accessFlags |= AccSynthetic;
 		}
 	}
@@ -129,20 +130,9 @@ public boolean isConstructor() {
  * @return boolean
  */
 public boolean isSynthetic() {
-	int attributesCount = u2At(6);
-	int readOffset = 8;
-	boolean isSynthetic = false;
-	for (int i = 0; i < attributesCount; i++) {
-		int utf8Offset = constantPoolOffsets[u2At(readOffset)] - structOffset;
-		char[] attributeName = utf8At(utf8Offset + 3, u2At(utf8Offset + 1));
-		if (CharOperation.equals(attributeName, SyntheticName)) {
-			isSynthetic = true;
-		}
-		readOffset += (6 + u4At(readOffset + 2));
-	}
-	return isSynthetic;
+	return (getModifiers() & AccSynthetic) != 0;
 }
-private void readDeprecatedAttributes() {
+private void readDeprecatedAndSyntheticAttributes() {
 	int attributesCount = u2At(6);
 	int readOffset = 8;
 	for (int i = 0; i < attributesCount; i++) {
@@ -150,6 +140,8 @@ private void readDeprecatedAttributes() {
 		char[] attributeName = utf8At(utf8Offset + 3, u2At(utf8Offset + 1));
 		if (CharOperation.equals(attributeName, DeprecatedName)) {
 			isDeprecated = true;
+		} else if (CharOperation.equals(attributeName, SyntheticName)) {
+			isSynthetic = true;
 		}
 		readOffset += (6 + u4At(readOffset + 2));
 	}
@@ -222,5 +214,21 @@ public int compareTo(Object o) {
 	int result = new String(this.getSelector()).compareTo(new String(otherMethod.getSelector()));
 	if (result != 0) return result;
 	return new String(this.getMethodDescriptor()).compareTo(new String(otherMethod.getMethodDescriptor()));
+}
+
+/**
+ * This method is used to fully initialize the contents of the receiver. All methodinfos, fields infos
+ * will be therefore fully initialized and we can get rid of the bytes.
+ */
+void initialize() {
+	getModifiers();
+	getSelector();
+	getMethodDescriptor();
+	getExceptionTypeNames();
+	reset();
+}
+protected void reset() {
+	this.constantPoolOffsets = null;
+	super.reset();
 }
 }

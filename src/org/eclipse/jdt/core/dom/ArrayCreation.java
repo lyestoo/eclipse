@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -72,6 +72,13 @@ public class ArrayCreation extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return ARRAY_CREATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		ArrayCreation result = new ArrayCreation(target);
 		result.setType((ArrayType) getType().clone(target));
@@ -84,15 +91,9 @@ public class ArrayCreation extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof ArrayCreation)) {
-			return false;
-		}
-		ArrayCreation o = (ArrayCreation) other;
-		return 
-			(ASTNode.equalNodes(getType(), o.getType())
-			&& ASTNode.equalLists(dimensions(), o.dimensions())
-			&& ASTNode.equalNodes(getInitializer(), o.getInitializer()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -127,8 +128,8 @@ public class ArrayCreation extends Expression {
 	 * Sets the array type in this array creation expression.
 	 * 
 	 * @param type the new array type
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setType(ArrayType type) {
 		if (type == null) {
@@ -166,9 +167,9 @@ public class ArrayCreation extends Expression {
 	 * 
 	 * @param initializer the array initializer node, or <code>null</code>
 	 *    if there is none
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setInitializer(ArrayInitializer initializer) {
 		// an ArrayCreation may occur inside an ArrayInitializer

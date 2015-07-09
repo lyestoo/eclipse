@@ -2,8 +2,9 @@ package org.eclipse.jdt.internal.eval;
 
 /*
  * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
+ * All Rights Reserved. 
  */
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
@@ -86,13 +87,13 @@ protected void consumeClassHeaderName() {
 	TypeDeclaration typeDecl;
 	if (nestedMethod[nestedType] == 0) {
 		if (nestedType != 0) {
-			typeDecl = new MemberTypeDeclaration();
+			typeDecl = new MemberTypeDeclaration(this.compilationUnit.compilationResult);
 		} else {
-			typeDecl = new CodeSnippetTypeDeclaration();
+			typeDecl = new CodeSnippetTypeDeclaration(this.compilationUnit.compilationResult);
 		}
 	} else {
 		// Record that the block has a declaration for local types
-		typeDecl = new LocalTypeDeclaration();
+		typeDecl = new LocalTypeDeclaration(this.compilationUnit.compilationResult);
 		markCurrentMethodWithLocalType();
 		blockReal();
 	}
@@ -164,13 +165,13 @@ protected void consumeInterfaceHeaderName() {
 	TypeDeclaration typeDecl;
 	if (nestedMethod[nestedType] == 0) {
 		if (nestedType != 0) {
-			typeDecl = new MemberTypeDeclaration();
+			typeDecl = new MemberTypeDeclaration(this.compilationUnit.compilationResult);
 		} else {
-			typeDecl = new CodeSnippetTypeDeclaration();
+			typeDecl = new CodeSnippetTypeDeclaration(this.compilationUnit.compilationResult);
 		}
 	} else {
 		// Record that the block has a declaration for local types
-		typeDecl = new LocalTypeDeclaration();
+		typeDecl = new LocalTypeDeclaration(this.compilationUnit.compilationResult);
 		markCurrentMethodWithLocalType(); 
 		blockReal();
 	}
@@ -295,8 +296,8 @@ protected void consumeMethodDeclaration(boolean isNotAbstract) {
 protected void consumeMethodInvocationName() {
 	// MethodInvocation ::= Name '(' ArgumentListopt ')'
 
-	if (scanner.startPosition >= codeSnippetStart
-		&& scanner.startPosition <= codeSnippetEnd + 1
+	if (scanner.startPosition >= this.codeSnippetStart
+		&& scanner.startPosition <= this.codeSnippetEnd + 1 + Util.LINE_SEPARATOR_CHARS.length // 14838
 		&& isTopLevelType()) {
 			
 		// when the name is only an identifier...we have a message send to "this" (implicit)
@@ -336,8 +337,8 @@ protected void consumeMethodInvocationSuper() {
 protected void consumePrimaryNoNewArrayThis() {
 	// PrimaryNoNewArray ::= 'this'
 
-	if (scanner.startPosition >= codeSnippetStart
-		&& scanner.startPosition <= codeSnippetEnd + 1
+	if (scanner.startPosition >= this.codeSnippetStart
+		&& scanner.startPosition <= this.codeSnippetEnd + 1 + Util.LINE_SEPARATOR_CHARS.length // 14838
 		&& isTopLevelType()) {
 		pushOnExpressionStack(
 			new CodeSnippetThisReference(intStack[intPtr--], endPosition, this.evaluationContext, false));
@@ -401,7 +402,7 @@ protected void consumeStatementReturn() {
 	// returned value intercepted by code snippet 
 	// support have to be defined at toplevel only
 	if ((this.hasRecoveredOnExpression
-			|| (scanner.startPosition >= codeSnippetStart && scanner.startPosition <= codeSnippetEnd+1))
+			|| (scanner.startPosition >= codeSnippetStart && scanner.startPosition <= codeSnippetEnd+1+Util.LINE_SEPARATOR_CHARS.length /* 14838*/))
 		&& this.expressionLengthStack[this.expressionLengthPtr] != 0
 		&& isTopLevelType()) {
 		this.expressionLengthPtr--;
@@ -490,7 +491,7 @@ protected CompilationUnitDeclaration endParse(int act) {
 			int maxRegularPos = 0, problemCount = unitResult.problemCount;
 			for (int i = 0; i < this.problemCountBeforeRecovery; i++) {
 				// skip unmatched bracket problems
-				if (unitResult.problems[i].getID() == ProblemIrritants.UnmatchedBracket) continue;
+				if (unitResult.problems[i].getID() == IProblem.UnmatchedBracket) continue;
 				
 				int start = unitResult.problems[i].getSourceStart();
 				if (start > maxRegularPos && start <= this.codeSnippetEnd) {
@@ -500,7 +501,7 @@ protected CompilationUnitDeclaration endParse(int act) {
 			int maxRecoveryPos = 0;
 			for (int i = this.problemCountBeforeRecovery; i < problemCount; i++) {
 				// skip unmatched bracket problems
-				if (unitResult.problems[i].getID() == ProblemIrritants.UnmatchedBracket) continue;
+				if (unitResult.problems[i].getID() == IProblem.UnmatchedBracket) continue;
 				
 				int start = unitResult.problems[i].getSourceStart();
 				if (start > maxRecoveryPos && start <= this.codeSnippetEnd) {
@@ -525,7 +526,7 @@ protected NameReference getUnspecifiedReference() {
 	/* build a (unspecified) NameReference which may be qualified*/
 
 	if (scanner.startPosition >= codeSnippetStart 
-		&& scanner.startPosition <= codeSnippetEnd+1){
+		&& scanner.startPosition <= codeSnippetEnd+1+Util.LINE_SEPARATOR_CHARS.length /*14838*/){
 		int length;
 		NameReference ref;
 		if ((length = identifierLengthStack[identifierLengthPtr--]) == 1)
@@ -561,7 +562,7 @@ protected NameReference getUnspecifiedReferenceOptimized() {
 	look for that it is not a type reference */
 
 	if (scanner.startPosition >= codeSnippetStart 
-		&& scanner.startPosition <= codeSnippetEnd+1){
+		&& scanner.startPosition <= codeSnippetEnd+1+Util.LINE_SEPARATOR_CHARS.length /*14838*/){
 		int length;
 		NameReference ref;
 		if ((length = identifierLengthStack[identifierLengthPtr--]) == 1) {
@@ -629,7 +630,7 @@ protected MessageSend newMessageSend() {
  * Records the scanner position if we're parsing a top level type.
  */
 private void recordLastStatementIfNeeded() {
-	if ((isTopLevelType()) && (this.scanner.startPosition <= this.codeSnippetEnd)) {
+	if ((isTopLevelType()) && (this.scanner.startPosition <= this.codeSnippetEnd+Util.LINE_SEPARATOR_CHARS.length /*14838*/)) {
 		this.lastStatement = this.scanner.startPosition;
 	}
 }
@@ -660,7 +661,7 @@ protected boolean resumeOnSyntaxError() {
 	this.scanner.initialPosition = this.lastStatement;
 	this.scanner.startPosition = this.lastStatement;
 	this.scanner.currentPosition = this.lastStatement;
-	this.scanner.eofPosition = this.codeSnippetEnd + 1; // stop after expression 
+	this.scanner.eofPosition = this.codeSnippetEnd < Integer.MAX_VALUE ? this.codeSnippetEnd + 1 : this.codeSnippetEnd; // stop after expression 
 	this.scanner.commentPtr = -1;
 
 	// reset stacks in consistent state

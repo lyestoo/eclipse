@@ -95,10 +95,8 @@ public final boolean areTypesCastCompatible(BlockScope scope, TypeBinding castTb
 			return false;
 		}
 
-		//===houps=====
 		return false;
 	}
-
 
 	//------------(castType) null--------------
 	if (expressionTb == NullBinding) {
@@ -141,7 +139,6 @@ public final boolean areTypesCastCompatible(BlockScope scope, TypeBinding castTb
 			}
 		}
 
-		//=========houps=============
 		return false;
 	}
 	if (expressionTb.isInterface()) {
@@ -188,25 +185,28 @@ public final boolean areTypesCastCompatible(BlockScope scope, TypeBinding castTb
 			return true;
 		}
 
-
-		//=========hoops===========	
 		return false;
 	}
 
-	//==========HOUPS==========
 	return false;
 }
-public final void computeConstant(TypeBinding leftTb, TypeBinding rightTb){
-
-	if ( (left.constant != NotAConstant) && (right.constant != NotAConstant) )
-	{	constant = Constant.computeConstantOperationEQUAL_EQUAL(left.constant,rightTb.id,EQUAL_EQUAL,right.constant,rightTb.id);
+public final void computeConstant(TypeBinding leftTb, TypeBinding rightTb) {
+	if ((left.constant != NotAConstant) && (right.constant != NotAConstant)) {
+		constant =
+			Constant.computeConstantOperationEQUAL_EQUAL(
+				left.constant,
+				leftTb.id,
+				EQUAL_EQUAL,
+				right.constant,
+				rightTb.id);
 		if (((bits & OperatorMASK) >> OperatorSHIFT) == NOT_EQUAL)
-			constant = Constant.fromValue(! constant.booleanValue()) ;}
-	else
-		constant = NotAConstant ;
+			constant = Constant.fromValue(!constant.booleanValue());
+	} else {
+		constant = NotAConstant;
+	}
 }
 /**
- * Normal == or != code generation
+ * Normal == or != code generation.
  *
  * @param currentScope org.eclipse.jdt.internal.compiler.lookup.BlockScope
  * @param codeStream org.eclipse.jdt.internal.compiler.codegen.CodeStream

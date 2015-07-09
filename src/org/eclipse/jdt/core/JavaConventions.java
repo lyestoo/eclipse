@@ -6,11 +6,14 @@ package org.eclipse.jdt.core;
  */
  
 
-import org.eclipse.jdt.internal.compiler.parser.InvalidInputException;
+import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.core.compiler.ITerminalSymbols;
+import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
-import org.eclipse.jdt.internal.compiler.parser.TerminalSymbols;
 
 import org.eclipse.jdt.internal.compiler.util.CharOperation;
+
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.StringTokenizer;
 
@@ -64,7 +67,7 @@ public static boolean isOverlappingRoots(IPath rootPath1, IPath rootPath2) {
  * from the given id.
  * Returns <code>null</code> if the id was not valid.
  */
-private static char[] scannedIdentifier(String id) {
+private static synchronized char[] scannedIdentifier(String id) {
 	if (id == null) {
 		return null;
 	}
@@ -73,7 +76,7 @@ private static char[] scannedIdentifier(String id) {
 		return null;
 	}
 	try {
-		SCANNER.setSourceBuffer(id.toCharArray());
+		SCANNER.setSource(id.toCharArray());
 		int token = SCANNER.getNextToken();
 		char[] currentIdentifier;
 		try {
@@ -82,8 +85,8 @@ private static char[] scannedIdentifier(String id) {
 			return null;
 		}
 		int nextToken= SCANNER.getNextToken();
-		if (token == TerminalSymbols.TokenNameIdentifier 
-			&& nextToken == TerminalSymbols.TokenNameEOF
+		if (token == ITerminalSymbols.TokenNameIdentifier 
+			&& nextToken == ITerminalSymbols.TokenNameEOF
 			&& SCANNER.startPosition == SCANNER.source.length) { // to handle case where we had an ArrayIndexOutOfBoundsException 
 															     // while reading the last token
 			return currentIdentifier;
@@ -339,6 +342,7 @@ public static IStatus validatePackageName(String name) {
 	}
 	IWorkspace workspace = ResourcesPlugin.getWorkspace();
 	StringTokenizer st = new StringTokenizer(name, new String(new char[] {fgDot}));
+	boolean firstToken = true;
 	while (st.hasMoreTokens()) {
 		String typeName = st.nextToken();
 		typeName = typeName.trim(); // grammar allows spaces
@@ -350,6 +354,10 @@ public static IStatus validatePackageName(String name) {
 		if (!status.isOK()) {
 			return status;
 		}
+		if (firstToken && scannedID.length > 0 && Character.isUpperCase(scannedID[0])) {
+			return new Status(IStatus.WARNING, JavaCore.PLUGIN_ID, -1, Util.bind("convention.package.uppercaseName"), null); //$NON-NLS-1$
+		}
+		firstToken = false;
 	}
 	return new Status(IStatus.OK, JavaCore.PLUGIN_ID, -1, "OK", null); //$NON-NLS-1$
 }
@@ -365,8 +373,8 @@ public static IStatus validatePackageName(String name) {
  *   <li> Output location must be nested inside project.
  * </ul>
  * 
- *  Note that the classpath entries are not validated automatically. Only bound variables are considered in
- *  the checking process (this allows to perform a consistency check on a classpath which has references to
+ *  Note that the classpath entries are not validated automatically. Only bound variables or containers are considered 
+ *  in the checking process (this allows to perform a consistency check on a classpath which has references to
  *  yet non existing projects, folders, ...).
  * 
  * @param classpath a given classpath
@@ -399,20 +407,56 @@ public static IJavaModelStatus validateClasspath(IJavaProject javaProject, IClas
 	// tolerate null path, it will be reset to default
 	int length = classpath == null ? 0 : classpath.length; 
 
-	IClasspathEntry[] originalClasspath = classpath;
+	ArrayList resolvedEntries = new ArrayList();
 	for (int i = 0 ; i < length; i++) {
-		// use resolved variable
-		if (classpath[i].getEntryKind() == IClasspathEntry.CPE_VARIABLE){
-			if (classpath == originalClasspath) System.arraycopy(originalClasspath, 0, classpath = new IClasspathEntry[length], 0, length);
-			classpath[i] = JavaCore.getResolvedClasspathEntry(classpath[i]);
-		}
-		if (classpath[i] != null){
-			if (classpath[i].getEntryKind() == IClasspathEntry.CPE_SOURCE) hasSource = true;
-			// check if any source entries coincidates with binary output - in which case nesting inside output is legal
-			if (classpath[i].getPath().equals(outputLocation)) allowNestingInOutput = true;
+		IClasspathEntry rawEntry = classpath[i];
+		switch(rawEntry.getEntryKind()){
+			
+			case IClasspathEntry.CPE_VARIABLE :
+				IClasspathEntry resolvedEntry = JavaCore.getResolvedClasspathEntry(rawEntry);
+				if (resolvedEntry != null){
+					// check if any source entries coincidates with binary output - in which case nesting inside output is legal
+					if (resolvedEntry.getPath().equals(outputLocation)) allowNestingInOutput = true;
+					resolvedEntries.add(resolvedEntry);
+				}
+				break;
+
+			case IClasspathEntry.CPE_CONTAINER :
+				try {
+					IClasspathContainer container = JavaCore.getClasspathContainer(rawEntry.getPath(), javaProject);
+					if (container != null){
+						IClasspathEntry[] containerEntries = container.getClasspathEntries();
+						if (containerEntries != null){
+							for (int j = 0, containerLength = containerEntries.length; j < containerLength; j++){
+								//resolvedEntry = JavaCore.getResolvedClasspathEntry(containerEntries[j]);
+								resolvedEntry = containerEntries[j];
+								if (resolvedEntry != null){
+									// check if any source entries coincidates with binary output - in which case nesting inside output is legal
+									if (resolvedEntry.getPath().equals(outputLocation)) allowNestingInOutput = true;
+									resolvedEntries.add(resolvedEntry);
+								}
+							}
+						}
+					}
+				} catch(JavaModelException e){
+					return new JavaModelStatus(e);
+				}
+				break;
+				
+			case IClasspathEntry.CPE_SOURCE :
+				hasSource = true;
+			default :
+				// check if any source entries coincidates with binary output - in which case nesting inside output is legal
+				if (rawEntry.getPath().equals(outputLocation)) allowNestingInOutput = true;
+				resolvedEntries.add(rawEntry);
+				break;
 		}
 	}
 	if (!hasSource) allowNestingInOutput = true; // if no source, then allowed
+	
+	length = resolvedEntries.size();
+	classpath = new IClasspathEntry[length];
+	resolvedEntries.toArray(classpath);
 	
 	HashSet pathes = new HashSet(length);
 	
@@ -437,12 +481,10 @@ public static IJavaModelStatus validateClasspath(IJavaProject javaProject, IClas
 			}
 			continue;
 		}
-		if (entryPath.equals(outputLocation)) continue;
-
 
 		// prevent nesting source entries in each other
 		if (kind == IClasspathEntry.CPE_SOURCE 
-				|| (kind == IClasspathEntry.CPE_LIBRARY && !org.eclipse.jdt.internal.compiler.util.Util.isArchiveFileName(entryPath.toString()))){
+				|| (kind == IClasspathEntry.CPE_LIBRARY && !org.eclipse.jdt.internal.compiler.util.Util.isArchiveFileName(entryPath.lastSegment()))){
 			for (int j = 0; j < classpath.length; j++){
 				IClasspathEntry otherEntry = classpath[j];
 				if (otherEntry == null) continue;
@@ -450,7 +492,7 @@ public static IJavaModelStatus validateClasspath(IJavaProject javaProject, IClas
 				if (entry != otherEntry 
 					&& (otherKind == IClasspathEntry.CPE_SOURCE 
 							|| (otherKind == IClasspathEntry.CPE_LIBRARY 
-									&& !org.eclipse.jdt.internal.compiler.util.Util.isArchiveFileName(otherEntry.getPath().toString())))){
+									&& !org.eclipse.jdt.internal.compiler.util.Util.isArchiveFileName(otherEntry.getPath().lastSegment())))){
 					if (otherEntry.getPath().isPrefixOf(entryPath)){
 						return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.cannotNestEntryInEntry", entryPath.toString(), otherEntry.getPath().toString())); //$NON-NLS-1$
 					}
@@ -458,7 +500,7 @@ public static IJavaModelStatus validateClasspath(IJavaProject javaProject, IClas
 			}
 		}
 		// prevent nesting output location inside entry
-		if (entryPath.isPrefixOf(outputLocation)) {
+		if (!entryPath.equals(outputLocation) && entryPath.isPrefixOf(outputLocation)) {
 			return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.cannotNestEntryInOutput",entryPath.toString(), outputLocation.toString())); //$NON-NLS-1$
 		}
 
@@ -482,6 +524,42 @@ public static IJavaModelStatus validateClasspath(IJavaProject javaProject, IClas
 		
 		switch(entry.getEntryKind()){
 
+			// container entry check
+			case IClasspathEntry.CPE_CONTAINER :
+				if (path != null && path.segmentCount() >= 1){
+					try {
+						IClasspathContainer container = JavaCore.getClasspathContainer(path, javaProject);
+						// container retrieval is performing validation check on container entry kinds.
+						if (container == null){
+							return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundContainerPath", path.toString())); //$NON-NLS-1$
+						}
+						IClasspathEntry[] containerEntries = container.getClasspathEntries();
+						if (containerEntries != null){
+							for (int i = 0, length = containerEntries.length; i < length; i++){
+								IClasspathEntry containerEntry = containerEntries[i];
+								int kind = containerEntry == null ? 0 : containerEntry.getEntryKind();
+								if (containerEntry == null
+									|| kind == IClasspathEntry.CPE_SOURCE
+									|| kind == IClasspathEntry.CPE_VARIABLE
+									|| kind == IClasspathEntry.CPE_CONTAINER){
+										return new JavaModelStatus(
+											IJavaModelStatusConstants.INVALID_CP_CONTAINER_ENTRY,
+											container.getPath().toString());
+								}
+								IJavaModelStatus containerEntryStatus = validateClasspathEntry(javaProject, containerEntry, checkSourceAttachment);
+								if (!containerEntryStatus.isOK()){
+									return containerEntryStatus;
+								}
+							}
+						}
+					} catch(JavaModelException e){
+						return new JavaModelStatus(e);
+					}
+				} else {
+					return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.illegalContainerPath", path.toString()));					 //$NON-NLS-1$
+				}
+				break;
+			
 			// variable entry check
 			case IClasspathEntry.CPE_VARIABLE :
 				if (path != null && path.segmentCount() >= 1){
@@ -509,7 +587,7 @@ public static IJavaModelStatus validateClasspath(IJavaProject javaProject, IClas
 										&& sourceAttachment != null
 										&& !sourceAttachment.isEmpty()
 										&& JavaModel.getTarget(workspaceRoot, sourceAttachment, true) == null){
-										return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundSourceAttachment", sourceAttachment.toString())); //$NON-NLS-1$
+										return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundSourceAttachment", sourceAttachment.toString(), path.toString())); //$NON-NLS-1$
 									}
 								}
 								break;
@@ -518,7 +596,7 @@ public static IJavaModelStatus validateClasspath(IJavaProject javaProject, IClas
 									&& sourceAttachment != null 
 									&& !sourceAttachment.isEmpty()
 									&& JavaModel.getTarget(workspaceRoot, sourceAttachment, true) == null){
-									return  new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundSourceAttachment", sourceAttachment.toString())); //$NON-NLS-1$
+									return  new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundSourceAttachment", sourceAttachment.toString(), path.toString())); //$NON-NLS-1$
 								}
 						}
 					} else if (target instanceof File){
@@ -526,7 +604,7 @@ public static IJavaModelStatus validateClasspath(IJavaProject javaProject, IClas
 							&& sourceAttachment != null 
 							&& !sourceAttachment.isEmpty()
 							&& JavaModel.getTarget(workspaceRoot, sourceAttachment, true) == null){
-							return  new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundSourceAttachment", sourceAttachment.toString())); //$NON-NLS-1$
+							return  new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundSourceAttachment", sourceAttachment.toString(), path.toString())); //$NON-NLS-1$
 						}
 					} else {
 						return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundLibrary", path.toString())); //$NON-NLS-1$
@@ -543,6 +621,9 @@ public static IJavaModelStatus validateClasspath(IJavaProject javaProject, IClas
 					try {
 						if (!project.exists() || !project.hasNature(JavaCore.NATURE_ID)){
 							return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundProject", path.segment(0).toString())); //$NON-NLS-1$
+						}
+						if (!project.isOpen()){
+							return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.closedProject", path.segment(0).toString())); //$NON-NLS-1$
 						}
 					} catch (CoreException e){
 						return new JavaModelStatus(IJavaModelStatusConstants.INVALID_CLASSPATH, Util.bind("classpath.unboundProject", path.segment(0).toString())); //$NON-NLS-1$

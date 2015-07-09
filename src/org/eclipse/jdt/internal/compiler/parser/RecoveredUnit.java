@@ -31,6 +31,7 @@ public RecoveredElement add(AbstractMethodDeclaration methodDeclaration, int bra
 		RecoveredType type = this.types[typeCount -1];
 		type.bodyEnd = 0; // reset position
 		type.typeDeclaration.declarationSourceEnd = 0; // reset position
+		type.typeDeclaration.bodyEnd = 0;
 		return type.add(methodDeclaration, bracketBalance);
 	}
 	return this; // ignore
@@ -45,6 +46,7 @@ public RecoveredElement add(FieldDeclaration fieldDeclaration, int bracketBalanc
 		RecoveredType type = this.types[typeCount -1];
 		type.bodyEnd = 0; // reset position
 		type.typeDeclaration.declarationSourceEnd = 0; // reset position
+		type.typeDeclaration.bodyEnd = 0;
 		return type.add(fieldDeclaration, bracketBalance);
 	}
 	return this; // ignore
@@ -72,6 +74,17 @@ public RecoveredElement add(ImportReference importReference, int bracketBalance)
 }
 public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalance) {
 	
+	if (typeDeclaration instanceof AnonymousLocalTypeDeclaration){
+		if (this.typeCount > 0) {
+			// add it to the last type
+			RecoveredType lastType = this.types[this.typeCount-1];
+			lastType.bodyEnd = 0; // reopen type
+			lastType.typeDeclaration.bodyEnd = 0; // reopen type
+			lastType.typeDeclaration.declarationSourceEnd = 0; // reopen type
+			lastType.bracketBalance++; // expect one closing brace
+			return lastType.add(typeDeclaration, bracketBalance);
+		}
+	}
 	if (types == null) {
 		types = new RecoveredType[5];
 		typeCount = 0;
@@ -144,9 +157,23 @@ public CompilationUnitDeclaration updatedCompilationUnitDeclaration(){
 		// may need to update the declarationSourceEnd of the last type
 		if (types[typeCount - 1].typeDeclaration.declarationSourceEnd == 0){
 			types[typeCount - 1].typeDeclaration.declarationSourceEnd = unitDeclaration.sourceEnd;
+			types[typeCount - 1].typeDeclaration.bodyEnd = unitDeclaration.sourceEnd;
 		}
+		int actualCount = existingCount;
 		for (int i = 0; i < typeCount; i++){
-			typeDeclarations[existingCount + i] = types[i].updatedTypeDeclaration();
+			TypeDeclaration typeDecl = types[i].updatedTypeDeclaration();
+			// filter out local types (12454)
+			if (!(typeDecl instanceof LocalTypeDeclaration)){
+				typeDeclarations[actualCount++] = typeDecl;
+			}
+		}
+		if (actualCount != typeCount){
+			System.arraycopy(
+				typeDeclarations, 
+				0, 
+				typeDeclarations = new TypeDeclaration[existingCount+actualCount], 
+				0, 
+				existingCount+actualCount);
 		}
 		unitDeclaration.types = typeDeclarations;
 	}

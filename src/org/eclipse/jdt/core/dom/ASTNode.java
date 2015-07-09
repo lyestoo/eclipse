@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -105,6 +105,440 @@ import java.util.Map;
 public abstract class ASTNode {
 	
 	/**
+	 * Node type constant indicating a node of type 
+	 * <code>AnonymousClassDeclaration</code>.
+	 * @see AnonymousClassDeclaration
+	 */
+	public static final int ANONYMOUS_CLASS_DECLARATION = 1;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ArrayAccess</code>.
+	 * @see ArrayAccess
+	 */
+	public static final int ARRAY_ACCESS = 2;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ArrayCreation</code>.
+	 * @see ArrayCreation
+	 */
+	public static final int ARRAY_CREATION = 3;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ArrayInitializer</code>.
+	 * @see ArrayInitializer
+	 */
+	public static final int ARRAY_INITIALIZER = 4;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ArrayType</code>.
+	 * @see ArrayType
+	 */
+	public static final int ARRAY_TYPE = 5;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>AssertStatement</code>.
+	 * @see AssertStatement
+	 */
+	public static final int ASSERT_STATEMENT = 6;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>Assignment</code>.
+	 * @see Assignment
+	 */
+	public static final int ASSIGNMENT = 7;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>Block</code>.
+	 * @see Block
+	 */
+	public static final int BLOCK = 8;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>BooleanLiteral</code>.
+	 * @see BooleanLiteral
+	 */
+	public static final int BOOLEAN_LITERAL = 9;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>BreakStatement</code>.
+	 * @see BreakStatement
+	 */
+	public static final int BREAK_STATEMENT = 10;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>CastExpression</code>.
+	 * @see CastExpression
+	 */
+	public static final int CAST_EXPRESSION = 11;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>CatchClause</code>.
+	 * @see CatchClause
+	 */
+	public static final int CATCH_CLAUSE = 12;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>CharacterLiteral</code>.
+	 * @see CharacterLiteral
+	 */
+	public static final int CHARACTER_LITERAL = 13;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ClassInstanceCreation</code>.
+	 * @see ClassInstanceCreation
+	 */
+	public static final int CLASS_INSTANCE_CREATION = 14;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>CompilationUnit</code>.
+	 * @see CompilationUnit
+	 */
+	public static final int COMPILATION_UNIT = 15;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ConditionalExpression</code>.
+	 * @see ConditionalExpression
+	 */
+	public static final int CONDITIONAL_EXPRESSION = 16;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ConstructorInvocation</code>.
+	 * @see ConstructorInvocation
+	 */
+	public static final int CONSTRUCTOR_INVOCATION = 17;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ContinueStatement</code>.
+	 * @see ContinueStatement
+	 */
+	public static final int CONTINUE_STATEMENT = 18;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>DoStatement</code>.
+	 * @see DoStatement
+	 */
+	public static final int DO_STATEMENT = 19;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>EmptyStatement</code>.
+	 * @see EmptyStatement
+	 */
+	public static final int EMPTY_STATEMENT = 20;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ExpressionStatement</code>.
+	 * @see ExpressionStatement
+	 */
+	public static final int EXPRESSION_STATEMENT = 21;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>FieldAccess</code>.
+	 * @see FieldAccess
+	 */
+	public static final int FIELD_ACCESS = 22;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>FieldDeclaration</code>.
+	 * @see FieldDeclaration
+	 */
+	public static final int FIELD_DECLARATION = 23;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ForStatement</code>.
+	 * @see ForStatement
+	 */
+	public static final int FOR_STATEMENT = 24;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>IfStatement</code>.
+	 * @see IfStatement
+	 */
+	public static final int IF_STATEMENT = 25;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ImportDeclaration</code>.
+	 * @see ImportDeclaration
+	 */
+	public static final int IMPORT_DECLARATION = 26;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>InfixExpression</code>.
+	 * @see InfixExpression
+	 */
+	public static final int INFIX_EXPRESSION = 27;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>Initializer</code>.
+	 * @see Initializer
+	 */
+	public static final int INITIALIZER = 28;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>Javadoc</code>.
+	 * @see Javadoc
+	 */
+	public static final int JAVADOC = 29;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>LabeledStatement</code>.
+	 * @see LabeledStatement
+	 */
+	public static final int LABELED_STATEMENT = 30;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>MethodDeclaration</code>.
+	 * @see MethodDeclaration
+	 */
+	public static final int METHOD_DECLARATION = 31;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>MethodInvocation<code>.
+	 * @see MethodInvocation
+	 */
+	public static final int METHOD_INVOCATION = 32;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>NullLiteral</code>.
+	 * @see NullLiteral
+	 */
+	public static final int NULL_LITERAL = 33;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>NumberLiteral</code>.
+	 * @see NumberLiteral
+	 */
+	public static final int NUMBER_LITERAL = 34;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>PackageDeclaration</code>.
+	 * @see PackageDeclaration
+	 */
+	public static final int PACKAGE_DECLARATION = 35;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ParenthesizedExpression</code>.
+	 * @see ParenthesizedExpression
+	 */
+	public static final int PARENTHESIZED_EXPRESSION = 36;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>PostfixExpression</code>.
+	 * @see PostfixExpression
+	 */
+	public static final int POSTFIX_EXPRESSION = 37;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>PrefixExpression</code>.
+	 * @see PrefixExpression
+	 */
+	public static final int PREFIX_EXPRESSION = 38;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>PrimitiveType</code>.
+	 * @see PrimitiveType
+	 */
+	public static final int PRIMITIVE_TYPE = 39;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>QualifiedName</code>.
+	 * @see QualifiedName
+	 */
+	public static final int QUALIFIED_NAME = 40;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ReturnStatement</code>.
+	 * @see ReturnStatement
+	 */
+	public static final int RETURN_STATEMENT = 41;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>SimpleName</code>.
+	 * @see SimpleName
+	 */
+	public static final int SIMPLE_NAME = 42;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>SimpleType</code>.
+	 * @see SimpleType
+	 */
+	public static final int SIMPLE_TYPE = 43;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>SingleVariableDeclaration</code>.
+	 * @see SingleVariableDeclaration
+	 */
+	public static final int SINGLE_VARIABLE_DECLARATION = 44;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>StringLiteral</code>.
+	 * @see StringLiteral
+	 */
+	public static final int STRING_LITERAL = 45;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>SuperConstructorInvocation</code>.
+	 * @see SuperConstructorInvocation
+	 */
+	public static final int SUPER_CONSTRUCTOR_INVOCATION = 46;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>SuperFieldAccess</code>.
+	 * @see SuperFieldAccess
+	 */
+	public static final int SUPER_FIELD_ACCESS = 47;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>SuperMethodInvocation</code>.
+	 * @see SuperMethodInvocation
+	 */
+	public static final int SUPER_METHOD_INVOCATION = 48;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>SwitchCase</code>.
+	 * @see SwitchCase
+	 */
+	public static final int SWITCH_CASE = 49;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>SwitchStatement</code>.
+	 * @see SwitchStatement
+	 */
+	public static final int SWITCH_STATEMENT = 50;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>SynchronizedStatement</code>.
+	 * @see SynchronizedStatement
+	 */
+	public static final int SYNCHRONIZED_STATEMENT = 51;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ThisExpression</code>.
+	 * @see ThisExpression
+	 */
+	public static final int THIS_EXPRESSION = 52;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>ThrowStatement</code>.
+	 * @see ThrowStatement
+	 */
+	public static final int THROW_STATEMENT = 53;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>TryStatement</code>.
+	 * @see TryStatement
+	 */
+	public static final int TRY_STATEMENT = 54;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>TypeDeclaration</code>.
+	 * @see TypeDeclaration
+	 */
+	public static final int TYPE_DECLARATION = 55;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>TypeDeclarationStatement</code>.
+	 * @see TypeDeclarationStatement
+	 */
+	public static final int TYPE_DECLARATION_STATEMENT = 56;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>TypeLiteral</code>.
+	 * @see TypeLiteral
+	 */
+	public static final int TYPE_LITERAL = 57;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>VariableDeclarationExpression</code>.
+	 * @see VariableDeclarationExpression
+	 */
+	public static final int VARIABLE_DECLARATION_EXPRESSION = 58;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>VariableDeclarationFragment</code>.
+	 * @see VariableDeclarationFragment
+	 */
+	public static final int VARIABLE_DECLARATION_FRAGMENT = 59;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>VariableDeclarationStatement</code>.
+	 * @see VariableDeclarationStatement
+	 */
+	public static final int VARIABLE_DECLARATION_STATEMENT = 60;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>WhileStatement</code>.
+	 * @see WhileStatement
+	 */
+	public static final int WHILE_STATEMENT = 61;
+
+	/**
+	 * Node type constant indicating a node of type 
+	 * <code>InstanceofExpression</code>.
+	 * @see InstanceofExpression
+	 */
+	public static final int INSTANCEOF_EXPRESSION = 62;
+
+	/**
 	 * Owning AST.
 	 */
 	private final AST owner;
@@ -162,7 +596,7 @@ public abstract class ASTNode {
 	 * not quite right with this AST node.
 	 * <p>
 	 * The standard parser (<code>AST.parseCompilationUnit</code>) sets this
-	 * flag on a node to indicate a syntax error detcted in the vicinity.
+	 * flag on a node to indicate a syntax error detected in the vicinity.
 	 * </p>
 	 */
 	public static final int MALFORMED = 1;
@@ -285,21 +719,21 @@ public abstract class ASTNode {
 		}
 	
 		/**
-		 * @see AbstractCollection
+		 * @see java.util.AbstractCollection#size()
 		 */
 		public int size() {
 			return store.size();
 		}
 	
 		/**
-		 * @see AbstractList
+		 * @see AbstractList#get(int)
 		 */
 		public Object get(int index) {
 			return store.get(index);
 		}
 	
 		/**
-		 * @see List
+		 * @see List#set(int, java.lang.Object)
 		 */
 		public Object set(int index, Object element) {
 			// delink old child from parent, and link new child to parent
@@ -317,7 +751,7 @@ public abstract class ASTNode {
 		}
 		
 		/**
-		 * @see List
+		 * @see List#add(int, java.lang.Object)
 		 */
 		public void add(int index, Object element) {
 			// link new child to parent
@@ -330,7 +764,7 @@ public abstract class ASTNode {
 		}
 		
 		/**
-		 * @see List
+		 * @see List#remove(int)
 		 */
 		public Object remove(int index) {
 			// delink old child from parent
@@ -540,9 +974,9 @@ public abstract class ASTNode {
 	 * @param cycleCheck <code>true</code> if cycles are possible and need to
 	 *   be checked, <code>false</code> if cycles are impossible and do not
 	 *   need to be checked
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	void replaceChild(ASTNode oldChild, ASTNode newChild, boolean cycleCheck) {
 		if (newChild != null) {
@@ -561,9 +995,9 @@ public abstract class ASTNode {
 	/**
 	 * Checks whether the given new child node is a node 
 	 * in a different AST from its parent-to-be, whether it is
-	 * already has a parent, and whether adding it to its
-	 * parent-to-be would create a cycle. The parent-to-be
-	 * is the enclosing instance.
+	 * already has a parent, whether adding it to its
+	 * parent-to-be would create a cycle, and whether the child is of
+	 * the right type. The parent-to-be is the enclosing instance.
 	 * 
 	 * @param node the parent-to-be node
 	 * @param newChild the new child of the parent, or <code>null</code> 
@@ -573,11 +1007,11 @@ public abstract class ASTNode {
 	 *   not need to be checked
 	 * @param nodeType a type constraint on child nodes, or <code>null</code>
 	 *   if no special check is required
-	 * @exception $precondition-violation:null-child$
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:incorrect-child-type$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the child is null
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the child has the incorrect node type
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	static void checkNewChild(ASTNode node, ASTNode newChild,
 			boolean cycleCheck, Class nodeType) {
@@ -586,19 +1020,18 @@ public abstract class ASTNode {
 			// new child is from a different AST
 			throw new IllegalArgumentException();
 		}
-		Class childClass = newChild.getClass();
 		
-//		// FIXME - test is erratic
-//		if (nodeType != null && childClass.isAssignableFrom(nodeType)) {
-//			// new child is not of the right type
-//			throw new IllegalArgumentException();
-//		}
 		if (newChild.getParent() != null) {
 			// new child currently has a different parent
 			throw new IllegalArgumentException();
 		}
 		if (cycleCheck && newChild == node.getRoot()) {
 			// inserting new child would create a cycle
+			throw new IllegalArgumentException();
+		}
+		Class childClass = newChild.getClass();
+		if (nodeType != null && !nodeType.isAssignableFrom(childClass)) {
+			// new child is not of the right type
 			throw new IllegalArgumentException();
 		}
 	}
@@ -783,124 +1216,39 @@ public abstract class ASTNode {
 	}
 
 	/**
+	 * Returns an integer value identifying the type of this concrete AST node.
+	 * The values are small positive integers, suitable for use in switch statements.
+	 * <p>
+	 * For each concrete node type there is a unique node type constant (name
+	 * and value). The unique node type constant for a concrete node type such as 
+	 * <code>CastExpression</code> is <code>ASTNode.CAST_EXPRESSION</code>.
+	 * </p>
+	 * 
+	 * @return one of the node type constants
+	 */
+	public abstract int getNodeType();
+	
+	/**
 	 * The <code>ASTNode</code> implementation of this <code>Object</code>
-	 * method uses object identity (==). Use <code>subtreeEquals</code> to
+	 * method uses object identity (==). Use <code>subtreeMatch</code> to
 	 * compare two subtrees for equality.
 	 * 
-	 * @see #subtreeEquals
+	 * @see #subtreeMatch(ASTMatcher matcher, Object other)
 	 */
 	public final boolean equals(Object obj) {
 		return this == obj; // equivalent to Object.equals
 	}
 
 	/**
-	 * Returns whether the subtree rooted at the given node is the same
-	 * as the subtree rooted at the given node. Returns <code>false</code>
-	 * if the given node is <code>null</code>.
-	 * <p>
-	 * [Explain subtree isomorphism. The subtrees may or may not be from
-	 *  the same ASTs.
-	 *  Comments (and source positions, etc.) are ignored.
-	 * ]
-	 * </p>
+	 * Returns whether the subtree rooted at the given node matches the
+	 * given other object as decided by the given matcher.
 	 * 
-	 * @param other the root of the AST subtree, or <code>null</code>
-	 * @return <code>true</code> if the subtrees are the same, or 
-	 * <code>false</code> if the subtrees are different or the other node is
-	 * <code>null</code>
+	 * @param matcher the matcher
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or 
+	 * <code>false</code> if they do not match
 	 */
-	public boolean subtreeEquals(ASTNode other) {
-		// public method dispatch to package-private virtual method
-		return equalSubtrees(other);
-	}
-	
-	/**
-	 * Returns whether the subtree rooted at the given node is isomorphic
-	 * to the subtree rooted at the given node. Returns <code>false</code>
-	 * if the given node is <code>null</code>. The owning AST is not taken
-	 * into account.
-	 * <p>
-	 * N.B. This method is package-private, so that the implementations
-	 * of this method in each of the concrete AST node types do not
-	 * clutter up the API doc.
-	 * </p>
-	 * 
-	 * @param other the root of the AST subtree, or <code>null</code>
-	 * @return <code>true</code> if the subtrees are the same, or 
-	 * <code>false</code> if the subtrees are different or the other node is
-	 * <code>null</code>
-	 */
-	abstract boolean equalSubtrees(Object other);
-
-	/**
-	 * Returns whether the given lists of nodes are equal according to
-	 * <code>equalSubtrees</code>.
-	 * 
-	 * @param list1 the first list of AST nodes
-	 *    (element type: <code>ASTNode</code>)
-	 * @param list2 the second list of AST nodes
-	 *    (element type: <code>ASTNode</code>)
-	 * @return <code>true</code> if the list have the same number of elements
-	 *    and are pairwise equal according to <code>equalSubtrees</code> 
-	 */
-	static boolean equalLists(List list1, List list2) {
-		int size1 = list1.size();
-		int size2 = list2.size();
-		if (size1 != size2) {
-			return false;
-		}
-		for (Iterator it1 = list1.iterator(), it2 = list2.iterator();
-			it1.hasNext(); ) {
-				ASTNode n1 = (ASTNode) it1.next();
-				ASTNode n2 = (ASTNode) it2.next();
-				if (!n1.equalSubtrees(n2)) {
-					return false;
-				}
-			}
-		return true;
-	}	
-
-	/**
-	 * Returns whether the given nodes are equal according to
-	 * <code>equalSubtrees</code>. Returns <code>false</code> if either
-	 * node is <code>null</code>.
-	 * 
-	 * @param o1 the first AST node, or <code>null</code>
-	 * @param o2 the second AST node, or <code>null</code>
-	 * @return <code>true</code> if the nodes are equal according to
-	 *    <code>equalSubtrees</code> or both <code>null</code>, and 
-	 *    <code>false</code> otherwise
-	 */
-	static boolean equalNodes(Object o1, Object o2) {
-		if (o1 == o2) {
-			return true;
-		}
-		if (o1 == null || o2 == null) {
-			return false;
-		}
-		return ((ASTNode) o1).equalSubtrees(o2);
-	}	
-	
-	/**
-	 * Returns whether the given objects are equal according to
-	 * <code>equals</code>. Returns <code>false</code> if either
-	 * node is <code>null</code>.
-	 * 
-	 * @param o1 the first object, or <code>null</code>
-	 * @param o2 the second object, or <code>null</code>
-	 * @return <code>true</code> if the nodes are equal according to
-	 *    <code>equalSubtrees</code> or both <code>null</code>, and 
-	 *    <code>false</code> otherwise
-	 */
-	static boolean equals(Object o1, Object o2) {
-		if (o1 == o2) {
-			return true;
-		}
-		if (o1 == null || o2 == null) {
-			return false;
-		}
-		return o1.equals(o2);
-	}	
+	public abstract boolean subtreeMatch(ASTMatcher matcher, Object other);
 	
 	/**
 	 * Returns a deep copy of the subtree of AST nodes rooted at the
@@ -968,21 +1316,24 @@ public abstract class ASTNode {
 
 	/**
 	 * Accepts the given visitor on a visit of the current node.
-	 * This method much be implemented in all concrete AST node types.
 	 * 
 	 * @param visitor the visitor object
-	 * @exception $precondition-violation:illegal-argument$
+	 * @exception IllegalArgumentException if the visitor is null
 	 */
 	public final void accept(ASTVisitor visitor) {
 		if (visitor == null) {
 			throw new IllegalArgumentException();
 		}
-		// dynamic dispatch to internal method
+		// begin with the generic pre-visit
+		visitor.preVisit(this);
+		// dynamic dispatch to internal method for type-specific visit/endVisit
 		accept0(visitor);
+		// end with the generic post-visit
+		visitor.postVisit(this);
 	}
 
 	/**
-	 * Accepts the given visitor on a visit of the current node.
+	 * Accepts the given visitor on a type-specific visit of the current node.
 	 * This method must be implemented in all concrete AST node types.
 	 * <p>
 	 * General template for implementation on each concrete ASTNode class:
@@ -998,6 +1349,8 @@ public abstract class ASTNode {
 	 * visitor.endVisit(this);
 	 * </code>
 	 * </pre>
+	 * Note that the caller (<code>accept</code>) take cares of invoking
+	 * <code>visitor.preVisit(this)</code> and <code>visitor.postVisit(this)</code>.
 	 * </p>
 	 * 
 	 * @param visitor the visitor object
@@ -1009,7 +1362,7 @@ public abstract class ASTNode {
 	 * <p>
 	 * This method should be used by the concrete implementations of
 	 * <code>accept0</code> to traverse optional properties. Equivalent
-	 * to <code>child.accept0(visitor)</code> if <code>child</code>
+	 * to <code>child.accept(visitor)</code> if <code>child</code>
 	 * is not <code>null</code>.
 	 * </p>
 	 * 
@@ -1021,8 +1374,7 @@ public abstract class ASTNode {
 		if (child == null) {
 			return;
 		}
-		// dynamic dispatch to internal method
-		child.accept0(visitor);
+		child.accept(visitor);
 	}
 
 	/**
@@ -1030,7 +1382,7 @@ public abstract class ASTNode {
 	 * child nodes. 
 	 * <p>
 	 * This method must be used by the concrete implementations of
-	 * <code>accept0</code> to traverse list-values properties; it
+	 * <code>accept</code> to traverse list-values properties; it
 	 * encapsulates the proper handling of on-the-fly changes to the list.
 	 * </p>
 	 * 
@@ -1045,8 +1397,7 @@ public abstract class ASTNode {
 		try {
 			while (cursor.hasNext()) {
 				ASTNode child = (ASTNode) cursor.next();
-				// dynamic dispatch to internal method
-				child.accept0(visitor);
+				child.accept(visitor);
 			}
 		} finally {
 			children.releaseCursor(cursor);
@@ -1066,12 +1417,12 @@ public abstract class ASTNode {
 	}
 
 	/**
-	 * Returns the length in character of the original source file indicating
+	 * Returns the length in characters of the original source file indicating
 	 * where the source fragment corresponding to this node ends.
 	 * 
 	 * @return a (possibly 0) length, or <code>0</code>
 	 *    if no source position information is recorded for this node
-	 * @see #getStartPositions
+	 * @see #getStartPosition()
 	 */
 	public int getLength() {
 		return length;
@@ -1108,8 +1459,57 @@ public abstract class ASTNode {
 	 * 
 	 * @return a debug string 
 	 */
-	public String toString() {
+	public final String toString() {
+		// allocate a buffer that is large enough to hold an average compilation unit
+		StringBuffer buffer = new StringBuffer(6000);
+		int p = buffer.length();
+		try {
+			appendDebugString(buffer);
+		} catch (RuntimeException e) {
+			// since debugger sometimes call toString methods, problems can easily happen when
+			// toString is called on an instance that is being initialized
+			buffer.setLength(p);
+			buffer.append("!"); //$NON-NLS-1$
+			buffer.append(standardToString());
+		}
+		// convert to a string, but lose the extra space in the string buffer by copying
+		return new String(buffer.toString());
+	}
+	
+	/**
+	 * Returns the string representation of this node produced by the standard
+	 * <code>Object.toString</code> method.
+	 * 
+	 * @return a debug string 
+	 */
+	final String standardToString() {
 		return super.toString();
+	}
+	
+	/**
+	 * Appends a debug representation of this node to the given string buffer.
+	 * <p>
+	 * The <code>ASTNode</code> implementation of this method prints out the entire 
+	 * subtree. Subclasses may override to provide a more succinct representation.
+	 * </p>
+	 * 
+	 * @param buffer the string buffer to append to
+	 */
+	void appendDebugString(StringBuffer buffer) {
+		// print the subtree by default
+		appendPrintString(buffer);
+	}
+		
+	/**
+	 * Appends a standard Java source code representation of this subtree to the given
+	 * string buffer.
+	 * 
+	 * @param buffer the string buffer to append to
+	 */
+	final void appendPrintString(StringBuffer buffer) {
+		NaiveASTFlattener printer = new NaiveASTFlattener();
+		this.accept(printer);
+		buffer.append(printer.getResult());
 	}
 	
 	/**

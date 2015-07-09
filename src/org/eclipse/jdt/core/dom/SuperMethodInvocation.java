@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -58,6 +58,13 @@ public class SuperMethodInvocation extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return SUPER_METHOD_INVOCATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		SuperMethodInvocation result = new SuperMethodInvocation(target);
 		result.setName((SimpleName) getName().clone(target));
@@ -69,15 +76,9 @@ public class SuperMethodInvocation extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof SuperMethodInvocation)) {
-			return false;
-		}
-		SuperMethodInvocation o = (SuperMethodInvocation) other;
-		return 
-			(ASTNode.equalNodes(getQualifier(), o.getQualifier())
-			&& ASTNode.equalNodes(getName(), o.getName())
-			&& ASTNode.equalLists(arguments(), o.arguments()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -109,8 +110,8 @@ public class SuperMethodInvocation extends Expression {
 	 * 
 	 * @param name the qualifier name node, or <code>null</code> if 
 	 *    there is none
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setQualifier(Name name) {
 		// a SuperMethodInvocation cannot occur inside a Name
@@ -136,8 +137,8 @@ public class SuperMethodInvocation extends Expression {
 	 * given name.
 	 * 
 	 * @param name the new method name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setName(SimpleName name) {
 		if (name == null) {

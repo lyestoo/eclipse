@@ -14,7 +14,7 @@ import org.eclipse.jdt.internal.compiler.env.*;
 public class InnerClassInfo extends ClassFileStruct implements IBinaryNestedType {
 	int innerClassNameIndex = -1;
 	int outerClassNameIndex = -1;
-	private int innerNameIndex = -1;
+	int innerNameIndex = -1;
 	private char[] innerClassName;
 	private char[] outerClassName;
 	private char[] innerName;
@@ -22,12 +22,14 @@ public class InnerClassInfo extends ClassFileStruct implements IBinaryNestedType
 	private int[] constantPoolOffsets;
 	private boolean readInnerClassName = false;
 	private boolean readOuterClassName = false;
+	private boolean readInnerName = false;
 public InnerClassInfo(byte classFileBytes[], int offsets[], int offset)
 	throws ClassFormatException {
 	super(classFileBytes, offset);
 	constantPoolOffsets = offsets;
 	innerClassNameIndex = u2At(0);
 	outerClassNameIndex = u2At(2);
+	this.innerNameIndex = u2At(4);
 }
 /**
  * Answer the resolved name of the enclosing type in the
@@ -89,14 +91,12 @@ public char[] getName() {
  * @return char[]
  */
 public char[] getSourceName() {
-	if (innerNameIndex == -1) {
-		// read inner name
-		innerNameIndex = u2At(4);
+	if (!this.readInnerName) {
+		this.readInnerName = true;
 		if (innerNameIndex != 0) {
 			int utf8Offset = constantPoolOffsets[innerNameIndex] - structOffset;
 			innerName = utf8At(utf8Offset + 3, u2At(utf8Offset + 1));
 		}
-
 	}
 	return innerName;
 }
@@ -118,5 +118,20 @@ public String toString() {
 		buffer.append(getSourceName());
 	}
 	return buffer.toString();   
+}
+/**
+ * This method is used to fully initialize the contents of the receiver. All methodinfos, fields infos
+ * will be therefore fully initialized and we can get rid of the bytes.
+ */
+void initialize() {
+	getModifiers();
+	getName();
+	getSourceName();
+	getEnclosingTypeName();
+	reset();
+}
+protected void reset() {
+	this.constantPoolOffsets = null;
+	super.reset();
 }
 }

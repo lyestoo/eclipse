@@ -7,11 +7,12 @@ package org.eclipse.jdt.internal.compiler.parser;
 /**
  * Internal initializer structure for parsing recovery 
  */
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.util.*;
 
-public class RecoveredInitializer extends RecoveredField implements CompilerModifiers, TerminalSymbols, BaseTypes {
+public class RecoveredInitializer extends RecoveredField implements CompilerModifiers, ITerminalSymbols, BaseTypes {
 
 	public RecoveredType[] localTypes;
 	public int localTypeCount;
@@ -36,7 +37,11 @@ public RecoveredElement add(Block nestedBlockDeclaration, int bracketBalance) {
 	if (fieldDeclaration.declarationSourceEnd > 0
 		&& nestedBlockDeclaration.sourceStart
 			> fieldDeclaration.declarationSourceEnd){
-		return this.parent.add(nestedBlockDeclaration, bracketBalance);
+		if (this.parent == null){
+			return this; // ignore
+		} else {
+			return this.parent.add(nestedBlockDeclaration, bracketBalance);
+		}
 	}
 	/* consider that if the opening brace was not found, it is there */
 	if (!foundOpeningBrace){
@@ -59,8 +64,12 @@ public RecoveredElement add(FieldDeclaration newFieldDeclaration, int bracketBal
 		|| (newFieldDeclaration.type == null) // initializer
 		|| ((fieldTypeName = newFieldDeclaration.type.getTypeName()).length == 1 // non void
 			&& CharOperation.equals(fieldTypeName[0], VoidBinding.sourceName()))){ 
-		this.updateSourceEndIfNecessary(this.previousAvailableLineEnd(newFieldDeclaration.declarationSourceStart - 1));
-		return this.parent.add(newFieldDeclaration, bracketBalance);
+		if (this.parent == null) {
+			return this; // ignore
+		} else {
+			this.updateSourceEndIfNecessary(this.previousAvailableLineEnd(newFieldDeclaration.declarationSourceStart - 1));
+			return this.parent.add(newFieldDeclaration, bracketBalance);
+		}
 	}
 
 	/* default behavior is to delegate recording to parent if any,
@@ -70,7 +79,11 @@ public RecoveredElement add(FieldDeclaration newFieldDeclaration, int bracketBal
 	if (this.fieldDeclaration.declarationSourceEnd > 0
 		&& newFieldDeclaration.declarationSourceStart
 			> this.fieldDeclaration.declarationSourceEnd){
-		return this.parent.add(newFieldDeclaration, bracketBalance);
+		if (this.parent == null) {
+			return this; // ignore
+		} else {
+			return this.parent.add(newFieldDeclaration, bracketBalance);
+		}
 	}
 	// still inside initializer, treat as local variable
 	return this; // ignore
@@ -204,8 +217,10 @@ public RecoveredElement updateOnOpeningBrace(int currentPosition){
  * Update the declarationSourceEnd of the corresponding parse node
  */
 public void updateSourceEndIfNecessary(int sourceEnd){
-	if (this.fieldDeclaration.declarationSourceEnd == 0)	
+	if (this.fieldDeclaration.declarationSourceEnd == 0) {
 		this.fieldDeclaration.sourceEnd = sourceEnd;
 		this.fieldDeclaration.declarationSourceEnd = sourceEnd;
+		this.fieldDeclaration.declarationEnd = sourceEnd;
+	}
 }
 }

@@ -7,12 +7,13 @@ package org.eclipse.jdt.internal.compiler.parser;
 /**
  * Internal block structure for parsing recovery 
  */
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
 import org.eclipse.jdt.internal.compiler.util.CharOperation;
 
-public class RecoveredBlock extends RecoveredStatement implements CompilerModifiers, TerminalSymbols, BaseTypes {
+public class RecoveredBlock extends RecoveredStatement implements CompilerModifiers, ITerminalSymbols, BaseTypes {
 
 	public Block blockDeclaration;
 
@@ -241,6 +242,10 @@ public RecoveredElement updateOnClosingBrace(int braceStart, int braceEnd){
 		/* if the block is the method body, then it closes the method too */
 		RecoveredMethod method = enclosingMethod();
 		if (method != null && method.methodBody == this){
+			return parent.updateOnClosingBrace(braceStart, braceEnd);
+		}
+		RecoveredInitializer initializer = enclosingInitializer();
+		if (initializer != null && initializer.initializerBody == this){
 			return parent.updateOnClosingBrace(braceStart, braceEnd);
 		}
 		return parent;

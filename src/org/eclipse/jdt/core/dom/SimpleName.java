@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -14,6 +14,10 @@ package org.eclipse.jdt.core.dom;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+
+import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.core.compiler.InvalidInputException;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
 
 /**
  * AST node for a simple name. A simple name is an identifier other than
@@ -58,23 +62,32 @@ public class SimpleName extends Name {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return SIMPLE_NAME;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		SimpleName result = new SimpleName(target);
 		result.setIdentifier(getIdentifier());
+		int startPosition = getStartPosition();
+		int length = getLength();
+		if (startPosition >= 0 && length > 0) {
+			result.setSourceRange(startPosition, length);
+		}
 		return result;
 	}
 	
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof SimpleName)) {
-			return false;
-		}
-		SimpleName o = (SimpleName) other;
-		return getIdentifier().equals(o.getIdentifier());
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
-	
+
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
@@ -95,98 +108,89 @@ public class SimpleName extends Name {
 	/**
 	 * Sets the identifier of this node to the given value.
 	 * The identifier should be legal according to the rules
-	 * of the Java language.
+	 * of the Java language. Note that keywords are not legal
+	 * identifiers.
 	 * <p>
-	 * [Issue: Include specification of legal Java identifier.]
+	 * Note that the list of keywords may depend on the version of the
+	 * language (determined when the AST object was created).
 	 * </p>
 	 * 
 	 * @param identifier the identifier of this node
-	 * @exception $precondition-violation:invalid-java-identifier$
+	 * @exception IllegalArgumentException if the identifier is invalid
+	 * @see AST#AST(java.util.Map)
 	 */ 
 	public void setIdentifier(String identifier) {
 		if (identifier == null) {
 			throw new IllegalArgumentException();
 		}
-		if (!isJavaIdentifier(identifier)) {
+		Scanner scanner = getAST().scanner;
+		char[] source = identifier.toCharArray();
+		scanner.setSource(source);
+		scanner.resetTo(0, source.length);
+		try {
+			int tokenType = scanner.getNextToken();
+			switch(tokenType) {
+				case Scanner.TokenNameIdentifier:
+					break;
+				default:
+					throw new IllegalArgumentException();
+			}
+		} catch(InvalidInputException e) {
 			throw new IllegalArgumentException();
 		}
 		modifying();
 		this.identifier = identifier;
 	}
-	
-	/**
-	 * Table of keywords and literals (element type <code>String</code>) that 
-	 * may not be used as identifiers. See Java Language Specification §3.9.
-	 * The "assert" keyword, which was added in 1.4, is <b>not</b> included.
-	 */
-	private static final Set KEYWORDS;
-	static {
-		KEYWORDS = new HashSet(50);
-		KEYWORDS.addAll(
-			Arrays.asList(
-				new String[] {// literals
-		"true", "false", "null", //$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$
-		"abstract", "default", "if", "private", "this", //$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$
-		"boolean", "do", "implements", "protected", "throw",//$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$//$NON-NLS-5$
-		"break", "double", "import", "public", "throws",//$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$//$NON-NLS-5$
-		"byte", "else", "instanceof", "return", "transient",//$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$//$NON-NLS-5$
-		"case", "extends", "int", "short", "try",//$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$//$NON-NLS-5$
-		"catch", "final", "interface", "static", "void",//$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$//$NON-NLS-5$
-		"char", "finally", "long", "strictfp", "volatile",//$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$//$NON-NLS-5$
-		"class", "float", "native", "super", "while",//$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$
-		"const", "for", "new", "switch",//$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$
-		"continue", "goto", "package", "synchronized"}));//$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$//$NON-NLS-4$
-	}
 
 	/**
-	 * Returns whether the given string is a valid Java identifier.
+	 * Returns whether this simple name represents a name that is being defined,
+	 * as opposed to one being referenced. The following positions are considered
+	 * ones where a name is defined:
+	 * <ul>
+	 * <li>The type name in a <code>TypeDeclaration</code> node.</li>
+	 * <li>The method name in a <code>MethodDeclaration</code> node
+	 * providing <code>isConstructor</code> is <code>false</code>.</li>
+	 * </ul>
+	 * <li>The variable name in any type of <code>VariableDeclaration</code>
+	 * node.</li>
+	 * </ul>
 	 * <p>
-	 * Java Language Specification (§3.8):
-	 * "An identifier is an unlimited-length sequence of Java letters and 
-	 * Java digits, the first of which must be a Java letter. An identifier 
-	 * cannot have the same spelling (Unicode character sequence) as a 
-	 * keyword (§3.9), boolean literal (§3.10.3), or the null literal (§3.10.7).
-	 * </p>
-	 * <p>
-	 * Letters and digits may be drawn from the entire Unicode character set, 
-	 * which supports most writing scripts in use in the world today, including 
-	 * the large sets for Chinese, Japanese, and Korean. This allows 
-	 * programmers to use identifiers in their programs that are written in 
-	 * their native languages. A "Java letter" is a character for which the 
-	 * method Character.isJavaIdentifierStart returns true. A "Java 
-	 * letter-or-digit" is a character for which the method 
-	 * Character.isJavaIdentifierPart returns true."
-	 * </p>
-	 * <p>
-	 * Note that "assert", which was added as a keyword in 1.4, is considered
-	 * to be a legal Java identifier.
+	 * Note that this is a convenience method that simply checks whether
+	 * this node appears in the declaration position relative to its parent.
+	 * It always returns <code>false</code> if this node is unparented.
 	 * </p>
 	 * 
-	 * @param identifier the alleged identifier
-	 * @return <code>true</code> if a valid identifier, and <code>false</code> 
-	 *    if not valid
-	 */
-	public static boolean isJavaIdentifier(String identifier) {
-		int len = identifier.length();
-		if (len == 0) {
+	 * @return <code>true</code> if this node declares a name, and 
+	 *    <code>false</code> otherwise
+	 */ 
+	public boolean isDeclaration() {
+		ASTNode parent = getParent();
+		if (parent == null) {
+			// unparented node
 			return false;
 		}
-		char c = identifier.charAt(0);
-		if (!Character.isJavaIdentifierStart(c)) {
-			return false;
-		}			
-		for (int i= 1; i < len; i++) {
-			c = identifier.charAt(i);
-			if (!Character.isJavaIdentifierPart(c)) {
-				return false;
-			}	
+		if (parent instanceof TypeDeclaration) {
+			// could only be the name of the type
+			return true;
 		}
-		if (KEYWORDS.contains(identifier)) {
-			return false;
-		}			
-		return true;
+		if (parent instanceof MethodDeclaration) {
+			// could be the name of the method or constructor
+			MethodDeclaration p = (MethodDeclaration) parent;
+			return !p.isConstructor();
+		}
+		if (parent instanceof SingleVariableDeclaration) {
+			SingleVariableDeclaration p = (SingleVariableDeclaration) parent;
+			// make sure its the name of the variable (not the initializer)
+			return (p.getName() == this);
+		}
+		if (parent instanceof VariableDeclarationFragment) {
+			VariableDeclarationFragment p = (VariableDeclarationFragment) parent;
+			// make sure its the name of the variable (not the initializer)
+			return (p.getName() == this);
+		}
+		return false;
 	}
-	
+		
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */

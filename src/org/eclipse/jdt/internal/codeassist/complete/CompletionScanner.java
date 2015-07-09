@@ -14,6 +14,8 @@ package org.eclipse.jdt.internal.codeassist.complete;
  *	0  means completion behind the first character
  *  n  means completion behind the n-th character
  */
+import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.parser.*;
 
 public class CompletionScanner extends Scanner {
@@ -185,7 +187,7 @@ public int getNextToken() throws InvalidInputException {
 				startPosition = whiteStart;
 				return TokenNameWHITESPACE;
 			}
-			//little trick to get out in the middle of a source comptuation
+			//little trick to get out in the middle of a source computation
 			if (currentPosition > eofPosition){
 				/* might be completing at eof (e.g. behind a dot) */
 				if (completionIdentifier == null && 
@@ -216,6 +218,10 @@ public int getNextToken() throws InvalidInputException {
 				case ',' :
 					return TokenNameCOMMA;
 				case '.' :
+					if (startPosition <= cursorLocation 
+					    && cursorLocation < currentPosition){
+					    	return TokenNameDOT; // completion inside .<|>12
+				    }
 					if (getNextCharAsDigit())
 						return scanNumber(true);
 					return TokenNameDOT;
@@ -684,6 +690,7 @@ public int scanIdentifierOrKeyword() throws InvalidInputException {
 	return id;
 }
 public int scanNumber(boolean dotPrefix) throws InvalidInputException {
+	
 	int token = super.scanNumber(dotPrefix);
 
 	// consider completion just before a number to be ok, will insert before it

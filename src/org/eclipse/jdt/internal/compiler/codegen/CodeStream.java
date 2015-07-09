@@ -972,8 +972,11 @@ public void exitUserScope(BlockScope blockScope) {
 		return;
 	for (int i = 0; i < visibleLocalsCount; i++) {
 		LocalVariableBinding visibleLocal = visibleLocals[i];
-		if ((visibleLocal != null) && (visibleLocal.declaringScope == blockScope) && (visibleLocal.initializationCount > 0)) { // for filtering out preserved locals never initialized
-			visibleLocals[i].recordInitializationEndPC(position);
+		if ((visibleLocal != null) && (visibleLocal.declaringScope == blockScope)) { 
+			// there maybe some some preserved locals never initialized
+			if (visibleLocal.initializationCount > 0){
+				visibleLocals[i].recordInitializationEndPC(position);
+			}
 			visibleLocals[i] = null; // this variable is no longer visible afterwards
 		}
 	}
@@ -1348,7 +1351,7 @@ public void generateClassLiteralAccessForType(TypeBinding accessedType, FieldBin
 	Label endLabel;
 	ExceptionLabel anyExceptionHandler;
 	int saveStackSize;
-	if (accessedType.isBaseType()) {
+	if (accessedType.isBaseType() && accessedType != NullBinding) {
 		this.getTYPE(accessedType.id);
 		return;
 	}
@@ -5415,18 +5418,20 @@ final public void tableswitch(CaseLabel defaultLabel, int low, int high, int[] k
 	defaultLabel.branch();
 	writeSignedWord(low);
 	writeSignedWord(high);
-	int j = low;
+	int i = low, j = low;
 	// the index j is used to know if the index i is one of the missing entries in case of an 
 	// optimized tableswitch
-	for (int i = low; i <= high; i++) {
+	while (true) {
 		int index;
 		int key = keys[index = sortedIndexes[j - low]];
 		if (key == i) {
 			casesLabel[index].branch();
 			j++;
+			if (i == high) break; // if high is maxint, then avoids wrapping to minint.
 		} else {
 			defaultLabel.branch();
 		}
+		i++;
 	}
 }
 public String toString() {
@@ -5499,7 +5504,7 @@ public final void writeByteAtPos(int pos, byte b) {
 }
 /**
  * Write a unsigned 8 bits value into the byte array
- * @param 
+ * @param b the signed byte
  */
 public final void writeSignedByte(int b) {
 	try {
@@ -5511,7 +5516,7 @@ public final void writeSignedByte(int b) {
 }
 /**
  * Write a signed 16 bits value into the byte array
- * @param 
+ * @param b the signed short
  */
 public final void writeSignedShort(int b) {
 	try {
@@ -5597,7 +5602,7 @@ public final void writeSignedWord(int pos, int value) {
 }
 /**
  * Write a unsigned 8 bits value into the byte array
- * @param 
+ * @param b the unsigned byte
  */
 public final void writeUnsignedByte(int b) {
 	try {
@@ -5609,7 +5614,7 @@ public final void writeUnsignedByte(int b) {
 }
 /**
  * Write a unsigned 16 bits value into the byte array
- * @param 
+ * @param b the unsigned short
  */
 public final void writeUnsignedShort(int b) {
 	try {
@@ -5627,7 +5632,7 @@ public final void writeUnsignedShort(int b) {
 }
 /**
  * Write a unsigned 32 bits value into the byte array
- * @param 
+ * @param value the unsigned word
  */
 public final void writeUnsignedWord(int value) {
 	try {

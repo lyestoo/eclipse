@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -11,6 +11,7 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -81,6 +82,13 @@ public class FieldDeclaration extends BodyDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return FIELD_DECLARATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		FieldDeclaration result = new FieldDeclaration(target);
 		result.setJavadoc(
@@ -95,16 +103,9 @@ public class FieldDeclaration extends BodyDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof FieldDeclaration)) {
-			return false;
-		}
-		FieldDeclaration o = (FieldDeclaration) other;
-		return
-			getModifiers() == o.getModifiers()
-			&& ASTNode.equalNodes(getJavadoc(), o.getJavadoc())
-			&& ASTNode.equalNodes(getType(), o.getType())
-			&& ASTNode.equalLists(fragments(), o.fragments());
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 	
 	/* (omit javadoc for this method)
@@ -144,7 +145,7 @@ public class FieldDeclaration extends BodyDeclaration {
 	 * 
 	 * @return the bit-wise or of <code>Modifier</code> constants
 	 * @see Modifier
-	 * @exception $precondition-violation:illegal-modifiers$
+	 * @exception IllegalArgumentException if the modifiers are illegal
 	 */ 
 	public void setModifiers(int modifiers) {
 		if ((modifiers & ~LEGAL_MODIFIERS) != 0) {
@@ -176,8 +177,8 @@ public class FieldDeclaration extends BodyDeclaration {
 	 * Sets the base type declared in this field declaration to the given type.
 	 * 
 	 * @param type the new base type
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setType(Type type) {
 		if (type == null) {
@@ -201,6 +202,24 @@ public class FieldDeclaration extends BodyDeclaration {
 		return variableDeclarationFragments;
 	}
 		
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	void appendDebugString(StringBuffer buffer) {
+		buffer.append("FieldDeclaration["); //$NON-NLS-1$
+		buffer.append("field "); //$NON-NLS-1$
+		getType().appendPrintString(buffer);
+		buffer.append(" "); //$NON-NLS-1$
+		for (Iterator it = fragments().iterator(); it.hasNext(); ) {
+			VariableDeclarationFragment d = (VariableDeclarationFragment) it.next();
+			d.getName().appendPrintString(buffer);
+			if (it.hasNext()) {
+				buffer.append(","); //$NON-NLS-1$
+			}
+		}
+		buffer.append("]"); //$NON-NLS-1$
+	}
+
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */

@@ -34,11 +34,8 @@ public class FinallyFlowContext extends FlowContext {
 			Reference ref;
 			if (((ref = finalAssignments[i]).bits & BindingIds.FIELD) != 0) {
 				// final field
-				if (flowInfo
-					.isPotentiallyAssigned((FieldBinding) ((NameReference) ref).binding)) {
-					scope.problemReporter().duplicateInitializationOfBlankFinalField(
-						(FieldBinding) ((NameReference) ref).binding,
-						(NameReference) ref);
+				if (flowInfo.isPotentiallyAssigned(ref.fieldBinding())) {
+					scope.problemReporter().duplicateInitializationOfBlankFinalField(ref.fieldBinding(), ref);
 				}
 			} else {
 				// final local variable

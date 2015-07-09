@@ -1,8 +1,15 @@
+/**********************************************************************
+Copyright (c) 2000, 2001, 2002 IBM Corp. and others.
+All rights reserved.   This program and the accompanying materials
+are made available under the terms of the Common Public License v0.5
+which accompanies this distribution, and is available at
+http://www.eclipse.org/legal/cpl-v05.html
+ 
+Contributors:
+     IBM Corporation - initial API and implementation
+**********************************************************************/
 package org.eclipse.jdt.core;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
+
 import org.eclipse.jdt.internal.core.*;
 
 /**
@@ -16,6 +23,23 @@ import org.eclipse.jdt.internal.core.*;
  * @see org.eclipse.core.runtime.IStatus#getCode
  */
 public interface IJavaModelStatusConstants {
+
+	/**
+	 * Status constant indicating that a container path was resolved
+	 * to invalid entries (null or container).
+	 */
+	public static final int INVALID_CP_CONTAINER_ENTRY = 962;
+
+	/**
+	 * Status constant indicating that a container path was not resolvable
+	 * indicating either the referred container is undefined, unbound.
+	 */
+	public static final int CP_CONTAINER_PATH_UNBOUND = 963;
+
+	/**
+	 * Status constant indicating that a classpath entry was invalid
+	 */
+	public static final int INVALID_CLASSPATH = 964;
 
 	/**
 	 * Status constant indicating that a variable path was not resolvable
@@ -223,8 +247,4 @@ public interface IJavaModelStatusConstants {
 	 * has been made locally available.
 	 */
 	 public static final int NO_LOCAL_CONTENTS = 999;
-	/**
-	 * Status constant indicating that a classpath entry was invalid
-	 */
-	public static final int INVALID_CLASSPATH = 964;
 }

@@ -1,3 +1,14 @@
+/*******************************************************************************
+ * Copyright (c) 2001 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
+
 package org.eclipse.jdt.core.dom;
 
 /**
@@ -39,6 +50,13 @@ public class FieldAccess extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return FIELD_ACCESS;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		FieldAccess result = new FieldAccess(target);
 		result.setExpression((Expression) getExpression().clone(target));
@@ -49,14 +67,9 @@ public class FieldAccess extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof FieldAccess)) {
-			return false;
-		}
-		FieldAccess o = (FieldAccess) other;
-		return 
-			(ASTNode.equalNodes(getExpression(), o.getExpression())
-			&& ASTNode.equalNodes(getName(), o.getName()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -89,9 +102,9 @@ public class FieldAccess extends Expression {
 	 * Sets the expression of this field access expression.
 	 * 
 	 * @param expression the new expression
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setExpression(Expression expression) {
 		if (expression == null) {
@@ -118,8 +131,8 @@ public class FieldAccess extends Expression {
 	 * Sets the name of the field accessed in this field access expression.
 	 * 
 	 * @param fieldName the field name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setName(SimpleName fieldName) {
 		if (fieldName == null) {

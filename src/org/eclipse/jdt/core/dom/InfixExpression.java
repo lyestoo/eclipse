@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -47,7 +47,6 @@ public class InfixExpression extends Expression {
 	 *    <b><code>&gt;</code></p>  <code>GREATER</code>
 	 *    <b><code>&lt;=</code></p>  <code>LESS_EQUALS</code>
 	 *    <b><code>&gt;=</code></p>  <code>GREATER_EQUALS</code>
-	 *    <b><code>instanceof</code></p>  <code>INSTANCEOF</code>
 	 *    <b><code>==</code></p>  <code>EQUALS</code>
 	 *    <b><code>!=</code></p>  <code>NOT_EQUALS</code>
 	 *    <b><code>^</code></p>  <code>XOR</code>
@@ -100,7 +99,7 @@ public class InfixExpression extends Expression {
 		public static final Operator LEFT_SHIFT = new Operator("<<");//$NON-NLS-1$
 		/** Signed right shift "&gt;&gt;" operator. */
 		public static final Operator RIGHT_SHIFT_SIGNED = new Operator(">>");//$NON-NLS-1$
-		/** Unsigned right shift "&gt;&gt&gt;;" operator. */
+		/** Unsigned right shift "&gt;&gt;&gt;" operator. */
 		public static final Operator RIGHT_SHIFT_UNSIGNED = 
 			new Operator(">>>");//$NON-NLS-1$
 		/** Less than "&lt;" operator. */
@@ -111,8 +110,6 @@ public class InfixExpression extends Expression {
 		public static final Operator LESS_EQUALS = new Operator("<=");//$NON-NLS-1$
 		/** Greater than or equals "&gt=;" operator. */
 		public static final Operator GREATER_EQUALS = new Operator(">=");//$NON-NLS-1$
-		/** "instanceof" operator. */
-		public static final Operator INSTANCEOF = new Operator("instanceof");//$NON-NLS-1$
 		/** Equals "==" operator. */
 		public static final Operator EQUALS = new Operator("==");//$NON-NLS-1$
 		/** Not equals "!=" operator. */
@@ -148,7 +145,6 @@ public class InfixExpression extends Expression {
 					GREATER,
 					LESS_EQUALS,
 					GREATER_EQUALS,
-					INSTANCEOF,
 					EQUALS,
 					NOT_EQUALS,
 					XOR,
@@ -217,6 +213,13 @@ public class InfixExpression extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return INFIX_EXPRESSION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		InfixExpression result = new InfixExpression(target);
 		result.setOperator(getOperator());
@@ -233,24 +236,9 @@ public class InfixExpression extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof InfixExpression)) {
-			return false;
-		}
-		InfixExpression o = (InfixExpression) other;
-		// be careful not to trigger lazy creation of extended operand lists
-		if (hasExtendedOperands() && o.hasExtendedOperands()) {
-			if (!ASTNode.equalLists(extendedOperands(), o.extendedOperands())) {
-				return false;
-			}
-		}
-		if (hasExtendedOperands() != o.hasExtendedOperands()) {
-			return false;
-		}
-		return 
-			(getOperator().equals(o.getOperator())
-			&& ASTNode.equalNodes(getLeftOperand(), o.getLeftOperand())
-			&& ASTNode.equalNodes(getRightOperand(), o.getRightOperand()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -283,7 +271,7 @@ public class InfixExpression extends Expression {
 	 * Sets the operator of this infix expression.
 	 * 
 	 * @param operator the infix operator
-	 * @exception $precondition-violation:invalid-argument$
+	 * @exception IllegalArgumentException if the argument is incorrect
 	 */ 
 	public void setOperator(InfixExpression.Operator operator) {
 		if (operator == null) {
@@ -310,9 +298,9 @@ public class InfixExpression extends Expression {
 	 * Sets the left operand of this infix expression.
 	 * 
 	 * @param expression the left operand node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setLeftOperand(Expression expression) {
 		if (expression == null) {
@@ -340,9 +328,9 @@ public class InfixExpression extends Expression {
 	 * Sets the right operand of this infix expression.
 	 * 
 	 * @param expression the right operand node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setRightOperand(Expression expression) {
 		if (expression == null) {

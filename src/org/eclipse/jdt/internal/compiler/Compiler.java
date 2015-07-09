@@ -2,11 +2,10 @@ package org.eclipse.jdt.internal.compiler;
 
 /*
  * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
+ * All Rights Reserved. 
  */
-import org.eclipse.jdt.internal.compiler.*;
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.env.*;
-
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -62,13 +61,13 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 	 *      specify the rules for handling problems (stop on first error or accumulate
 	 *      them all) and at the same time perform some actions such as opening a dialog
 	 *      in UI when compiling interactively.
-	 *      @see org.eclipse.jdt.internal.compiler.api.problem.DefaultErrorHandlingPolicies
+	 *      @see org.eclipse.jdt.internal.compiler.DefaultErrorHandlingPolicies
 	 *      
 	 *  @param requestor org.eclipse.jdt.internal.compiler.api.ICompilerRequestor
 	 *      Component which will receive and persist all compilation results and is intended
 	 *      to consume them as they are produced. Typically, in a batch compiler, it is 
 	 *      responsible for writing out the actual .class files to the file system.
-	 *      @see org.eclipse.jdt.internal.compiler.api.CompilationResult
+	 *      @see org.eclipse.jdt.internal.compiler.CompilationResult
 	 *
 	 *  @param problemFactory org.eclipse.jdt.internal.compiler.api.problem.IProblemFactory
 	 *      Factory used inside the compiler to create problem descriptors. It allows the
@@ -129,13 +128,13 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 	 *      specify the rules for handling problems (stop on first error or accumulate
 	 *      them all) and at the same time perform some actions such as opening a dialog
 	 *      in UI when compiling interactively.
-	 *      @see org.eclipse.jdt.internal.compiler.api.problem.DefaultErrorHandlingPolicies
+	 *      @see org.eclipse.jdt.internal.compiler.DefaultErrorHandlingPolicies
 	 *      
 	 *  @param requestor org.eclipse.jdt.internal.compiler.api.ICompilerRequestor
 	 *      Component which will receive and persist all compilation results and is intended
 	 *      to consume them as they are produced. Typically, in a batch compiler, it is 
 	 *      responsible for writing out the actual .class files to the file system.
-	 *      @see org.eclipse.jdt.internal.compiler.api.CompilationResult
+	 *      @see org.eclipse.jdt.internal.compiler.CompilationResult
 	 *
 	 *  @param problemFactory org.eclipse.jdt.internal.compiler.api.problem.IProblemFactory
 	 *      Factory used inside the compiler to create problem descriptors. It allows the
@@ -378,7 +377,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			return; //work already done ...
 
 		//real parse of the method....
-		parser.scanner.setSourceBuffer(
+		parser.scanner.setSource(
 			unit.compilationResult.compilationUnit.getContents());
 		if (unit.types != null) {
 			for (int i = unit.types.length; --i >= 0;)
@@ -416,7 +415,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 					problemReporter
 					.createProblem(
 						result.getFileName(),
-						ProblemIrritants.UnclassifiedProblem,
+						IProblem.Unclassified,
 						new String[] {
 							Util.bind("compilation.internalError" ) //$NON-NLS-1$
 								+ "\n"  //$NON-NLS-1$
@@ -550,11 +549,11 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 		CompilationUnitDeclaration unit = null;
 		try {
 			// build and record parsed units
-			parseThreshold = 1; // will request a full parse
+			parseThreshold = 0; // will request a full parse
 			beginToCompile(new ICompilationUnit[] { sourceUnit });
 			// process all units (some more could be injected in the loop by the lookup environment)
 			unit = unitsToProcess[0];
-			//getMethodBodies(unit,i);
+			getMethodBodies(unit, 0);
 			if (unit.scope != null) {
 				// fault in fields & methods
 				unit.scope.faultInTypes();

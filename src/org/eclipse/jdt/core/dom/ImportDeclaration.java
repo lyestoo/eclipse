@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -52,6 +52,13 @@ public class ImportDeclaration extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return IMPORT_DECLARATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		ImportDeclaration result = new ImportDeclaration(target);
 		result.setOnDemand(isOnDemand());
@@ -62,14 +69,9 @@ public class ImportDeclaration extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof ImportDeclaration)) {
-			return false;
-		}
-		ImportDeclaration o = (ImportDeclaration) other;
-		return 
-			(ASTNode.equalNodes(getName(), o.getName())
-			&& isOnDemand() == o.isOnDemand());
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -109,8 +111,8 @@ public class ImportDeclaration extends ASTNode {
 	 * </p>
 	 * 
 	 * @param name the new import name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setName(Name name) {
 		if (name == null) {
@@ -141,6 +143,22 @@ public class ImportDeclaration extends ASTNode {
 	public void setOnDemand(boolean onDemand) {
 		modifying();
 		this.onDemand = onDemand;
+	}
+	
+	/**
+	 * Resolves and returns the binding for the package or type imported by
+	 * this import declaration.
+	 * <p>
+	 * Note that bindings are generally unavailable unless requested when the
+	 * AST is being built.
+	 * </p>
+	 * 
+	 * @return the package binding (for on-demand imports) or type binding
+	 *    (for single-type imports), or <code>null</code> if the binding cannot
+	 *    be resolved
+	 */	
+	public IBinding resolveBinding() {
+		return getAST().getBindingResolver().resolveImport(this);
 	}
 	
 	/* (omit javadoc for this method)

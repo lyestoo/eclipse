@@ -5,6 +5,8 @@ package org.eclipse.jdt.internal.compiler.ast;
  * All Rights Reserved.
  */
 import java.util.ArrayList;
+
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
@@ -23,6 +25,10 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 	public int referenceCount = 0;
 	// count how many times this constructor is referenced from other local constructors
 
+	public ConstructorDeclaration(CompilationResult compilationResult){
+		super(compilationResult);
+	}
+	
 	public void analyseCode(
 		ClassScope classScope,
 		InitializationFlowContext initializerFlowContext,
@@ -102,28 +108,6 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 			}
 		} catch (AbortMethod e) {
 			this.ignoreFurtherInvestigation = true;
-		}
-	}
-
-	public void checkName() {
-		//look if the name of the method is correct
-		//and proceed with the resolution of the special constructor statement 
-
-		if (!CharOperation.equals(scope.enclosingSourceType().sourceName, selector))
-			scope.problemReporter().missingReturnType(this);
-
-		// if null ==> an error has occurs at parsing time ....
-		if (constructorCall != null) {
-			// e.g. using super() in java.lang.Object
-			if ((binding.declaringClass.id == T_Object)
-				&& (constructorCall.accessMode != ExplicitConstructorCall.This)) {
-				if (constructorCall.accessMode == ExplicitConstructorCall.Super) {
-					scope.problemReporter().cannotUseSuperInJavaLangObject(constructorCall);
-				}
-				constructorCall = null;
-				return;
-			}
-			constructorCall.resolve(scope);
 		}
 	}
 
@@ -302,8 +286,13 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 		//fill up the constructor body with its statements
 		if (ignoreFurtherInvestigation)
 			return;
-		if (isDefaultConstructor)
+		if (isDefaultConstructor){
+			constructorCall =
+				new ExplicitConstructorCall(ExplicitConstructorCall.ImplicitSuper);
+			constructorCall.sourceStart = sourceStart;
+			constructorCall.sourceEnd = sourceEnd; 
 			return;
+		}
 		parser.parse(this, unit);
 
 	}
@@ -312,31 +301,44 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 	 * Type checking for constructor, just another method, except for special check
 	 * for recursive constructor invocations.
 	 */
-	public void resolve(ClassScope upperScope) {
-
-		if (binding == null) {
-			ignoreFurtherInvestigation = true;
-			return;
+	public void resolveStatements(ClassScope upperScope) {
+/*
+		// checking for recursive constructor call (protection)
+		if (!ignoreFurtherInvestigation && constructorCall == null){
+			constructorCall = new ExplicitConstructorCall(ExplicitConstructorCall.ImplicitSuper);
+			constructorCall.sourceStart = sourceStart;
+			constructorCall.sourceEnd = sourceEnd;
+		}
+*/
+		if (!CharOperation.equals(scope.enclosingSourceType().sourceName, selector)){
+			scope.problemReporter().missingReturnType(this);
 		}
 
-		super.resolve(upperScope);
-
-		try {
-			// checking for recursive constructor call
-			if (constructorCall != null) {
-				// indirect reference: increment target constructor reference count
-				if (constructorCall.binding != null
-					&& !constructorCall.isSuperAccess()
-					&& constructorCall.binding.isValidBinding()) {
-					(
-						(ConstructorDeclaration)
-							(
-								upperScope.referenceContext.declarationOf(
-									constructorCall.binding))).referenceCount++;
-				}
+		// if null ==> an error has occurs at parsing time ....
+		if (constructorCall != null) {
+			// e.g. using super() in java.lang.Object
+			if (binding != null
+				&& binding.declaringClass.id == T_Object
+				&& constructorCall.accessMode != ExplicitConstructorCall.This) {
+					if (constructorCall.accessMode == ExplicitConstructorCall.Super) {
+						scope.problemReporter().cannotUseSuperInJavaLangObject(constructorCall);
+					}
+					constructorCall = null;
+			} else {
+				constructorCall.resolve(scope);
 			}
-		} catch (AbortMethod e) {
-			this.ignoreFurtherInvestigation = true;
+		}
+		
+		super.resolveStatements(upperScope);
+
+		// indirect reference: increment target constructor reference count
+		if (constructorCall != null){
+			if (constructorCall.binding != null
+				&& !constructorCall.isSuperAccess()
+				&& constructorCall.binding.isValidBinding()) {
+				((ConstructorDeclaration)
+						(upperScope.referenceContext.declarationOf(constructorCall.binding))).referenceCount++;
+			}
 		}
 	}
 
@@ -354,7 +356,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 				}
 			}
 		}
-		s += "\n" + tabString(tab == 0 ? 0 : tab - 1) + "}";
+		s += "\n" + tabString(tab == 0 ? 0 : tab - 1) + "}"; //$NON-NLS-1$ //$NON-NLS-2$
 		//$NON-NLS-2$ //$NON-NLS-1$
 		return s;
 	}

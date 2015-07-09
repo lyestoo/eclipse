@@ -4,6 +4,7 @@ package org.eclipse.jdt.internal.eval;
  * (c) Copyright IBM Corp. 2000, 2001.
  * All Rights Reserved.
  */
+import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.Compiler;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.env.*;
@@ -99,7 +100,7 @@ ClassFile[] getClasses() {
 					CharOperation.replace(relativeName, '/', java.io.File.separatorChar);
 					ClassFile.writeToDisk("d:/test/snippet", new String(relativeName), classFile.getBytes());
 					String str = "d:/test/snippet" + "/" + new String(relativeName);
-					System.out.println(com.ibm.compiler.java.classfmt.disassembler.ClassFileDisassembler.disassemble(str));				
+					System.out.println(org.eclipse.jdt.core.tools.classfmt.disassembler.ClassFileDisassembler.disassemble(str));				
  */	
 					classDefinitions.add(classFile);
 				}

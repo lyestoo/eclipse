@@ -8,7 +8,7 @@ import org.eclipse.jdt.internal.compiler.env.*;
 
 /**
  * This interface defines the API that may be used to implement any
- * search-based tool (such as a CodeAssist, a Finder, ...)
+ * search-based tool (such as a CodeAssist, a Finder, ...).
  * It is mainly used to hide from the search tool the implementation
  * of the underlying environment and its constructions.
  */
@@ -17,7 +17,7 @@ public interface ISearchableNameEnvironment extends INameEnvironment {
 	/**
 	 * Find the packages that start with the given prefix.
 	 * A valid prefix is a qualified name separated by periods
-	 * (ex. com.ibm.com or java.util).
+	 * (ex. java.util).
 	 * The packages found are passed to:
 	 *    ISearchRequestor.acceptPackage(char[][] packageName)
 	 */

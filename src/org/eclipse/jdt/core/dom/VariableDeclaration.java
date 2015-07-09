@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002 IBM Corporation and others.
+ * Copyright (c) 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -40,6 +40,43 @@ public abstract class VariableDeclaration extends ASTNode {
 		super(ast);
 	}
 	
+	/**
+	 * Returns the name of the variable declared in this variable declaration.
+	 * 
+	 * @return the variable name node
+	 */ 
+	public abstract SimpleName getName();
+		
+	/**
+	 * Sets the name of the variable declared in this variable declaration 
+	 * to the given name.
+	 * 
+	 * @param variableName the new variable name
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 */ 
+	public abstract void setName(SimpleName variableName);
+
+	/**
+	 * Returns the initializer of this variable declaration, or 
+	 * <code>null</code> if there is none.
+	 * 
+	 * @return the initializer expression node, or <code>null</code> if 
+	 *    there is none
+	 */ 
+	public abstract Expression getInitializer();
+	
+	/**
+	 * Sets or clears the initializer of this variable declaration.
+	 * 
+	 * @param initializer the initializer expression node, or <code>null</code>
+	 *    if there is none
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
+	 */ 
+	public abstract void setInitializer(Expression initializer);
+
 	/**
 	 * Resolves and returns the binding for the variable declared in this
 	 * variable declaration.

@@ -5,14 +5,16 @@ package org.eclipse.jdt.internal.eval;
  * All Rights Reserved.
  */
 import org.eclipse.jdt.core.ICompletionRequestor;
+import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.codeassist.*;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.env.*;
 import org.eclipse.jdt.internal.compiler.classfmt.*;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
-import org.eclipse.jdt.internal.compiler.problem.ProblemIrritants;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 import org.eclipse.jdt.internal.compiler.util.CharOperation;
+import org.eclipse.jdt.internal.compiler.util.Util;
+
 import java.io.*;
 import java.util.*;
 import java.util.zip.*;
@@ -105,7 +107,7 @@ public void complete(char[] codeSnippet, int completionPosition, ISearchableName
 		}
 	};
 	CompletionEngine engine = new CompletionEngine(environment, mapper.getCompletionRequestor(requestor), options);
-	engine.complete(sourceUnit, mapper.startPosOffset + completionPosition);
+	engine.complete(sourceUnit, mapper.startPosOffset + completionPosition, 0);
 }
 /**
  * Deletes the given variable from this evaluation context. This will take effect in the target VM only
@@ -149,7 +151,7 @@ private void deployCodeSnippetClassIfNeeded(IRequestor requestor) {
 	}
 }
 /**
- * @see org.eclipse.jdt.internal.eval.IEvaluationContext
+ * @see org.eclipse.jdt.core.eval.IEvaluationContext
  * @exception org.eclipse.jdt.internal.eval.InstallException if the code snippet class files could not be deployed.
  */
 public void evaluate(
@@ -235,7 +237,7 @@ public void evaluate(
 	}
 }
 /**
- * @see org.eclipse.jdt.internal.eval.IEvaluationContext
+ * @see org.eclipse.jdt.core.eval.IEvaluationContext
  * @exception org.eclipse.jdt.internal.eval.InstallException if the code snippet class files could not be deployed.
  */
 public void evaluate(char[] codeSnippet, INameEnvironment environment, Map options, final IRequestor requestor, IProblemFactory problemFactory) throws InstallException {
@@ -278,15 +280,15 @@ public void evaluateImports(INameEnvironment environment, IRequestor requestor, 
 						packageName = splitDeclaration[splitLength - 2];
 				}
 				if (!environment.isPackage(parentName, packageName)) {
-					problems[0] = problemFactory.createProblem(importDeclaration, ProblemIrritants.ImportProblemBase + ProblemReasons.NotFound, new String[] {new String(importDeclaration)}, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
+					problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, new String[] {new String(importDeclaration)}, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
 				}
 			} else {
 				if (environment.findType(splitDeclaration) == null) {
-					problems[0] = problemFactory.createProblem(importDeclaration, ProblemIrritants.ImportProblemBase + ProblemReasons.NotFound, new String[] {new String(importDeclaration)}, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
+					problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, new String[] {new String(importDeclaration)}, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
 				}
 			}
 		} else {
-			problems[0] = problemFactory.createProblem(importDeclaration, ProblemIrritants.ImportProblemBase + ProblemReasons.NotFound, new String[] {new String(importDeclaration)}, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
+			problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, new String[] {new String(importDeclaration)}, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
 		}
 		if (problems[0] != null) {
 			requestor.acceptProblem(problems[0], importDeclaration, EvaluationResult.T_IMPORT);
@@ -294,7 +296,7 @@ public void evaluateImports(INameEnvironment environment, IRequestor requestor, 
 	}
 }
 /**
- * @see org.eclipse.jdt.internal.eval.IEvaluationContext
+ * @see org.eclipse.jdt.core.eval.IEvaluationContext
  * @exception org.eclipse.jdt.internal.eval.InstallException if the code snippet class files could not be deployed.
  * @exception java.lang.IllegalArgumentException if the global has not been installed yet.
  */
@@ -302,7 +304,7 @@ public void evaluateVariable(GlobalVariable variable, INameEnvironment environme
 	this.evaluate(variable.getName(), environment, options, requestor, problemFactory);
 }
 /**
- * @see org.eclipse.jdt.internal.eval.IEvaluationContext
+ * @see org.eclipse.jdt.core.eval.IEvaluationContext
  * @exception org.eclipse.jdt.internal.eval.InstallException if the code snippet class files could not be deployed.
  */
 public void evaluateVariables(INameEnvironment environment, Map options, IRequestor requestor, IProblemFactory problemFactory) throws InstallException {
@@ -362,7 +364,6 @@ private byte[] getCodeSnippetBytes() {
 /**
  * Returns the source of the CodeSnippet class.
  * This is used to generate the binary of the CodeSnippetClass
- * @see getCodeSnippetBytes
  */
 public static String getCodeSnippetSource() {
 	return
@@ -471,16 +472,22 @@ public GlobalVariable newVariable(char[] typeName, char[] name, char[] initializ
 /**
  * Computes the selection at the specified positions of the given code snippet.
  * (Note that this evaluation context's VM doesn't need to be running.)
- *
- *  @param environment com.ibm.codeassist.java.api.ISearchableNameEnvironment
+ *  @param codeSnippet char[]
+ * 		The code snipper source
+ * 
+ *  @param selectionSourceStart int
+ * 
+ *  @param selectionSourceEnd int
+ * 
+ *  @param environment org.eclipse.jdt.internal.codeassist.ISearchableNameEnvironment
  *      used to resolve type/package references and search for types/packages
  *      based on partial names.
  *
- *  @param requestor com.ibm.codeassist.java.api.ISelectionRequestor
+ *  @param requestor org.eclipse.jdt.internal.codeassist.ISelectionRequestor
  *      since the engine might produce answers of various forms, the engine 
  *      is associated with a requestor able to accept all possible selections.
  *
- *  @param options com.ibm.compiler.java.api.ConfigurableOptions
+ *  @param options java.util.Map
  *		set of options used to configure the code assist engine.
  */
 public void select( 

@@ -123,14 +123,10 @@ public abstract class Scope
 			return null; // know it has no member types (nor inherited member types)
 
 		SourceTypeBinding enclosingSourceType = enclosingSourceType();
-// replaces call to addTypeReference
 		compilationUnitScope().recordReference(enclosingType.compoundName, typeName);
-		compilationUnitScope().addTypeReference(enclosingType);
 		ReferenceBinding memberType = enclosingType.getMemberType(typeName);
 		if (memberType != null) {
-// was the enclosing type not recorded 3 lines above?
 			compilationUnitScope().recordTypeReference(memberType); // to record supertypes
-			compilationUnitScope().addTypeReference(memberType);
 			if (enclosingSourceType == null
 				? memberType.canBeSeenBy(getCurrentPackage())
 				: memberType.canBeSeenBy(enclosingType, enclosingSourceType))
@@ -148,17 +144,11 @@ public abstract class Scope
 		TypeBinding[] argumentTypes,
 		InvocationSite invocationSite) {
 
-// replaces call to addTypeReference
 		compilationUnitScope().recordTypeReference(receiverType);
-		compilationUnitScope().addTypeReference(receiverType);
-// replaces call to addTypeReferences
 		compilationUnitScope().recordTypeReferences(argumentTypes);
-		compilationUnitScope().addTypeReferences(argumentTypes);
 		MethodBinding exactMethod = receiverType.getExactMethod(selector, argumentTypes);
 		if (exactMethod != null) {
-// replaces call to addTypeReferences
 			compilationUnitScope().recordTypeReferences(exactMethod.thrownExceptions);
-			compilationUnitScope().addTypeReferences(exactMethod.thrownExceptions);
 			if (receiverType.isInterface() || exactMethod.canBeSeenBy(receiverType, invocationSite, this))
 				return exactMethod;
 		}
@@ -183,7 +173,6 @@ public abstract class Scope
 			return null;
 		}
 
-// replaces call to addTypeReference which should be here
 		compilationUnitScope().recordTypeReference(receiverType);
 
 		ReferenceBinding currentType = (ReferenceBinding) receiverType;
@@ -191,7 +180,6 @@ public abstract class Scope
 			return new ProblemFieldBinding(currentType, fieldName, NotVisible);
 		// *** Need a new problem id - TypeNotVisible?
 
-		compilationUnitScope().addTypeReference(currentType);
 		FieldBinding field = currentType.getField(fieldName);
 		if (field != null) {
 			if (field.canBeSeenBy(currentType, invocationSite, this))
@@ -294,14 +282,10 @@ public abstract class Scope
 
 		SourceTypeBinding enclosingSourceType = enclosingSourceType();
 		PackageBinding currentPackage = getCurrentPackage();
-// replaces call to addTypeReference
 		compilationUnitScope().recordReference(enclosingType.compoundName, typeName);
-		compilationUnitScope().addTypeReference(enclosingType);
 		ReferenceBinding memberType = enclosingType.getMemberType(typeName);
 		if (memberType != null) {
-// was the enclosing type not recorded 3 lines above?
 			compilationUnitScope().recordTypeReference(memberType); // to record supertypes
-			compilationUnitScope().addTypeReference(memberType);
 			if (enclosingSourceType == null
 				? memberType.canBeSeenBy(currentPackage)
 				: memberType.canBeSeenBy(enclosingType, enclosingSourceType))
@@ -335,13 +319,9 @@ public abstract class Scope
 			if ((currentType = currentType.superclass()) == null)
 				break;
 
-// replaces call to addTypeReference
 			compilationUnitScope().recordReference(currentType.compoundName, typeName);
-			compilationUnitScope().addTypeReference(currentType);
 			if ((memberType = currentType.getMemberType(typeName)) != null) {
-// was the superclass not recorded 3 lines above?
 				compilationUnitScope().recordTypeReference(memberType); // to record supertypes
-				compilationUnitScope().addTypeReference(memberType);
 				keepLooking = false;
 				if (enclosingSourceType == null
 					? memberType.canBeSeenBy(currentPackage)
@@ -365,13 +345,9 @@ public abstract class Scope
 					if ((anInterface.tagBits & InterfaceVisited) == 0) {
 						// if interface as not already been visited
 						anInterface.tagBits |= InterfaceVisited;
-// replaces call to addTypeReference
 						compilationUnitScope().recordReference(anInterface.compoundName, typeName);
-						compilationUnitScope().addTypeReference(anInterface);
 						if ((memberType = anInterface.getMemberType(typeName)) != null) {
-// was the interface not recorded 3 lines above?
 							compilationUnitScope().recordTypeReference(memberType); // to record supertypes
-							compilationUnitScope().addTypeReference(memberType);
 							if (visibleMemberType == null) {
 								visibleMemberType = memberType;
 							} else {
@@ -420,143 +396,222 @@ public abstract class Scope
 
 		ReferenceBinding currentType = receiverType;
 		MethodBinding matchingMethod = null;
-		ObjectVector found = null;
+		ObjectVector found = new ObjectVector();
 
-// replaces call to addTypeReference
 		compilationUnitScope().recordTypeReference(receiverType);
-		compilationUnitScope().addTypeReference(receiverType);
-// replaces call to addTypeReferences
 		compilationUnitScope().recordTypeReferences(argumentTypes);
-		compilationUnitScope().addTypeReferences(argumentTypes);
+
 		if (currentType.isInterface()) {
 			MethodBinding[] currentMethods = currentType.getMethods(selector);
 			int currentLength = currentMethods.length;
 			if (currentLength == 1) {
 				matchingMethod = currentMethods[0];
 			} else if (currentLength > 1) {
-				found = new ObjectVector();
-				for (int f = 0; f < currentLength; f++)
-					found.add(currentMethods[f]);
+				found.addAll(currentMethods);
 			}
-			ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
-			if (itsInterfaces != NoSuperInterfaces) {
-				ReferenceBinding[][] interfacesToVisit = new ReferenceBinding[5][];
-				int lastPosition = -1;
-				if (++lastPosition == interfacesToVisit.length)
-					System.arraycopy(
-						interfacesToVisit,
-						0,
-						interfacesToVisit = new ReferenceBinding[lastPosition * 2][],
-						0,
-						lastPosition);
-				interfacesToVisit[lastPosition] = itsInterfaces;
-
-				for (int i = 0; i <= lastPosition; i++) {
-					ReferenceBinding[] interfaces = interfacesToVisit[i];
-					for (int j = 0, length = interfaces.length; j < length; j++) {
-						currentType = interfaces[j];
-						if ((currentType.tagBits & InterfaceVisited) == 0) {
-							// if interface as not already been visited
-							currentType.tagBits |= InterfaceVisited;
-
-							currentMethods = currentType.getMethods(selector);
-							if ((currentLength = currentMethods.length) == 1
-								&& matchingMethod == null
-								&& found == null) {
-								matchingMethod = currentMethods[0];
-							} else if (currentLength > 0) {
-								if (found == null) {
-									found = new ObjectVector();
-									if (matchingMethod != null)
-										found.add(matchingMethod);
-								}
-								for (int f = 0; f < currentLength; f++)
-									found.add(currentMethods[f]);
-							}
-							itsInterfaces = currentType.superInterfaces();
-							if (itsInterfaces != NoSuperInterfaces) {
-								if (++lastPosition == interfacesToVisit.length)
-									System.arraycopy(
-										interfacesToVisit,
-										0,
-										interfacesToVisit = new ReferenceBinding[lastPosition * 2][],
-										0,
-										lastPosition);
-								interfacesToVisit[lastPosition] = itsInterfaces;
-							}
-						}
-					}
-				}
-
-				// bit reinitialization
-				for (int i = 0; i <= lastPosition; i++) {
-					ReferenceBinding[] interfaces = interfacesToVisit[i];
-					for (int j = 0, length = interfaces.length; j < length; j++)
-						interfaces[j].tagBits &= ~InterfaceVisited;
-				}
-			}
-			currentType =
-				(matchingMethod == null && found == null) ? getJavaLangObject() : null;
+			matchingMethod = findMethodInSuperInterfaces(currentType, selector, found, matchingMethod);
+			currentType = getJavaLangObject();
 		}
 
+		// superclass lookup
+		ReferenceBinding classHierarchyStart = currentType;
 		while (currentType != null) {
 			MethodBinding[] currentMethods = currentType.getMethods(selector);
 			int currentLength = currentMethods.length;
-			if (currentLength == 1 && matchingMethod == null && found == null) {
+			if (currentLength == 1 && matchingMethod == null && found.size == 0) {
 				matchingMethod = currentMethods[0];
 			} else if (currentLength > 0) {
-				if (found == null) {
-					found = new ObjectVector();
-					if (matchingMethod != null)
-						found.add(matchingMethod);
+				if (matchingMethod != null) {
+					found.add(matchingMethod);
+					matchingMethod = null;
 				}
-				for (int f = 0; f < currentLength; f++)
-					found.add(currentMethods[f]);
+				found.addAll(currentMethods);
 			}
 			currentType = currentType.superclass();
 		}
 
-		if (found == null)
-			return matchingMethod; // may be null - have not checked arg types or visibility
-
 		int foundSize = found.size;
-		MethodBinding[] compatible = new MethodBinding[foundSize];
-		int compatibleIndex = 0;
+		if (foundSize == 0) {
+			if (matchingMethod != null && areParametersAssignable(matchingMethod.parameters, argumentTypes))
+				return matchingMethod;
+			return findDefaultAbstractMethod(receiverType, selector, argumentTypes, invocationSite, classHierarchyStart, matchingMethod, found);
+		}
+
+		MethodBinding[] candidates = new MethodBinding[foundSize];
+		int candidatesCount = 0;
+		// argument type compatibility check
 		for (int i = 0; i < foundSize; i++) {
 			MethodBinding methodBinding = (MethodBinding) found.elementAt(i);
 			if (areParametersAssignable(methodBinding.parameters, argumentTypes))
-				compatible[compatibleIndex++] = methodBinding;
+				candidates[candidatesCount++] = methodBinding;
 		}
-		if (compatibleIndex == 1)
-			return compatible[0]; // have not checked visibility
-		if (compatibleIndex == 0)
-			return (MethodBinding) found.elementAt(0); // no good match so just use the first one found
+		if (candidatesCount == 1) {
+			compilationUnitScope().recordTypeReferences(candidates[0].thrownExceptions);
+			return candidates[0]; // have not checked visibility
+		}
+		if (candidatesCount == 0) { // try to find a close match when the parameter order is wrong or missing some parameters
+			MethodBinding interfaceMethod =
+				findDefaultAbstractMethod(receiverType, selector, argumentTypes, invocationSite, classHierarchyStart, matchingMethod, found);
+			if (interfaceMethod != null) return interfaceMethod;
 
-		MethodBinding[] visible = new MethodBinding[compatibleIndex];
-		int visibleIndex = 0;
-		for (int i = 0; i < compatibleIndex; i++) {
-			MethodBinding methodBinding = compatible[i];
-			if (methodBinding.canBeSeenBy(receiverType, invocationSite, this))
-				visible[visibleIndex++] = methodBinding;
+			int argLength = argumentTypes.length;
+			foundSize = found.size;
+			nextMethod : for (int i = 0; i < foundSize; i++) {
+				MethodBinding methodBinding = (MethodBinding) found.elementAt(i);
+				TypeBinding[] params = methodBinding.parameters;
+				int paramLength = params.length;
+				nextArg: for (int a = 0; a < argLength; a++) {
+					TypeBinding arg = argumentTypes[a];
+					for (int p = 0; p < paramLength; p++)
+						if (params[p] == arg)
+							continue nextArg;
+					continue nextMethod;
+				}
+				return methodBinding;
+			}
+			return (MethodBinding) found.elementAt(0); // no good match so just use the first one found
 		}
-		if (visibleIndex == 1) {
-// replaces call to addTypeReferences
-			compilationUnitScope().recordTypeReferences(visible[0].thrownExceptions);
-			compilationUnitScope().addTypeReferences(visible[0].thrownExceptions);
-			return visible[0];
+
+		// visibility check
+		int visiblesCount = 0;
+		for (int i = 0; i < candidatesCount; i++) {
+			MethodBinding methodBinding = candidates[i];
+			if (methodBinding.canBeSeenBy(receiverType, invocationSite, this)) {
+				if (visiblesCount != i) {
+					candidates[i] = null;
+					candidates[visiblesCount] = methodBinding;
+				}
+				visiblesCount++;
+			}
 		}
-		if (visibleIndex == 0)
-			return new ProblemMethodBinding(
-				compatible[0].selector,
-				argumentTypes,
-				compatible[0].declaringClass,
-				NotVisible);
-		if (visible[0].declaringClass.isClass())
-			return mostSpecificClassMethodBinding(visible, visibleIndex);
-		else
-			return mostSpecificInterfaceMethodBinding(visible, visibleIndex);
+		if (visiblesCount == 1) {
+			compilationUnitScope().recordTypeReferences(candidates[0].thrownExceptions);
+			return candidates[0];
+		}
+		if (visiblesCount == 0) {
+			MethodBinding interfaceMethod =
+				findDefaultAbstractMethod(receiverType, selector, argumentTypes, invocationSite, classHierarchyStart, matchingMethod, found);
+			if (interfaceMethod != null) return interfaceMethod;
+			return new ProblemMethodBinding(candidates[0].selector, argumentTypes, candidates[0].declaringClass, NotVisible);
+		}	
+		if (candidates[0].declaringClass.isClass()) {
+			return mostSpecificClassMethodBinding(candidates, visiblesCount);
+		} else {
+			return mostSpecificInterfaceMethodBinding(candidates, visiblesCount);
+		}
 	}
 
+	// abstract method lookup lookup (since maybe missing default abstract methods)
+	public MethodBinding findDefaultAbstractMethod(
+		ReferenceBinding receiverType, 
+		char[] selector,
+		TypeBinding[] argumentTypes,
+		InvocationSite invocationSite,
+		ReferenceBinding classHierarchyStart,
+		MethodBinding matchingMethod,
+		ObjectVector found) {
+
+		int startFoundSize = found.size;
+		ReferenceBinding currentType = classHierarchyStart;
+		while (currentType != null) {
+			matchingMethod = findMethodInSuperInterfaces(currentType, selector, found, matchingMethod);
+			currentType = currentType.superclass();
+		}
+		int foundSize = found.size;
+		if (foundSize == startFoundSize) return matchingMethod; // maybe null
+
+		MethodBinding[] candidates = new MethodBinding[foundSize - startFoundSize];
+		int candidatesCount = 0;
+		// argument type compatibility check
+		for (int i = startFoundSize; i < foundSize; i++) {
+			MethodBinding methodBinding = (MethodBinding) found.elementAt(i);
+			if (areParametersAssignable(methodBinding.parameters, argumentTypes))
+				candidates[candidatesCount++] = methodBinding;
+		}
+		if (candidatesCount == 1) {
+			compilationUnitScope().recordTypeReferences(candidates[0].thrownExceptions);
+			return candidates[0]; 
+		}
+		if (candidatesCount == 0) { // try to find a close match when the parameter order is wrong or missing some parameters
+			int argLength = argumentTypes.length;
+			nextMethod : for (int i = 0; i < foundSize; i++) {
+				MethodBinding methodBinding = (MethodBinding) found.elementAt(i);
+				TypeBinding[] params = methodBinding.parameters;
+				int paramLength = params.length;
+				nextArg: for (int a = 0; a < argLength; a++) {
+					TypeBinding arg = argumentTypes[a];
+					for (int p = 0; p < paramLength; p++)
+						if (params[p] == arg)
+							continue nextArg;
+					continue nextMethod;
+				}
+				return methodBinding;
+			}
+			return (MethodBinding) found.elementAt(0); // no good match so just use the first one found
+		}
+		// no need to check for visibility - interface methods are public
+		return mostSpecificInterfaceMethodBinding(candidates, candidatesCount);
+	}
+
+	public MethodBinding findMethodInSuperInterfaces(
+		ReferenceBinding currentType,
+		char[] selector,
+		ObjectVector found,
+		MethodBinding matchingMethod) {
+
+		ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
+		if (itsInterfaces != NoSuperInterfaces) {
+			ReferenceBinding[][] interfacesToVisit = new ReferenceBinding[5][];
+			int lastPosition = -1;
+			if (++lastPosition == interfacesToVisit.length)
+				System.arraycopy(
+					interfacesToVisit, 0,
+					interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0,
+					lastPosition);
+			interfacesToVisit[lastPosition] = itsInterfaces;
+
+			for (int i = 0; i <= lastPosition; i++) {
+				ReferenceBinding[] interfaces = interfacesToVisit[i];
+				for (int j = 0, length = interfaces.length; j < length; j++) {
+					currentType = interfaces[j];
+					if ((currentType.tagBits & InterfaceVisited) == 0) {
+						// if interface as not already been visited
+						currentType.tagBits |= InterfaceVisited;
+
+						MethodBinding[] currentMethods = currentType.getMethods(selector);
+						int currentLength = currentMethods.length;
+						if (currentLength == 1 && matchingMethod == null && found.size == 0) {
+							matchingMethod = currentMethods[0];
+						} else if (currentLength > 0) {
+							if (matchingMethod != null) {
+								found.add(matchingMethod);
+								matchingMethod = null;
+							}
+							found.addAll(currentMethods);
+						}
+						itsInterfaces = currentType.superInterfaces();
+						if (itsInterfaces != NoSuperInterfaces) {
+							if (++lastPosition == interfacesToVisit.length)
+								System.arraycopy(
+									interfacesToVisit, 0,
+									interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0,
+									lastPosition);
+							interfacesToVisit[lastPosition] = itsInterfaces;
+						}
+					}
+				}
+			}
+
+			// bit reinitialization
+			for (int i = 0; i <= lastPosition; i++) {
+				ReferenceBinding[] interfaces = interfacesToVisit[i];
+				for (int j = 0, length = interfaces.length; j < length; j++)
+					interfaces[j].tagBits &= ~InterfaceVisited;
+			}
+		}
+		return matchingMethod;
+	}
+	
 	// Internal use only
 	public MethodBinding findMethodForArray(
 		ArrayBinding receiverType,
@@ -606,9 +661,7 @@ public abstract class Scope
 		PackageBinding declarationPackage,
 		PackageBinding invocationPackage) {
 
-// replaces call to addNamespaceReference
 		compilationUnitScope().recordReference(declarationPackage.compoundName, typeName);
-		compilationUnitScope().addNamespaceReference(declarationPackage);
 		ReferenceBinding typeBinding = declarationPackage.getType(typeName);
 		if (typeBinding == null)
 			return null;
@@ -616,7 +669,6 @@ public abstract class Scope
 		if (typeBinding.isValidBinding()) {
 // Not convinced that this is necessary
 //			compilationUnitScope().recordTypeReference(typeBinding); // to record supertypes
-			compilationUnitScope().addTypeReference(typeBinding);
 			if (declarationPackage != invocationPackage && !typeBinding.canBeSeenBy(invocationPackage))
 				return new ProblemReferenceBinding(typeName, typeBinding, NotVisible);
 		}
@@ -793,23 +845,18 @@ public abstract class Scope
 			if (binding != null) return binding;
 		}
 
-// replaces 3 calls to addNamespaceReference & 1 to addTypeReference
 		compilationUnitScope().recordQualifiedReference(compoundName);
 		Binding binding =
 			getTypeOrPackage(compoundName[0], typeNameLength == 1 ? TYPE : TYPE | PACKAGE);
 		if (binding == null)
 			return new ProblemReferenceBinding(compoundName[0], NotFound);
-		if (!binding.isValidBinding()) {
-			compilationUnitScope().addNamespaceReference(
-				new ProblemPackageBinding(compoundName[0], NotFound)); // record extra reference to pkg
+		if (!binding.isValidBinding())
 			return (ReferenceBinding) binding;
-		}
+
 		int currentIndex = 1;
 		boolean checkVisibility = false;
 		if (binding instanceof PackageBinding) {
 			PackageBinding packageBinding = (PackageBinding) binding;
-			compilationUnitScope().addNamespaceReference(packageBinding);
-
 			while (currentIndex < typeNameLength) {
 				binding = packageBinding.getTypeOrPackage(compoundName[currentIndex++]); // does not check visibility
 				if (binding == null)
@@ -823,7 +870,6 @@ public abstract class Scope
 				if (!(binding instanceof PackageBinding))
 					break;
 				packageBinding = (PackageBinding) binding;
-				compilationUnitScope().addNamespaceReference(packageBinding);
 			}
 			if (binding instanceof PackageBinding)
 				return new ProblemReferenceBinding(
@@ -834,9 +880,7 @@ public abstract class Scope
 
 		// binding is now a ReferenceBinding
 		ReferenceBinding typeBinding = (ReferenceBinding) binding;
-// is this needed?
 		compilationUnitScope().recordTypeReference(typeBinding); // to record supertypes
-		compilationUnitScope().addTypeReference(typeBinding);
 		if (checkVisibility) // handles the fall through case
 			if (!typeBinding.canBeSeenBy(this))
 				return new ProblemReferenceBinding(
@@ -922,13 +966,14 @@ public abstract class Scope
 	/* Internal use only 
 	*/
 	final Binding getTypeOrPackage(char[] name, int mask) {
+		
 		Scope scope = this;
+		ReferenceBinding foundType = null;
 		if ((mask & TYPE) == 0) {
 			Scope next = scope;
 			while ((next = scope.parent) != null)
 				scope = next;
 		} else {
-			ReferenceBinding foundType = null;
 			done : while (true) { // done when a COMPILATION_UNIT_SCOPE is found
 				switch (scope.kind) {
 					case METHOD_SCOPE :
@@ -981,7 +1026,7 @@ public abstract class Scope
 				}
 				scope = scope.parent;
 			}
-			if (foundType != null)
+			if (foundType != null && foundType.problemId() != NotVisible)
 				return foundType;
 		}
 
@@ -1032,11 +1077,11 @@ public abstract class Scope
 				return packageBinding;
 		}
 
-// replaces calls to addNamespaceReference
 		compilationUnitScope().recordSimpleReference(name);
-		compilationUnitScope().addNamespaceReference(
-			new ProblemPackageBinding(name, NotFound));
 		// Answer error binding -- could not find name
+		if (foundType != null){
+			return foundType;
+		}
 		return new ProblemReferenceBinding(name, NotFound);
 	}
 
@@ -1101,10 +1146,13 @@ public abstract class Scope
 	* or a closer superclass.
 	*/
 	protected final MethodBinding mostSpecificClassMethodBinding(MethodBinding[] visible, int visibleSize) {
+
 		MethodBinding method = null;
 		MethodBinding previous = null;
+
 		nextVisible : for (int i = 0; i < visibleSize; i++) {
 			method = visible[i];
+						
 			if (previous != null && method.declaringClass != previous.declaringClass)
 				break; // cannot answer a method farther up the hierarchy than the first method found
 			previous = method;
@@ -1114,9 +1162,7 @@ public abstract class Scope
 				if (!areParametersAssignable(next.parameters, method.parameters))
 					continue nextVisible;
 			}
-// replaces call to addTypeReferences
 			compilationUnitScope().recordTypeReferences(method.thrownExceptions);
-			compilationUnitScope().addTypeReferences(method.thrownExceptions);
 			return method;
 		}
 		return new ProblemMethodBinding(visible[0].selector, visible[0].parameters, Ambiguous);
@@ -1161,9 +1207,7 @@ public abstract class Scope
 				if (!areParametersAssignable(next.parameters, method.parameters))
 					continue nextVisible;
 			}
-// replaces call to addTypeReferences
 			compilationUnitScope().recordTypeReferences(method.thrownExceptions);
-			compilationUnitScope().addTypeReferences(method.thrownExceptions);
 			return method;
 		}
 		return new ProblemMethodBinding(visible[0].selector, visible[0].parameters, Ambiguous);

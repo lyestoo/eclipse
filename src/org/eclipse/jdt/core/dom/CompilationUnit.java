@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -11,6 +11,7 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -28,7 +29,7 @@ import java.util.List;
  * @since 2.0
  */
 public class CompilationUnit extends ASTNode {
-	
+
 	/**
 	 * The package declaration, or <code>null</code> if none; initially
 	 * <code>null</code>.
@@ -55,10 +56,21 @@ public class CompilationUnit extends ASTNode {
 	 * <code>p</code>. Except for the last line, the positions are that
 	 * of the last character of the line delimiter. 
 	 * For example, the source string <code>A\nB\nC</code> has
-	 * line end table {1, 3, 4}.
+	 * line end table {1, 3} (if \n is one character).
 	 */
 	private int[] lineEndTable = new int[0];
 
+	/**
+	 * Canonical empty list of messages.
+	 */
+	private static final Message[] EMPTY_MESSAGES = new Message[0];
+
+	/**
+	 * Messages reported by the compiler during parsing or name resolution;
+	 * defaults to the empty list.
+	 */
+	private Message[] messages = EMPTY_MESSAGES;
+	 
 	/**
 	 * Sets the line end table for this compilation unit.
 	 * If <code>lineEndTable[i] == p</code> then line number <code>i+1</code> 
@@ -68,9 +80,8 @@ public class CompilationUnit extends ASTNode {
 	 * line end table {1, 3, 4}.
 	 * 
 	 * @param lineEndtable the line end table
-	 * @deprecated public is only temporary
 	 */
-	public void setLineEndTable(int[] lineEndTable) {
+	void setLineEndTable(int[] lineEndTable) {
 		if (lineEndTable == null) {
 			throw new NullPointerException();
 		}
@@ -97,8 +108,16 @@ public class CompilationUnit extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return COMPILATION_UNIT;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		CompilationUnit result = new CompilationUnit(target);
+		// n.b do not copy line number table or messages
 		result.setPackage(
 			(PackageDeclaration) ASTNode.copySubtree(target, getPackage()));
 		result.imports().addAll(ASTNode.copySubtrees(target, imports()));
@@ -109,15 +128,9 @@ public class CompilationUnit extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof CompilationUnit)) {
-			return false;
-		}
-		CompilationUnit o = (CompilationUnit) other;
-		return 
-			(ASTNode.equalNodes(getPackage(), o.getPackage())
-			&& ASTNode.equalLists(imports(), o.imports())
-			&& ASTNode.equalLists(types(), o.types()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -152,8 +165,8 @@ public class CompilationUnit extends ASTNode {
 	 * @param pkgDecl the new package declaration node, or 
 	 *   <code>null</code> if this compilation unit is not have no package
 	 *   declaration (that is, is to be in the default package)
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setPackage(PackageDeclaration pkgDecl) {
 		replaceChild(this.optionalPackageDeclaration, pkgDecl, false);
@@ -252,9 +265,14 @@ public class CompilationUnit extends ASTNode {
 		}
 		// assert position > lineEndTable[low+1]  && low == 0
 		int hi = length - 1;
-		if (position > lineEndTable[length - 1]) {
-			// position beyond the end of last line
-			return 1;
+		if (position > lineEndTable[hi]) {
+			// position beyond the last line separator
+			if (position >= getStartPosition() + getLength()) {
+				// this is beyond the end of the source length
+				return 1;
+			} else {
+				return length + 1;
+			}
 		}
 		// assert lineEndTable[low]  < position <= lineEndTable[hi]
 		// && low == 0 && hi == length - 1 && low < hi
@@ -285,7 +303,49 @@ public class CompilationUnit extends ASTNode {
 			// in both cases, invariant reachieved with reduced measure
 		}
 	}
-	
+
+	/**
+	 * Returns the list of messages reported by the compiler during the parsing 
+	 * or the type checking of this compilation unit. This list might be a subset of 
+	 * errors detected and reported by a Java compiler.
+	 * 
+	 * @return the list of messages, possibly empty
+	 * @see AST#parseCompilationUnit
+	 */
+	public Message[] getMessages() {
+		return messages;
+	}
+
+	/**
+	 * Sets the array of messages reported by the compiler during the parsing or
+	 * name resolution of this compilation unit.
+	 * 
+	 * @param messages the list of messages
+	 */
+	void setMessages(Message[] messages) {
+		if (messages == null) {
+			throw new IllegalArgumentException();
+		}
+		this.messages = messages;
+	}
+		
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	void appendDebugString(StringBuffer buffer) {
+		buffer.append("CompilationUnit"); //$NON-NLS-1$
+		// include the type names
+		buffer.append("["); //$NON-NLS-1$
+		for (Iterator it = types().iterator(); it.hasNext(); ) {
+			TypeDeclaration d = (TypeDeclaration) it.next();
+			buffer.append(d.getName().getIdentifier());
+			if (it.hasNext()) {
+				buffer.append(","); //$NON-NLS-1$
+			}
+		}
+		buffer.append("]"); //$NON-NLS-1$
+	}
+		
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */

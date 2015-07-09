@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -63,6 +63,13 @@ public class IfStatement extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return IF_STATEMENT;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		IfStatement result = new IfStatement(target);
 		result.setLeadingComment(getLeadingComment());
@@ -77,17 +84,11 @@ public class IfStatement extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof IfStatement)) {
-			return false;
-		}
-		IfStatement o = (IfStatement) other;
-		return 
-			(ASTNode.equalNodes(getExpression(), o.getExpression())
-			&& ASTNode.equalNodes(getThenStatement(), o.getThenStatement())
-			&& ASTNode.equalNodes(getElseStatement(), o.getElseStatement()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
-	
+
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
@@ -119,9 +120,9 @@ public class IfStatement extends Statement {
 	 * Sets the condition of this if statement.
 	 * 
 	 * @param expression the expression node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setExpression(Expression expression) {
 		if (expression == null) {
@@ -149,9 +150,9 @@ public class IfStatement extends Statement {
 	 * Sets the "then" part of this if statement.
 	 * 
 	 * @param statement the "then" statement node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setThenStatement(Statement statement) {
 		if (statement == null) {
@@ -186,9 +187,9 @@ public class IfStatement extends Statement {
 	 * 
 	 * @param statement the "else" statement node, or <code>null</code> if 
 	 *    there is none
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setElseStatement(Statement statement) {
 		// an IfStatement may occur inside a Statement - must check cycles

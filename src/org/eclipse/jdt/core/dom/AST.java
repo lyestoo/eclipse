@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -14,6 +14,7 @@ package org.eclipse.jdt.core.dom;
 import java.util.Locale;
 import java.util.Map;
 import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.internal.compiler.AbstractSyntaxTreeVisitorAdapter;
@@ -22,6 +23,7 @@ import org.eclipse.jdt.internal.compiler.DefaultErrorHandlingPolicies;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.parser.Parser;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
 import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 
@@ -52,6 +54,7 @@ import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
  * <p>
  * Clients may create instances of this class, which is not intended to be
  * subclassed.
+ * </p>
  * 
  * @see #parseCompilationUnit
  * @see ASTNode
@@ -66,9 +69,48 @@ public final class AST {
 	private long modCount = 0;
 	
 	/**
-	 * Creates a new, empty abstract syntax tree.
+	 * Java Scanner used to validate preconditions for the creation of specific nodes
+	 * like CharacterLiteral, NumberLiteral, StringLiteral or SimpleName.
+	 */
+	Scanner scanner;
+
+	/**
+	 * Creates a new, empty abstract syntax tree using default options.
+	 * 
+	 * @see JavaCore#getDefaultOptions
 	 */
 	public AST() {
+		this(JavaCore.getDefaultOptions());
+	}
+
+	/**
+	 * Creates a new, empty abstract syntax tree using the given options.
+	 * <p>
+	 * Following option keys are significant:
+	 * <ul>
+	 * <li><code>"org.eclipse.jdt.core.compiler.source"</code> - 
+	 *    indicates source compatibility mode (as per <code>JavaCore</code>);
+	 *    <code>"1.3"</code> means the source code is as per JDK 1.3;
+	 *    <code>"1.4"</code> means the source code is as per JDK 1.4
+	 *    (<code>assert<code> is a keyword);
+	 *    additional legal values may be added later. </li>
+	 * </ul>
+	 * Options other than the above are ignored.
+	 * </p>
+	 * 
+	 * @param options the table of options (key type: <code>String</code>;
+	 *    value type: <code>String</code>)
+	 * @see JavaCore#getDefaultOptions
+	 */
+	public AST(Map options) {
+		Object value = options.get("org.eclipse.jdt.core.compiler.source"); //$NON-NLS-1$
+		if ("1.3".equals(value)) { //$NON-NLS-1$
+			// use a 1.3 scanner - treats assert as an identifier
+			this.scanner = new Scanner();
+		} else {
+			// use a 1.4 scanner - treats assert as an keyword
+			this.scanner = new Scanner(false, false, false, true);
+		}
 	}
 		
 	/**
@@ -153,57 +195,151 @@ public final class AST {
 	 * outset.
 	 * </p>
 	 * 
-	 * @param unit an org.eclipse.jdt.core.ICompilationUnit which contains the source to be parsed
+	 * @param unit the Java model compilation unit whose source code is to be parsed
 	 * @param resolveBindings <code>true</code> if bindings are wanted, 
 	 *   and <code>false</code> if bindings are not of interest
 	 * @return the compilation unit node
-	 * @see ASTNode#getFlags
+	 * @see ASTNode#getFlags()
 	 * @see ASTNode#MALFORMED
-	 * @see ASTNode#getStartPositions
-	 * @see ASTNode#getLengths
+	 * @see ASTNode#getStartPosition()
+	 * @see ASTNode#getLength()
 	 */
 	public static CompilationUnit parseCompilationUnit(
 			ICompilationUnit unit,
 			boolean resolveBindings) {
 				
-		CompilationUnitDeclaration compilationUnitDeclaration = null;
+		if (unit == null) {
+			throw new IllegalArgumentException();
+		}
+		
 		char[] source = null;
 		try {
 			source = unit.getSource().toCharArray();
 		} catch(JavaModelException e) {
+			// no source, then we cannot build anything
+			throw new IllegalArgumentException();
 		}
 
 		if (resolveBindings) {
-			// If resolveBindings is true, we need to record the mod count
-			// once newAST has been constructed. If the mod count goes above
-			// this level, someone is modifying the AST and all bets are off
-			// regarding resolved bindings. All existing binding info should be
-			// discarded, and the various public resolveBinding methods should
-			// thereafter return null.
 			try {
-				compilationUnitDeclaration = CompilationUnitResolver.resolve(
+				CompilationUnitDeclaration compilationUnitDeclaration = CompilationUnitResolver.resolve(
 					unit,
 					new AbstractSyntaxTreeVisitorAdapter());
-				if (compilationUnitDeclaration != null && source != null) {
-					ASTConverter converter = new ASTConverter(true);
-					CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
-					// line end table should be extracted from scanner
-					cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
-				
-					// line end table should be extracted from scanner
-					//cu.setLineEndTable(parser.scanner.lineEnds);
-					return cu;
-				} else {
-					return null;
-				}
+				ASTConverter converter = new ASTConverter(true);
+				AST ast = new AST();
+				BindingResolver resolver = new DefaultBindingResolver(compilationUnitDeclaration.scope);
+				ast.setBindingResolver(resolver);
+				converter.setAST(ast);
+			
+				CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
+				cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
+				resolver.storeModificationCount(ast.modificationCount());
+				return cu;
 			} catch(JavaModelException e) {
+				/* if a JavaModelException is thrown trying to retrieve the name environment
+				 * then we simply do a parsing without creating bindings.
+				 * Therefore all binding resolution will return null.
+				 */
+				return parseCompilationUnit(source);			
 			}
 		} else {
 			return parseCompilationUnit(source);
 		}
-		return null;
 	}
+
+	/**
+	 * Parses the given string as the hypothethetical contents of the named
+	 * compilation unit and creates and returns a corresponding abstract syntax tree.
+	 * <p>
+	 * The returned compilation unit node is the root node of a new AST.
+	 * Each node in the subtree carries source range(s) information relating back
+	 * to positions in the given source string (the given source string itself
+	 * is not remembered with the AST). If a syntax error is detected while
+	 * parsing, the relevant node(s) of the tree will be flagged as 
+	 * <code>MALFORMED</code>.
+	 * </p>
+	 * <p>
+	 * If the given project is not <code>null</code>, the various names
+	 * and types appearing in the compilation unit can be resolved to "bindings"
+	 * by calling the <code>resolveBinding</code> methods. These bindings 
+	 * draw connections between the different parts of a program, and 
+	 * generally afford a more powerful vantage point for clients who wish to
+	 * analyze a program's structure more deeply. These bindings come at a 
+	 * considerable cost in both time and space, however, and should not be
+	 * requested frivilously. The additional space is not reclaimed until the 
+	 * AST, all its nodes, and all its bindings become garbage. So it is very
+	 * important to not retain any of these objects longer than absolutely
+	 * necessary. Note that bindings can only be resolved while the AST remains
+	 * in its original unmodified state. Once the AST is modified, all 
+	 * <code>resolveBinding</code> methods return <code>null</code>.
+	 * If the given project is <code>null</code>, the analysis 
+	 * does not go beyond parsing and building the tree, and all 
+	 * <code>resolveBinding</code> methods return <code>null</code> from the 
+	 * outset.
+	 * </p>
+	 * <p>
+	 * The name of the compilation unit must be supplied for resolving bindings.
+	 * This name should include the ".java" suffix and match the name of the main
+	 * (public) class or interface declared in the source. For example, if the source
+	 * declares a public class named "Foo", the name of the compilation should be
+	 * "Foo.java". For the purposes of resolving bindings, types declared in the
+	 * source string hide types by the same name available through the classpath
+	 * of the given project.
+	 * </p>
+	 * 
+	 * @param source the string to be parsed as a Java compilation unit
+	 * @param unitName the name of the compilation unit that would contain the source
+	 *    string, or <code>null</code> if <code>javaProject</code> is also <code>null</code>
+	 * @param project the Java project used to resolve names, or 
+	 *    <code>null</code> if bindings are not resolved
+	 * @return the compilation unit node
+	 * @see ASTNode#getFlags()
+	 * @see ASTNode#MALFORMED
+	 * @see ASTNode#getStartPosition()
+	 * @see ASTNode#getLength()
+	 */
+	public static CompilationUnit parseCompilationUnit(
+		char[] source,
+		String unitName,
+		IJavaProject project) {
+			
+		if (source == null) {
+			throw new IllegalArgumentException();
+		}
+		if (unitName == null && project != null) {
+			throw new IllegalArgumentException();
+		}
+		if (project == null) {
+			// this just reuces to the other simplest case
+			return parseCompilationUnit(source);
+		}
 	
+		try {
+			CompilationUnitDeclaration compilationUnitDeclaration =
+				CompilationUnitResolver.resolve(
+					source,
+					unitName,
+					project,
+					new AbstractSyntaxTreeVisitorAdapter());
+			ASTConverter converter = new ASTConverter(true);
+			AST ast = new AST();
+			BindingResolver resolver = new DefaultBindingResolver(compilationUnitDeclaration.scope);
+			ast.setBindingResolver(resolver);
+			converter.setAST(ast);
+		
+			CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
+			cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
+			resolver.storeModificationCount(ast.modificationCount());
+			return cu;
+		} catch(JavaModelException e) {
+			/* if a JavaModelException is thrown trying to retrieve the name environment
+			 * then we simply do a parsing without creating bindings.
+			 * Therefore all binding resolution will return null.
+			 */
+			return parseCompilationUnit(source);			
+		}
+	}
+	  	
 	/**
 	 * Parses the given string as a Java compilation unit and creates and 
 	 * returns a corresponding abstract syntax tree.
@@ -217,23 +353,30 @@ public final class AST {
 	 * </p>
 	 * 
 	 * @param source the string to be parsed as a Java compilation unit
-	 * @see ASTNode#getFlags
+	 * @see ASTNode#getFlags()
 	 * @see ASTNode#MALFORMED
-	 * @see ASTNode#getStartPosition
-	 * @see ASTNode#getLength
+	 * @see ASTNode#getStartPosition()
+	 * @see ASTNode#getLength()
 	 */
 	public static CompilationUnit parseCompilationUnit(char[] source) {
+		if (source == null) {
+			throw new IllegalArgumentException();
+		}
 		CompilationUnitDeclaration compilationUnitDeclaration = 
 			CompilationUnitResolver.parse(source);
 
 		ASTConverter converter = new ASTConverter(false);
+		AST ast = new AST();
+		ast.setBindingResolver(new BindingResolver());
+		converter.setAST(ast);
+				
 		CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
 		
 		// line end table should be extracted from scanner
 		cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
 		return cu;
 	}
-	
+
 	/**
 	 * The binding resolver for this AST. Initially a binding resolver that
 	 * does not resolve names at all.
@@ -310,7 +453,7 @@ public final class AST {
 	 * 
 	 * @param identifier the identifier
 	 * @return a new unparented simple name node
-	 * @exception $precondition-violation:invalid-java-identifier$
+	 * @exception IllegalArgumentException if the identifier is invalid
 	 */
 	public SimpleName newSimpleName(String identifier) {
 		if (identifier == null) {
@@ -328,8 +471,8 @@ public final class AST {
 	 * @param qualifier the qualifier name node
 	 * @param name the simple name being qualified
 	 * @return a new unparented qualified name node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */
 	public QualifiedName newQualifiedName(
 		Name qualifier,
@@ -351,8 +494,8 @@ public final class AST {
 	 * @param identifiers a list of 1 or more name segments, each of which
 	 *    is a legal Java identifier
 	 * @return a new unparented name node
-	 * @exception $precondition-violation:invalid-java-identifier$
-	 * @exception $precondition-violation:empty-identifier-list$
+	 * @exception IllegalArgumentException if the identifier is invalid
+	 * @exception IllegalArgumentException if the list of identifiers is empty
 	 */
 	public Name newName(String[] identifiers) {
 		int count = identifiers.length;
@@ -378,8 +521,8 @@ public final class AST {
 	 * 
 	 * @param typeName the name of the class or interface
 	 * @return a new unparented simple type node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */
 	public SimpleType newSimpleType(Name typeName) {
 		SimpleType result = new SimpleType(this);
@@ -393,9 +536,9 @@ public final class AST {
 	 * 
 	 * @param componentType the component type (possibly another array type)
 	 * @return a new unparented array type node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */
 	public ArrayType newArrayType(Type componentType) {
 		ArrayType result = new ArrayType(this);
@@ -414,9 +557,9 @@ public final class AST {
 	 * @param elementType the element type (never an array type)
 	 * @param dimensions the number of dimensions, a positive number
 	 * @return a new unparented array type node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */
 	public ArrayType newArrayType(Type elementType, int dimensions) {
 		if (elementType == null || elementType.isArrayType()) {
@@ -442,7 +585,7 @@ public final class AST {
 	 * @param typeCode one of the primitive type code constants declared in 
 	 *    <code>PrimitiveType</code>
 	 * @return a new unparented primitive type node
-	 * @exception $precondition-violation:invalid-primitive-type-code$
+	 * @exception IllegalArgumentException if the primitive type code is invalid
 	 */
 	public PrimitiveType newPrimitiveType(PrimitiveType.Code typeCode) {
 		PrimitiveType result = new PrimitiveType(this);
@@ -473,8 +616,8 @@ public final class AST {
 	 * unspecified name.
 	 * 
 	 * @return the new unparented package declaration node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */
 	public PackageDeclaration newPackageDeclaration() {
 		PackageDeclaration result = new PackageDeclaration(this);
@@ -487,8 +630,8 @@ public final class AST {
 	 * of a type with an unspecified name.
 	 * 
 	 * @return the new unparented import declaration node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */
 	public ImportDeclaration newImportDeclaration() {
 		ImportDeclaration result = new ImportDeclaration(this);
@@ -595,9 +738,9 @@ public final class AST {
 	 * 
 	 * @param fragment the variable declaration fragment
 	 * @return a new unparented variable declaration statement node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */
 	public VariableDeclarationStatement
 			newVariableDeclarationStatement(VariableDeclarationFragment fragment) {
@@ -621,9 +764,9 @@ public final class AST {
 	 * 
 	 * @param decl the type declaration
 	 * @return a new unparented local type declaration statement node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */
 	public TypeDeclarationStatement 
 			newTypeDeclarationStatement(TypeDeclaration decl) {
@@ -675,9 +818,9 @@ public final class AST {
 	 * 
 	 * @param expression the expression
 	 * @return a new unparented statement node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */
 	public ExpressionStatement newExpressionStatement(Expression expression) {
 		ExpressionStatement result = new ExpressionStatement(this);
@@ -1001,9 +1144,9 @@ public final class AST {
 	 * 
 	 * @param fragment the first variable declaration fragment
 	 * @return a new unparented variable declaration expression node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */
 	public VariableDeclarationExpression
 			newVariableDeclarationExpression(VariableDeclarationFragment fragment) {
@@ -1031,9 +1174,9 @@ public final class AST {
 	 * 
 	 * @param fragment the variable declaration fragment
 	 * @return a new unparented field declaration node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */
 	public FieldDeclaration newFieldDeclaration(VariableDeclarationFragment fragment) {
 		if (fragment == null) {
@@ -1127,11 +1270,23 @@ public final class AST {
 	}
 
 	/**
+	 * Creates and returns a new unparented instanceof expression node 
+	 * owned by this AST. By default, the operator and left and right
+	 * operand are unspecified (but legal).
+	 * 
+	 * @return a new unparented instanceof expression node
+	 */
+	public InstanceofExpression newInstanceofExpression() {
+		InstanceofExpression result = new InstanceofExpression(this);
+		return result;
+	}
+
+	/**
 	 * Creates and returns a new unparented postfix expression node 
 	 * owned by this AST. By default, the operator and operand are 
 	 * unspecified (but legal).
 	 * 
-	 * @return a new unparented infix expression node
+	 * @return a new unparented postfix expression node
 	 */
 	public PostfixExpression newPostfixExpression() {
 		PostfixExpression result = new PostfixExpression(this);
@@ -1143,7 +1298,7 @@ public final class AST {
 	 * owned by this AST. By default, the operator and operand are 
 	 * unspecified (but legal).
 	 * 
-	 * @return a new unparented infix expression node
+	 * @return a new unparented prefix expression node
 	 */
 	public PrefixExpression newPrefixExpression() {
 		PrefixExpression result = new PrefixExpression(this);
@@ -1211,12 +1366,23 @@ public final class AST {
 	 * ("new") expression node owned by this AST. By default, 
 	 * there is no qualifying expression, an unspecified (but legal) type name,
 	 * an empty list of arguments, and does not declare an anonymous
-	 * class (and body declaration list is empty).
+	 * class declaration.
 	 * 
 	 * @return a new unparented class instance creation expression node
 	 */
 	public ClassInstanceCreation newClassInstanceCreation() {
 		ClassInstanceCreation result = new ClassInstanceCreation(this);
+		return result;
+	}
+
+	/**
+	 * Creates and returns a new unparented anonymous class declaration
+	 * node owned by this AST. By default, the body declaration list is empty.
+	 * 
+	 * @return a new unparented anonymous class declaration node
+	 */
+	public AnonymousClassDeclaration newAnonymousClassDeclaration() {
+		AnonymousClassDeclaration result = new AnonymousClassDeclaration(this);
 		return result;
 	}
 

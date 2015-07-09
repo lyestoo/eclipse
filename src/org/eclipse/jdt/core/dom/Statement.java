@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -65,7 +65,7 @@ public abstract class Statement extends ASTNode {
 	
 	/**
 	 * Returns the leading comment string, including the starting
-	 * and ending comment delimiters, and any embedded linebreaks.
+	 * and ending comment delimiters, and any embedded line breaks.
 	 * <p>
 	 * A leading comment is one that appears before the statement.
 	 * It may be either an end-of-line or a multi-line comment.
@@ -104,7 +104,7 @@ public abstract class Statement extends ASTNode {
 	 * </p>
 	 * 
 	 * @param comment the comment string, or <code>null</code> if none
-	 * @exception $precondition-violation:invalid-comment$
+	 * @exception IllegalArgumentException if the comment string is invalid
 	 */
 	public void setLeadingComment(String comment) {
 		if (comment != null) {

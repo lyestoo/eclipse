@@ -5,6 +5,7 @@ package org.eclipse.jdt.internal.compiler.parser;
  * All Rights Reserved.
  */
 
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.util.*;
@@ -13,7 +14,7 @@ import org.eclipse.jdt.internal.compiler.util.*;
  * Internal method structure for parsing recovery 
  */
 
-public class RecoveredMethod extends RecoveredElement implements CompilerModifiers, TerminalSymbols, BaseTypes {
+public class RecoveredMethod extends RecoveredElement implements CompilerModifiers, ITerminalSymbols, BaseTypes {
 
 	public AbstractMethodDeclaration methodDeclaration;
 
@@ -265,17 +266,22 @@ public AbstractMethodDeclaration updatedMethodDeclaration(){
 			methodDeclaration.statements = block.statements;
 
 			/* first statement might be an explict constructor call destinated to a special slot */
-			if (methodDeclaration.isConstructor()
-				&& methodDeclaration.statements != null
-				&& methodDeclaration.statements[0] instanceof ExplicitConstructorCall){
-				((ConstructorDeclaration)methodDeclaration).constructorCall = (ExplicitConstructorCall)methodDeclaration.statements[0];
-				int length = methodDeclaration.statements.length;
-				System.arraycopy(
-					methodDeclaration.statements, 
-					1, 
-					(methodDeclaration.statements = new Statement[length-1]),
-					0,
-					length-1);
+			if (methodDeclaration.isConstructor()) {
+				ConstructorDeclaration constructor = (ConstructorDeclaration)methodDeclaration;
+				if (methodDeclaration.statements != null
+					&& methodDeclaration.statements[0] instanceof ExplicitConstructorCall){
+					constructor.constructorCall = (ExplicitConstructorCall)methodDeclaration.statements[0];
+					int length = methodDeclaration.statements.length;
+					System.arraycopy(
+						methodDeclaration.statements, 
+						1, 
+						(methodDeclaration.statements = new Statement[length-1]),
+						0,
+						length-1);
+					}
+					if (constructor.constructorCall == null){ // add implicit constructor call
+						constructor.constructorCall = SuperReference.implicitSuperConstructorCall();
+					}
 			}
 		}
 	}
@@ -293,10 +299,14 @@ public void updateFromParserState(){
 		/* might want to recover arguments or thrown exceptions */
 		if (parser.listLength > 0){ // awaiting interface type references
 			/* has consumed the arguments - listed elements must be thrown exceptions */
-			if (methodDeclaration.sourceEnd == parser.rParenPos){
-				parser.consumeMethodHeaderThrowsClause(); 
-				// will reset typeListLength to zero
-				// thus this check will only be performed on first errorCheck after void foo() throws X, Y,
+			if (methodDeclaration.sourceEnd == parser.rParenPos) {
+				if (parser.astStack[parser.astPtr] instanceof TypeReference){
+					parser.consumeMethodHeaderThrowsClause(); 
+					// will reset typeListLength to zero
+					// thus this check will only be performed on first errorCheck after void foo() throws X, Y,
+				} else {
+					parser.listLength = 0;
+				}
 			} else {
 				/* has not consumed arguments yet, listed elements must be arguments */
 				if (parser.currentToken == TokenNameLPAREN || parser.currentToken == TokenNameSEMICOLON){
@@ -308,6 +318,8 @@ public void updateFromParserState(){
 				}
 				int argLength = parser.astLengthStack[parser.astLengthPtr];
 				int argStart = parser.astPtr - argLength + 1;
+				boolean needUpdateRParenPos = parser.rParenPos < parser.lParenPos; // 12387 : rParenPos will be used
+				// to compute bodyStart, and thus used to set next checkpoint.
 				int count;
 				for (count = 0; count < argLength; count++){
 					Argument argument = (Argument)parser.astStack[argStart+count];
@@ -316,13 +328,13 @@ public void updateFromParserState(){
 					if ((argument.modifiers & ~AccFinal) != 0
 						|| (argTypeName.length == 1
 							&& CharOperation.equals(argTypeName[0], VoidBinding.sourceName()))){
-						parser.astLengthStack[parser.astLengthPtr] = count-1; 
+						parser.astLengthStack[parser.astLengthPtr] = count; 
 						parser.astPtr = argStart+count-1; 
-						parser.listLength = count-1;
+						parser.listLength = count;
 						parser.currentToken = 0;
 						break;
 					}
-					count++;
+					if (needUpdateRParenPos) parser.rParenPos = argument.sourceEnd + 1;
 				}
 				if (parser.listLength > 0){
 					parser.consumeMethodHeaderParameters();
@@ -369,6 +381,7 @@ public void updateParseTree(){
 public void updateSourceEndIfNecessary(int sourceEnd){
 	if (this.methodDeclaration.declarationSourceEnd == 0) {
 		this.methodDeclaration.declarationSourceEnd = sourceEnd;
+		this.methodDeclaration.bodyEnd = sourceEnd;
 	}
 }
 }

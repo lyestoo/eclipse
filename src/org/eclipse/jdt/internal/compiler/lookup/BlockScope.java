@@ -156,14 +156,15 @@ public class BlockScope extends Scope {
 	private void checkAndSetModifiersForVariable(LocalVariableBinding varBinding) {
 
 		int modifiers = varBinding.modifiers;
-		if ((modifiers & AccAlternateModifierProblem) != 0)
-			problemReporter().duplicateModifierForVariable(varBinding.declaration);
-
+		if ((modifiers & AccAlternateModifierProblem) != 0 && varBinding.declaration != null){
+			problemReporter().duplicateModifierForVariable(varBinding.declaration, this instanceof MethodScope);
+		}
 		int realModifiers = modifiers & AccJustFlag;
+		
 		int unexpectedModifiers = ~AccFinal;
-		if ((realModifiers & unexpectedModifiers) != 0)
-			problemReporter().illegalModifierForVariable(varBinding.declaration);
-
+		if ((realModifiers & unexpectedModifiers) != 0 && varBinding.declaration != null){ 
+			problemReporter().illegalModifierForVariable(varBinding.declaration, this instanceof MethodScope);
+		}
 		varBinding.modifiers = modifiers;
 	}
 
@@ -201,7 +202,7 @@ public class BlockScope extends Scope {
 				if (subscopes[iscope] instanceof BlockScope) {
 					BlockScope subscope = (BlockScope) subscopes[iscope];
 					int subOffset =
-						subscope.shiftScope == null ? this.offset : subscope.shiftScope.offset;
+						subscope.shiftScope == null ? this.offset : subscope.shiftScope.maxOffset;
 					subscope.computeLocalVariablePositions(subOffset, codeStream);
 					if (subscope.maxOffset > this.maxOffset)
 						this.maxOffset = subscope.maxOffset;
@@ -219,7 +220,7 @@ public class BlockScope extends Scope {
 					&& ((local.declaration.bits & AstNode.IsLocalDeclarationReachableMASK) != 0)) { // declaration is reachable
 					if (local.isArgument) // method argument
 						this.problemReporter().unusedArgument(local.declaration);
-					else if (!(local.declaration instanceof Argument)) // catch variable
+					else if (!(local.declaration instanceof Argument))  // do not report unused catch arguments
 						this.problemReporter().unusedLocalVariable(local.declaration);
 				}
 				if (!generatesLocal) {
@@ -325,30 +326,37 @@ public class BlockScope extends Scope {
 			&& currentType != targetEnclosingType){
 			/*&& !targetEnclosingType.isSuperclassOf(currentType)*/
 
-			NestedTypeBinding currentNestedType = (NestedTypeBinding) currentType;
 			if (useDirectReference) {
 				// the target enclosing type is not in scope, we directly refer it
 				// must also add a synthetic field if we're not inside a constructor
+				NestedTypeBinding currentNestedType = (NestedTypeBinding) currentType;
 				if (methodScope().isInsideInitializerOrConstructor())
 					currentNestedType.addSyntheticArgument(targetEnclosingType);
 				else
 					currentNestedType.addSyntheticArgumentAndField(targetEnclosingType);
-			} else if (currentNestedType.isLocalType()) {
-				// direct enclosing instance link
-				// must also add a synthetic field if we're not inside a constructor
-				currentType = currentNestedType.enclosingType;
-				if (methodScope().isInsideInitializerOrConstructor())
-					currentNestedType.addSyntheticArgument(currentType);
-				else
-					currentNestedType.addSyntheticArgumentAndField(currentType);
-				// further indirect cases
-				while (currentType.isNestedType()
-					&& currentType != targetEnclosingType
-					&& !targetEnclosingType.isSuperclassOf(currentType)) {
-
-					currentNestedType = (NestedTypeBinding) currentType;
+					
+			} else { // indirect reference sequence
+				int depth = 0;
+				
+				// saturate all the way up until reaching compatible enclosing type
+				while (currentType.isLocalType()){
+					NestedTypeBinding currentNestedType = (NestedTypeBinding) currentType;
 					currentType = currentNestedType.enclosingType;
-					currentNestedType.addSyntheticArgumentAndField(currentType);
+					
+					if (depth == 0){
+						if (methodScope().isInsideInitializerOrConstructor()) {
+							// must also add a synthetic field if we're not inside a constructor
+							currentNestedType.addSyntheticArgument(currentType);
+						} else {
+							currentNestedType.addSyntheticArgumentAndField(currentType);
+						}					
+					} else if (currentNestedType == targetEnclosingType 
+										|| targetEnclosingType.isSuperclassOf(currentNestedType)) {
+							break;
+					} else {
+						currentNestedType.addSyntheticArgumentAndField(currentType);
+					} 
+					depth++;
 				}
 			}
 		}
@@ -442,11 +450,7 @@ public class BlockScope extends Scope {
 		int currentIndex = 1;
 		foundType : if (binding instanceof PackageBinding) {
 			PackageBinding packageBinding = (PackageBinding) binding;
-// this is replaced by the call to recordSimpleReference above
-			compilationUnitScope().addNamespaceReference(packageBinding);
-
 			while (currentIndex < length) {
-// replaces call to addNamespaceReference at the end of the loop & call to addTypeReference
 				compilationUnitScope().recordReference(packageBinding.compoundName, compoundName[currentIndex]);
 				binding = packageBinding.getTypeOrPackage(compoundName[currentIndex++]);
 				invocationSite.setFieldIndex(currentIndex);
@@ -466,7 +470,6 @@ public class BlockScope extends Scope {
 						return new ProblemReferenceBinding(
 							CharOperation.subarray(compoundName, 0, currentIndex),
 							binding.problemId());
-					compilationUnitScope().addTypeReference((ReferenceBinding) binding);
 					if (!((ReferenceBinding) binding).canBeSeenBy(this))
 						return new ProblemReferenceBinding(
 							CharOperation.subarray(compoundName, 0, currentIndex),
@@ -475,7 +478,6 @@ public class BlockScope extends Scope {
 					break foundType;
 				}
 				packageBinding = (PackageBinding) binding;
-				compilationUnitScope().addNamespaceReference(packageBinding);
 			}
 
 			// It is illegal to request a PACKAGE from this method.
@@ -670,6 +672,8 @@ public class BlockScope extends Scope {
 			// inside Constructor call or inside static context
 			Scope scope = parent;
 			int depth = 0;
+			int foundDepth = 0;
+			ReferenceBinding foundActualReceiverType = null;
 			done : while (true) { // done when a COMPILATION_UNIT_SCOPE is found
 				switch (scope.kind) {
 					case METHOD_SCOPE :
@@ -755,10 +759,8 @@ public class BlockScope extends Scope {
 								|| (foundField.problemId() == NotVisible
 									&& fieldBinding.problemId() != NotVisible)) {
 								// only remember the fieldBinding if its the first one found or the previous one was not visible & fieldBinding is...
-								if (depth > 0) {
-									invocationSite.setDepth(depth);
-									invocationSite.setActualReceiverType(enclosingType);
-								}
+								foundDepth = depth;
+								foundActualReceiverType = enclosingType;
 								foundInsideProblem = insideProblem;
 								foundField = fieldBinding;
 							}
@@ -778,11 +780,17 @@ public class BlockScope extends Scope {
 				scope = scope.parent;
 			}
 
-			if (foundInsideProblem != null)
+			if (foundInsideProblem != null){
 				return foundInsideProblem;
+			}
 			if (foundField != null) {
-				if (foundField.isValidBinding())
+				if (foundField.isValidBinding()){
+					if (foundDepth > 0){
+						invocationSite.setDepth(foundDepth);
+						invocationSite.setActualReceiverType(foundActualReceiverType);
+					}
 					return foundField;
+				}
 				problemField = foundField;
 			}
 		}
@@ -838,12 +846,7 @@ public class BlockScope extends Scope {
 		// use synthetic constructor arguments if possible
 		if (insideConstructor) {
 			SyntheticArgumentBinding syntheticArg;
-			if ((syntheticArg =
-				((NestedTypeBinding) sourceType).getSyntheticArgument(
-					targetEnclosingType,
-					this,
-					false))
-				!= null) {
+			if ((syntheticArg = ((NestedTypeBinding) sourceType).getSyntheticArgument(targetEnclosingType, this, false)) != null) {
 				return new Object[] { syntheticArg };
 			}
 		}
@@ -851,20 +854,14 @@ public class BlockScope extends Scope {
 		// use a direct synthetic field then
 		if (!currentMethodScope.isStatic) {
 			FieldBinding syntheticField;
-			if ((syntheticField =
-				sourceType.getSyntheticField(targetEnclosingType, this, false))
-				!= null) {
+			if ((syntheticField = sourceType.getSyntheticField(targetEnclosingType, this, false)) != null) {
 				return new Object[] { syntheticField };
 			}
 			// could be reached through a sequence of enclosing instance link (nested members)
 			Object[] path = new Object[2]; // probably at least 2 of them
 			ReferenceBinding currentType = sourceType.enclosingType();
 			if (insideConstructor) {
-				path[0] =
-					((NestedTypeBinding) sourceType).getSyntheticArgument(
-						(SourceTypeBinding) currentType,
-						this,
-						false);
+				path[0] = ((NestedTypeBinding) sourceType).getSyntheticArgument((SourceTypeBinding) currentType, this, false);
 			} else {
 				path[0] =
 					sourceType.getSyntheticField((SourceTypeBinding) currentType, this, false);
@@ -877,11 +874,7 @@ public class BlockScope extends Scope {
 					if (currentType == targetEnclosingType
 						|| targetEnclosingType.isSuperclassOf(currentType))
 						break;
-					syntheticField =
-						((NestedTypeBinding) currentType).getSyntheticField(
-							(SourceTypeBinding) currentEnclosingType,
-							this,
-							false);
+					syntheticField = ((NestedTypeBinding) currentType).getSyntheticField((SourceTypeBinding) currentEnclosingType, this, false);
 					if (syntheticField == null)
 						break;
 					// append inside the path
@@ -915,11 +908,8 @@ public class BlockScope extends Scope {
 		TypeBinding[] argumentTypes,
 		InvocationSite invocationSite) {
 
-// is this needed? Or when the type is resolved, is it recorded?
 		compilationUnitScope().recordTypeReference(receiverType);
-// replaces call to addTypeReferences
 		compilationUnitScope().recordTypeReferences(argumentTypes);
-		compilationUnitScope().addTypeReferences(argumentTypes);
 		MethodBinding methodBinding = receiverType.getExactConstructor(argumentTypes);
 		if (methodBinding != null)
 			if (methodBinding.canBeSeenBy(invocationSite, this))
@@ -993,17 +983,14 @@ public class BlockScope extends Scope {
 		if (currentMethodScope.isInsideInitializerOrConstructor()
 			&& (sourceType.isNestedType())) {
 			SyntheticArgumentBinding syntheticArg;
-			if ((syntheticArg =
-				((NestedTypeBinding) sourceType).getSyntheticArgument(outerLocalVariable))
-				!= null) {
+			if ((syntheticArg = ((NestedTypeBinding) sourceType).getSyntheticArgument(outerLocalVariable)) != null) {
 				return new VariableBinding[] { syntheticArg };
 			}
 		}
 		// use a synthetic field then
 		if (!currentMethodScope.isStatic) {
 			FieldBinding syntheticField;
-			if ((syntheticField = sourceType.getSyntheticField(outerLocalVariable))
-				!= null) {
+			if ((syntheticField = sourceType.getSyntheticField(outerLocalVariable)) != null) {
 				return new VariableBinding[] { syntheticField };
 			}
 		}
@@ -1043,21 +1030,14 @@ public class BlockScope extends Scope {
 		// use synthetic constructor arguments if possible
 		if (insideConstructor) {
 			SyntheticArgumentBinding syntheticArg;
-			if ((syntheticArg =
-				((NestedTypeBinding) sourceType).getSyntheticArgument(
-					targetEnclosingType,
-					this,
-					true))
-				!= null) {
+			if ((syntheticArg = ((NestedTypeBinding) sourceType).getSyntheticArgument(targetEnclosingType, this, true)) != null) {
 				return new Object[] { syntheticArg };
 			}
 		}
 		// use a direct synthetic field then
 		if (!currentMethodScope.isStatic) {
 			FieldBinding syntheticField;
-			if ((syntheticField =
-				sourceType.getSyntheticField(targetEnclosingType, this, true))
-				!= null) {
+			if ((syntheticField = sourceType.getSyntheticField(targetEnclosingType, this, true)) != null) {
 				return new Object[] { syntheticField };
 			}
 			// could be reached through a sequence of enclosing instance link (nested members)
@@ -1065,10 +1045,7 @@ public class BlockScope extends Scope {
 			ReferenceBinding currentType = sourceType.enclosingType();
 			if (insideConstructor) {
 				path[0] =
-					((NestedTypeBinding) sourceType).getSyntheticArgument(
-						(SourceTypeBinding) currentType,
-						this,
-						true);
+					((NestedTypeBinding) sourceType).getSyntheticArgument((SourceTypeBinding) currentType,	this, true);
 			} else {
 				path[0] =
 					sourceType.getSyntheticField((SourceTypeBinding) currentType, this, true);
@@ -1184,7 +1161,7 @@ public class BlockScope extends Scope {
 								invocationSite);
 					//						? findExactMethod(receiverType, selector, argumentTypes, invocationSite)
 					//						: findExactMethod(receiverType, foundMethod.selector, foundMethod.parameters, invocationSite);
-					if (methodBinding == null && foundMethod == null) {
+					if (methodBinding == null) {
 						// answers closest approximation, may not check argumentTypes or visibility
 						isExactMatch = false;
 						methodBinding =
@@ -1209,10 +1186,14 @@ public class BlockScope extends Scope {
 						if (methodBinding.isValidBinding()) {
 							if (!isExactMatch) {
 								if (!areParametersAssignable(methodBinding.parameters, argumentTypes)) {
-									fuzzyProblem =
-										new ProblemMethodBinding(methodBinding, selector, argumentTypes, NotFound);
-								} else if (
-									!methodBinding.canBeSeenBy(receiverType, invocationSite, classScope)) {
+									if (foundMethod == null || foundMethod.problemId() == NotVisible){
+										// inherited mismatch is reported directly, not looking at enclosing matches
+										return new ProblemMethodBinding(methodBinding, selector, argumentTypes, NotFound);
+									}
+									// make the user qualify the method, likely wants the first inherited method (javac generates an ambiguous error instead)
+									fuzzyProblem = new ProblemMethodBinding(selector, argumentTypes, InheritedNameHidesEnclosingName);
+
+								} else if (!methodBinding.canBeSeenBy(receiverType, invocationSite, classScope)) {
 									// using <classScope> instead of <this> for visibility check does grant all access to innerclass
 									fuzzyProblem =
 										new ProblemMethodBinding(

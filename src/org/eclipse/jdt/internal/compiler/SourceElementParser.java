@@ -24,9 +24,9 @@ package org.eclipse.jdt.internal.compiler;
  */
 import java.lang.reflect.Constructor;
 
-import org.eclipse.jdt.internal.compiler.Compiler;
 import org.eclipse.jdt.internal.compiler.env.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
@@ -35,6 +35,7 @@ import org.eclipse.jdt.internal.compiler.util.*;
 import java.util.Locale;
 
 public class SourceElementParser extends Parser {
+	
 	ISourceElementRequestor requestor;
 	private int fieldCount;
 	private int localIntPtr;
@@ -111,6 +112,17 @@ public SourceElementParser(
 		}
 }
 
+public void checkAnnotation() {
+	int firstCommentIndex = scanner.commentPtr;
+
+	super.checkAnnotation();
+
+	// modify the modifier source start to point at the first comment
+	if (firstCommentIndex >= 0) {
+		modifiersSourceStart = scanner.commentStarts[0]; 
+	}
+}
+
 protected void classInstanceCreation(boolean alwaysQualified) {
 
 	boolean previousFlag = reportReferenceInfo;
@@ -139,7 +151,7 @@ protected void consumeConstructorHeaderName() {
 			return;
 		}
 	}
-	SourceConstructorDeclaration cd = new SourceConstructorDeclaration();
+	SourceConstructorDeclaration cd = new SourceConstructorDeclaration(this.compilationUnit.compilationResult);
 
 	//name -- this is not really revelant but we do .....
 	cd.selector = identifierStack[identifierPtr];
@@ -204,7 +216,7 @@ protected void consumeFieldAccess(boolean isSuperAccess) {
 }
 protected void consumeMethodHeaderName() {
 	// MethodHeaderName ::= Modifiersopt Type 'Identifier' '('
-	SourceMethodDeclaration md = new SourceMethodDeclaration();
+	SourceMethodDeclaration md = new SourceMethodDeclaration(this.compilationUnit.compilationResult);
 
 	//name
 	md.selector = identifierStack[identifierPtr];
@@ -228,8 +240,8 @@ protected void consumeMethodHeaderName() {
 	if (currentElement != null){
 		if (currentElement instanceof RecoveredType 
 			//|| md.modifiers != 0
-			|| (scanner.searchLineNumber(md.returnType.sourceStart)
-					== scanner.searchLineNumber(md.sourceStart))){
+			|| (scanner.getLineNumber(md.returnType.sourceStart)
+					== scanner.getLineNumber(md.sourceStart))){
 			lastCheckPoint = md.bodyStart;
 			currentElement = currentElement.add(md, 0);
 			lastIgnoredToken = -1;			
@@ -314,7 +326,6 @@ protected FieldDeclaration createFieldDeclaration(Expression initialization, cha
 	return new SourceFieldDeclaration(null, name, sourceStart, sourceEnd);
 }
 protected CompilationUnitDeclaration endParse(int act) {
-
 	if (sourceType != null) {
 		if (sourceType.isInterface()) {
 			consumeInterfaceDeclaration();
@@ -324,10 +335,8 @@ protected CompilationUnitDeclaration endParse(int act) {
 	}
 	if (compilationUnit != null) {
 		CompilationUnitDeclaration result = super.endParse(act);
-		notifySourceElementRequestor();
 		return result;
 	} else {
-		notifySourceElementRequestor();
 		return null;
 	}		
 }
@@ -511,8 +520,8 @@ private boolean isLocalDeclaration() {
 /*
  * Update the bodyStart of the corresponding parse node
  */
-public void notifySourceElementRequestor() {
-	if (compilationUnit == null) {
+public void notifySourceElementRequestor(CompilationUnitDeclaration parsedUnit) {
+	if (parsedUnit == null) {
 		// when we parse a single type member declaration the compilation unit is null, but we still
 		// want to be able to notify the requestor on the created ast node
 		if (astStack[0] instanceof AbstractMethodDeclaration) {
@@ -521,6 +530,11 @@ public void notifySourceElementRequestor() {
 		}
 		return;
 	}
+	// range check
+	boolean isInRange = 
+				scanner.initialPosition <= parsedUnit.sourceStart
+				&& scanner.eofPosition >= parsedUnit.sourceEnd;
+	
 	if (reportReferenceInfo) {
 		notifyAllUnknownReferences();
 	}
@@ -528,12 +542,12 @@ public void notifySourceElementRequestor() {
 	int length = 0;
 	AstNode[] nodes = null;
 	if (sourceType == null){
-		if (scanner.initialPosition == 0) {
+		if (isInRange) {
 			requestor.enterCompilationUnit();
 		}
-		ImportReference currentPackage = compilationUnit.currentPackage;
-		ImportReference[] imports = compilationUnit.imports;
-		TypeDeclaration[] types = compilationUnit.types;
+		ImportReference currentPackage = parsedUnit.currentPackage;
+		ImportReference[] imports = parsedUnit.imports;
+		TypeDeclaration[] types = parsedUnit.types;
 		length = 
 			(currentPackage == null ? 0 : 1) 
 			+ (imports == null ? 0 : imports.length)
@@ -554,7 +568,7 @@ public void notifySourceElementRequestor() {
 			}
 		}
 	} else {
-		TypeDeclaration[] types = compilationUnit.types;
+		TypeDeclaration[] types = parsedUnit.types;
 		if (types != null) {
 			length = types.length;
 			nodes = new AstNode[length];
@@ -571,7 +585,7 @@ public void notifySourceElementRequestor() {
 			AstNode node = nodes[i];
 			if (node instanceof ImportReference) {
 				ImportReference importRef = (ImportReference)node;
-				if (node == compilationUnit.currentPackage) {
+				if (node == parsedUnit.currentPackage) {
 					notifySourceElementRequestor(importRef, true);
 				} else {
 					notifySourceElementRequestor(importRef, false);
@@ -583,8 +597,8 @@ public void notifySourceElementRequestor() {
 	}
 	
 	if (sourceType == null){
-		if (scanner.eofPosition >= compilationUnit.sourceEnd) {
-			requestor.exitCompilationUnit(compilationUnit.sourceEnd);
+		if (isInRange) {
+			requestor.exitCompilationUnit(parsedUnit.sourceEnd);
 		}
 	}
 }
@@ -631,6 +645,12 @@ private void notifyAllUnknownReferences() {
  * Update the bodyStart of the corresponding parse node
  */
 public void notifySourceElementRequestor(AbstractMethodDeclaration methodDeclaration) {
+
+	// range check
+	boolean isInRange = 
+				scanner.initialPosition <= methodDeclaration.declarationSourceStart
+				&& scanner.eofPosition >= methodDeclaration.declarationSourceEnd;
+
 	if (methodDeclaration.isClinit()) {
 		this.visitIfNeeded(methodDeclaration);
 		return;
@@ -689,7 +709,7 @@ public void notifySourceElementRequestor(AbstractMethodDeclaration methodDeclara
 			selectorSourceEnd = 
 				((SourceConstructorDeclaration) methodDeclaration).selectorSourceEnd; 
 		}
-		if (scanner.initialPosition <= methodDeclaration.declarationSourceStart) {
+		if (isInRange){
 			requestor.enterConstructor(
 				methodDeclaration.declarationSourceStart, 
 				methodDeclaration.modifiers, 
@@ -699,30 +719,30 @@ public void notifySourceElementRequestor(AbstractMethodDeclaration methodDeclara
 				argumentTypes, 
 				argumentNames, 
 				thrownExceptionTypes);
-			if (reportReferenceInfo) {
-				ConstructorDeclaration constructorDeclaration = (ConstructorDeclaration) methodDeclaration;
-				ExplicitConstructorCall constructorCall = constructorDeclaration.constructorCall;
-				if (constructorCall != null) {
-					switch(constructorCall.accessMode) {
-						case ExplicitConstructorCall.This :
-							requestor.acceptConstructorReference(
-								typeNames[nestedTypeIndex-1],
-								constructorCall.arguments == null ? 0 : constructorCall.arguments.length, 
-								constructorCall.sourceStart);
-							break;
-						case ExplicitConstructorCall.Super :
-						case ExplicitConstructorCall.ImplicitSuper :
-							requestor.acceptConstructorReference(
-								superTypeNames[nestedTypeIndex-1],
-								constructorCall.arguments == null ? 0 : constructorCall.arguments.length, 
-								constructorCall.sourceStart);
-							break;
-					}
+		}
+		if (reportReferenceInfo) {
+			ConstructorDeclaration constructorDeclaration = (ConstructorDeclaration) methodDeclaration;
+			ExplicitConstructorCall constructorCall = constructorDeclaration.constructorCall;
+			if (constructorCall != null) {
+				switch(constructorCall.accessMode) {
+					case ExplicitConstructorCall.This :
+						requestor.acceptConstructorReference(
+							typeNames[nestedTypeIndex-1],
+							constructorCall.arguments == null ? 0 : constructorCall.arguments.length, 
+							constructorCall.sourceStart);
+						break;
+					case ExplicitConstructorCall.Super :
+					case ExplicitConstructorCall.ImplicitSuper :
+						requestor.acceptConstructorReference(
+							superTypeNames[nestedTypeIndex-1],
+							constructorCall.arguments == null ? 0 : constructorCall.arguments.length, 
+							constructorCall.sourceStart);
+						break;
 				}
 			}
 		}
 		this.visitIfNeeded(methodDeclaration);
-		if (scanner.eofPosition >= methodDeclaration.declarationSourceEnd) {
+		if (isInRange){
 			requestor.exitConstructor(methodDeclaration.declarationSourceEnd);
 		}
 		return;
@@ -731,25 +751,34 @@ public void notifySourceElementRequestor(AbstractMethodDeclaration methodDeclara
 		selectorSourceEnd = 
 			((SourceMethodDeclaration) methodDeclaration).selectorSourceEnd; 
 	}
-	requestor.enterMethod(
-		methodDeclaration.declarationSourceStart, 
-		methodDeclaration.modifiers & AccJustFlag, 
-		returnTypeName(((MethodDeclaration) methodDeclaration).returnType), 
-		methodDeclaration.selector, 
-		methodDeclaration.sourceStart, 
-		selectorSourceEnd, 
-		argumentTypes, 
-		argumentNames, 
-		thrownExceptionTypes); 
-		
+	if (isInRange){
+		requestor.enterMethod(
+			methodDeclaration.declarationSourceStart, 
+			methodDeclaration.modifiers & AccJustFlag, 
+			returnTypeName(((MethodDeclaration) methodDeclaration).returnType), 
+			methodDeclaration.selector, 
+			methodDeclaration.sourceStart, 
+			selectorSourceEnd, 
+			argumentTypes, 
+			argumentNames, 
+			thrownExceptionTypes); 
+	}		
 	this.visitIfNeeded(methodDeclaration);
-	
-	requestor.exitMethod(methodDeclaration.declarationSourceEnd);
+
+	if (isInRange){	
+		requestor.exitMethod(methodDeclaration.declarationSourceEnd);
+	}
 }
 /*
 * Update the bodyStart of the corresponding parse node
 */
 public void notifySourceElementRequestor(FieldDeclaration fieldDeclaration) {
+	
+	// range check
+	boolean isInRange = 
+				scanner.initialPosition <= fieldDeclaration.declarationSourceStart
+				&& scanner.eofPosition >= fieldDeclaration.declarationSourceEnd;
+
 	if (fieldDeclaration.isField()) {
 		int fieldEndPosition = fieldDeclaration.declarationSourceEnd;
 		if (fieldDeclaration instanceof SourceFieldDeclaration) {
@@ -759,22 +788,30 @@ public void notifySourceElementRequestor(FieldDeclaration fieldDeclaration) {
 				fieldEndPosition = fieldDeclaration.declarationSourceEnd;
 			}
 		}
-		requestor.enterField(
-			fieldDeclaration.declarationSourceStart, 
-			fieldDeclaration.modifiers & AccJustFlag, 
-			returnTypeName(fieldDeclaration.type), 
-			fieldDeclaration.name, 
-			fieldDeclaration.sourceStart, 
-			fieldDeclaration.sourceEnd); 
+		if (isInRange) {
+			requestor.enterField(
+				fieldDeclaration.declarationSourceStart, 
+				fieldDeclaration.modifiers & AccJustFlag, 
+				returnTypeName(fieldDeclaration.type), 
+				fieldDeclaration.name, 
+				fieldDeclaration.sourceStart, 
+				fieldDeclaration.sourceEnd); 
+		}
 		this.visitIfNeeded(fieldDeclaration);
-		requestor.exitField(fieldEndPosition);
+		if (isInRange){
+			requestor.exitField(fieldEndPosition);
+		}
 
 	} else {
-		requestor.enterInitializer(
-			fieldDeclaration.declarationSourceStart,
-			fieldDeclaration.modifiers); 
+		if (isInRange){
+			requestor.enterInitializer(
+				fieldDeclaration.declarationSourceStart,
+				fieldDeclaration.modifiers); 
+		}
 		this.visitIfNeeded((Initializer)fieldDeclaration);
-		requestor.exitInitializer(fieldDeclaration.declarationSourceEnd);
+		if (isInRange){
+			requestor.exitInitializer(fieldDeclaration.declarationSourceEnd);
+		}
 	}
 }
 public void notifySourceElementRequestor(
@@ -794,6 +831,12 @@ public void notifySourceElementRequestor(
 	}
 }
 public void notifySourceElementRequestor(TypeDeclaration typeDeclaration, boolean notifyTypePresence) {
+	
+	// range check
+	boolean isInRange = 
+				scanner.initialPosition <= typeDeclaration.declarationSourceStart
+				&& scanner.eofPosition >= typeDeclaration.declarationSourceEnd;
+	
 	FieldDeclaration[] fields = typeDeclaration.fields;
 	AbstractMethodDeclaration[] methods = typeDeclaration.methods;
 	MemberTypeDeclaration[] memberTypes = typeDeclaration.memberTypes;
@@ -830,13 +873,15 @@ public void notifySourceElementRequestor(TypeDeclaration typeDeclaration, boolea
 			}
 		}
 		if (isInterface) {
-			requestor.enterInterface(
-				typeDeclaration.declarationSourceStart, 
-				typeDeclaration.modifiers & AccJustFlag, 
-				typeDeclaration.name, 
-				typeDeclaration.sourceStart, 
-				typeDeclaration.sourceEnd, 
-				interfaceNames);
+			if (isInRange){
+				requestor.enterInterface(
+					typeDeclaration.declarationSourceStart, 
+					typeDeclaration.modifiers & AccJustFlag, 
+					typeDeclaration.name, 
+					typeDeclaration.sourceStart, 
+					typeDeclaration.sourceEnd, 
+					interfaceNames);
+			}
 			if (nestedTypeIndex == typeNames.length) {
 				// need a resize
 				System.arraycopy(typeNames, 0, (typeNames = new char[nestedTypeIndex * 2][]), 0, nestedTypeIndex);
@@ -847,23 +892,27 @@ public void notifySourceElementRequestor(TypeDeclaration typeDeclaration, boolea
 		} else {
 			TypeReference superclass = typeDeclaration.superclass;
 			if (superclass == null) {
-				requestor.enterClass(
-					typeDeclaration.declarationSourceStart, 
-					typeDeclaration.modifiers, 
-					typeDeclaration.name, 
-					typeDeclaration.sourceStart, 
-					typeDeclaration.sourceEnd, 
-					null, 
-					interfaceNames); 
+				if (isInRange){
+					requestor.enterClass(
+						typeDeclaration.declarationSourceStart, 
+						typeDeclaration.modifiers, 
+						typeDeclaration.name, 
+						typeDeclaration.sourceStart, 
+						typeDeclaration.sourceEnd, 
+						null, 
+						interfaceNames); 
+				}
 			} else {
-				requestor.enterClass(
-					typeDeclaration.declarationSourceStart, 
-					typeDeclaration.modifiers, 
-					typeDeclaration.name, 
-					typeDeclaration.sourceStart, 
-					typeDeclaration.sourceEnd, 
-					CharOperation.concatWith(superclass.getTypeName(), '.'), 
-					interfaceNames); 
+				if (isInRange){
+					requestor.enterClass(
+						typeDeclaration.declarationSourceStart, 
+						typeDeclaration.modifiers, 
+						typeDeclaration.name, 
+						typeDeclaration.sourceStart, 
+						typeDeclaration.sourceEnd, 
+						CharOperation.concatWith(superclass.getTypeName(), '.'), 
+						interfaceNames); 
+				}
 			}
 			if (nestedTypeIndex == typeNames.length) {
 				// need a resize
@@ -919,10 +968,12 @@ public void notifySourceElementRequestor(TypeDeclaration typeDeclaration, boolea
 		}
 	}
 	if (notifyTypePresence){
-		if (isInterface) {
-			requestor.exitInterface(typeDeclaration.declarationSourceEnd);
-		} else {
-			requestor.exitClass(typeDeclaration.declarationSourceEnd);
+		if (isInRange){
+			if (isInterface) {
+				requestor.exitInterface(typeDeclaration.declarationSourceEnd);
+			} else {
+				requestor.exitClass(typeDeclaration.declarationSourceEnd);
+			}
 		}
 		nestedTypeIndex--;
 	}
@@ -940,13 +991,19 @@ public void parseCompilationUnit(
 		unknownRefsCounter = 0;
 	}
 	try {
-		diet = !needReferenceInfo;
+		diet = true;
 		CompilationResult compilationUnitResult = new CompilationResult(unit, 0, 0);
-		parse(unit, compilationUnitResult, start, end);
+		CompilationUnitDeclaration parsedUnit = parse(unit, compilationUnitResult, start, end);
+		if (needReferenceInfo){
+			diet = false;
+			this.getMethodBodies(parsedUnit);
+		}		
+		this.scanner.resetTo(start, end);
+		notifySourceElementRequestor(parsedUnit);
 	} catch (AbortCompilation e) {
 	} finally {
 		if (scanner.recordLineSeparator) {
-			requestor.acceptLineSeparatorPositions(scanner.lineEnds());
+			requestor.acceptLineSeparatorPositions(scanner.getLineEnds());
 		}
 		diet = old;
 	}
@@ -954,7 +1011,6 @@ public void parseCompilationUnit(
 public void parseCompilationUnit(
 	ICompilationUnit unit, 
 	boolean needReferenceInfo) {
-
 	boolean old = diet;
 	if (needReferenceInfo) {
 		unknownRefs = new NameReference[10];
@@ -962,14 +1018,26 @@ public void parseCompilationUnit(
 	}
 		
 	try {
-		diet = !needReferenceInfo;
+/*		diet = !needReferenceInfo;
 		reportReferenceInfo = needReferenceInfo;
 		CompilationResult compilationUnitResult = new CompilationResult(unit, 0, 0);
-		parse(unit, compilationUnitResult);
+		parse(unit, compilationUnitResult);		
+*/		diet = true;
+		reportReferenceInfo = needReferenceInfo;
+		CompilationResult compilationUnitResult = new CompilationResult(unit, 0, 0);
+		CompilationUnitDeclaration parsedUnit = parse(unit, compilationUnitResult);
+		int initialStart = this.scanner.initialPosition;
+		int initialEnd = this.scanner.eofPosition;
+		if (needReferenceInfo){
+			diet = false;
+			this.getMethodBodies(parsedUnit);
+		}
+		this.scanner.resetTo(initialStart, initialEnd);
+		notifySourceElementRequestor(parsedUnit);
 	} catch (AbortCompilation e) {
 	} finally {
 		if (scanner.recordLineSeparator) {
-			requestor.acceptLineSeparatorPositions(scanner.lineEnds());
+			requestor.acceptLineSeparatorPositions(scanner.getLineEnds());
 		}
 		diet = old;
 	}
@@ -980,7 +1048,6 @@ public void parseTypeMemberDeclarations(
 	int start, 
 	int end, 
 	boolean needReferenceInfo) {
-
 	boolean old = diet;
 	if (needReferenceInfo) {
 		unknownRefs = new NameReference[10];
@@ -992,7 +1059,6 @@ public void parseTypeMemberDeclarations(
 		reportReferenceInfo = needReferenceInfo;
 		CompilationResult compilationUnitResult = 
 			new CompilationResult(sourceUnit, 0, 0); 
-
 		CompilationUnitDeclaration unit = 
 			SourceTypeConverter.buildCompilationUnit(
 				new ISourceType[]{sourceType}, 
@@ -1002,24 +1068,22 @@ public void parseTypeMemberDeclarations(
 				compilationUnitResult); 
 		if ((unit == null) || (unit.types == null) || (unit.types.length != 1))
 			return;
-
 		this.sourceType = sourceType;
-
 		try {
 			/* automaton initialization */
 			initialize();
 			goForClassBodyDeclarations();
 			/* scanner initialization */
-			scanner.setSourceBuffer(sourceUnit.getContents());
+			scanner.setSource(sourceUnit.getContents());
 			scanner.resetTo(start, end);
 			/* unit creation */
 			referenceContext = compilationUnit = unit;
-
 			/* initialize the astStacl */
 			// the compilationUnitDeclaration should contain exactly one type
 			pushOnAstStack(unit.types[0]);
 			/* run automaton */
 			parse();
+			notifySourceElementRequestor(unit);
 		} finally {
 			unit = compilationUnit;
 			compilationUnit = null; // reset parser
@@ -1027,7 +1091,7 @@ public void parseTypeMemberDeclarations(
 	} catch (AbortCompilation e) {
 	} finally {
 		if (scanner.recordLineSeparator) {
-			requestor.acceptLineSeparatorPositions(scanner.lineEnds());
+			requestor.acceptLineSeparatorPositions(scanner.getLineEnds());
 		}
 		diet = old;
 	}
@@ -1047,7 +1111,7 @@ public void parseTypeMemberDeclarations(
 		initialize();
 		goForClassBodyDeclarations();
 		/* scanner initialization */
-		scanner.setSourceBuffer(contents);
+		scanner.setSource(contents);
 		scanner.recordLineSeparator = false;
 		scanner.resetTo(start, end);
 
@@ -1058,6 +1122,7 @@ public void parseTypeMemberDeclarations(
 		// the compilationUnitDeclaration should contain exactly one type
 		/* run automaton */
 		parse();
+		notifySourceElementRequestor((CompilationUnitDeclaration)null);
 	} catch (AbortCompilation e) {
 	} finally {
 		diet = old;

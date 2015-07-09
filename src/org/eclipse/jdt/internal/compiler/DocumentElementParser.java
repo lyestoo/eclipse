@@ -19,10 +19,10 @@ package org.eclipse.jdt.internal.compiler;
  *
  * Any (parsing) problem encountered is also provided.
  */
-import org.eclipse.jdt.internal.compiler.Compiler;
 import org.eclipse.jdt.internal.compiler.env.*;
 
 import org.eclipse.jdt.internal.compiler.impl.*;
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
@@ -234,13 +234,13 @@ protected void consumeClassHeaderName() {
 	TypeDeclaration typeDecl;
 	if (nestedMethod[nestedType] == 0) {
 		if (nestedType != 0) {
-			typeDecl = new MemberTypeDeclaration();
+			typeDecl = new MemberTypeDeclaration(this.compilationUnit.compilationResult);
 		} else {
-			typeDecl = new TypeDeclaration();
+			typeDecl = new TypeDeclaration(this.compilationUnit.compilationResult);
 		}
 	} else {
 		// Record that the block has a declaration for local types
-		typeDecl = new LocalTypeDeclaration();
+		typeDecl = new LocalTypeDeclaration(this.compilationUnit.compilationResult);
 		markCurrentMethodWithLocalType();
 		blockReal();
 	}
@@ -367,7 +367,7 @@ protected void consumeConstructorHeader() {
 }
 protected void consumeConstructorHeaderName() {
 	// ConstructorHeaderName ::=  Modifiersopt 'Identifier' '('
-	ConstructorDeclaration cd = new ConstructorDeclaration();
+	ConstructorDeclaration cd = new ConstructorDeclaration(this.compilationUnit.compilationResult);
 
 	//name -- this is not really revelant but we do .....
 	cd.selector = identifierStack[identifierPtr];
@@ -637,13 +637,13 @@ protected void consumeInterfaceHeaderName() {
 	TypeDeclaration typeDecl;
 	if (nestedMethod[nestedType] == 0) {
 		if (nestedType != 0) {
-			typeDecl = new MemberTypeDeclaration();
+			typeDecl = new MemberTypeDeclaration(this.compilationUnit.compilationResult);
 		} else {
-			typeDecl = new TypeDeclaration();
+			typeDecl = new TypeDeclaration(this.compilationUnit.compilationResult);
 		}
 	} else {
 		// Record that the block has a declaration for local types
-		typeDecl = new LocalTypeDeclaration();
+		typeDecl = new LocalTypeDeclaration(this.compilationUnit.compilationResult);
 		markCurrentMethodWithLocalType();
 		blockReal();
 	}
@@ -808,7 +808,7 @@ protected void consumeMethodHeaderExtendedDims() {
 }
 protected void consumeMethodHeaderName() {
 	// MethodHeaderName ::= Modifiersopt Type 'Identifier' '('
-	MethodDeclaration md = new MethodDeclaration();
+	MethodDeclaration md = new MethodDeclaration(this.compilationUnit.compilationResult);
 
 	//name
 	md.selector = identifierStack[identifierPtr];
@@ -937,7 +937,7 @@ protected void consumeTypeImportOnDemandDeclarationName() {
 }
 public CompilationUnitDeclaration endParse(int act) {
 	if (scanner.recordLineSeparator) {
-		requestor.acceptLineSeparatorPositions(scanner.lineEnds());
+		requestor.acceptLineSeparatorPositions(scanner.getLineEnds());
 	}
 	return super.endParse(act);
 }
@@ -1045,7 +1045,7 @@ public void parseCompilationUnit(ICompilationUnit unit) {
 						new CompilationResult(unit, 0, 0), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
-		scanner.setSourceBuffer(regionSource);
+		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
 	}
@@ -1065,7 +1065,7 @@ public void parseConstructor(char[] regionSource) {
 						new CompilationResult(regionSource, 0, 0), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
-		scanner.setSourceBuffer(regionSource);
+		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
 	}
@@ -1085,7 +1085,7 @@ public void parseField(char[] regionSource) {
 						new CompilationResult(regionSource, 0, 0), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
-		scanner.setSourceBuffer(regionSource);
+		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
 	}
@@ -1106,7 +1106,7 @@ public void parseImport(char[] regionSource) {
 						new CompilationResult(regionSource, 0, 0), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
-		scanner.setSourceBuffer(regionSource);
+		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
 	}
@@ -1130,7 +1130,7 @@ public void parseInitializer(char[] regionSource) {
 						new CompilationResult(regionSource, 0, 0), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
-		scanner.setSourceBuffer(regionSource);
+		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
 	}
@@ -1151,7 +1151,7 @@ public void parseMethod(char[] regionSource) {
 						new CompilationResult(regionSource, 0, 0), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
-		scanner.setSourceBuffer(regionSource);
+		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
 	}
@@ -1172,7 +1172,7 @@ public void parsePackage(char[] regionSource) {
 						new CompilationResult(regionSource, 0, 0), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
-		scanner.setSourceBuffer(regionSource);
+		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
 	}
@@ -1193,7 +1193,7 @@ public void parseType(char[] regionSource) {
 						new CompilationResult(regionSource, 0, 0), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
-		scanner.setSourceBuffer(regionSource);
+		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
 	}

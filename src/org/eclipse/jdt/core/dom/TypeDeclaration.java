@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -115,6 +115,13 @@ public class TypeDeclaration extends BodyDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return TYPE_DECLARATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		TypeDeclaration result = new TypeDeclaration(target);
 		result.setModifiers(getModifiers());
@@ -134,19 +141,9 @@ public class TypeDeclaration extends BodyDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof TypeDeclaration)) {
-			return false;
-		}
-		TypeDeclaration o = (TypeDeclaration) other;
-		return 
-			((getModifiers() == o.getModifiers())
-			&& (isInterface() == o.isInterface())
-			&& ASTNode.equalNodes(getJavadoc(), o.getJavadoc())
-			&& ASTNode.equalNodes(getName(), o.getName())
-			&& ASTNode.equalNodes(getSuperclass(), o.getSuperclass())
-			&& ASTNode.equalLists(superInterfaces(), o.superInterfaces())
-			&& ASTNode.equalLists(bodyDeclarations(), o.bodyDeclarations()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 	
 	/* (omit javadoc for this method)
@@ -215,7 +212,7 @@ public class TypeDeclaration extends BodyDeclaration {
 	 * 
 	 * @param modifiers the bit-wise or of Modifier constants
 	 * @see Modifier
-	 * @exception $precondition-violation:illegal-modifiers$
+	 * @exception IllegalArgumentException if the modifiers are illegal
 	 */ 
 	public void setModifiers(int modifiers) {
 		if ((modifiers & ~LEGAL_MODIFIERS) != 0) {
@@ -243,8 +240,8 @@ public class TypeDeclaration extends BodyDeclaration {
 	 * given name.
 	 * 
 	 * @param typeName the new type name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setName(SimpleName typeName) {
 		if (typeName == null) {
@@ -284,8 +281,8 @@ public class TypeDeclaration extends BodyDeclaration {
 	 * 
 	 * @param superclassName the superclass name node, or <code>null</code> if 
 	 *    there is none
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setSuperclass(Name superclassName) {
 		replaceChild(
@@ -334,20 +331,20 @@ public class TypeDeclaration extends BodyDeclaration {
 	 * 
 	 * @return the (possibly empty) list of field declarations
 	 */ 
-	public SingleVariableDeclaration[] getFields() {
+	public FieldDeclaration[] getFields() {
 		List bd = bodyDeclarations();
 		int fieldCount = 0;
 		for (Iterator it = bd.listIterator(); it.hasNext(); ) {
-			if (it.next() instanceof SingleVariableDeclaration) {
+			if (it.next() instanceof FieldDeclaration) {
 				fieldCount++;
 			}
 		}
-		SingleVariableDeclaration[] fields = new SingleVariableDeclaration[fieldCount];
+		FieldDeclaration[] fields = new FieldDeclaration[fieldCount];
 		int next = 0;
 		for (Iterator it = bd.listIterator(); it.hasNext(); ) {
 			Object decl = it.next();
-			if (decl instanceof SingleVariableDeclaration) {
-				fields[next++] = (SingleVariableDeclaration) decl;
+			if (decl instanceof FieldDeclaration) {
+				fields[next++] = (FieldDeclaration) decl;
 			}
 		}
 		return fields;
@@ -434,8 +431,8 @@ public class TypeDeclaration extends BodyDeclaration {
 	 * Returns whether this type declaration is a type member.
 	 * <p>
 	 * Note that this is a convenience method that simply checks whether
-	 * this node's parent is a type declaration node or a class instance
-	 * creation node declaring an anonymous subclass.
+	 * this node's parent is a type declaration node or an anonymous 
+	 * class declaration.
 	 * </p>
 	 * 
 	 * @return <code>true</code> if this type declaration is a child of
@@ -445,22 +442,22 @@ public class TypeDeclaration extends BodyDeclaration {
 	public boolean isMemberTypeDeclaration() {
 		ASTNode parent = getParent();
 		return (parent instanceof TypeDeclaration)
-			|| (parent instanceof ClassInstanceCreation);
+			|| (parent instanceof AnonymousClassDeclaration);
 	}
 
 	/**
 	 * Returns whether this type declaration is a local type.
 	 * <p>
 	 * Note that this is a convenience method that simply checks whether
-	 * this node's parent is a block node.
+	 * this node's parent is a type declaration statement node.
 	 * </p>
 	 * 
 	 * @return <code>true</code> if this type declaration is a child of
-	 *   a block node, and <code>false</code> otherwise
+	 *   a type declaration statement node, and <code>false</code> otherwise
 	 */ 
 	public boolean isLocalTypeDeclaration() {
 		ASTNode parent = getParent();
-		return (parent instanceof Block);
+		return (parent instanceof TypeDeclarationStatement);
 	}
 	
 	/**
@@ -478,6 +475,24 @@ public class TypeDeclaration extends BodyDeclaration {
 		return getAST().getBindingResolver().resolveType(this);
 	}
 	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	void appendDebugString(StringBuffer buffer) {
+		buffer.append("TypeDeclaration[");//$NON-NLS-1$
+		buffer.append(isInterface() ? "interface " : "class ");//$NON-NLS-2$//$NON-NLS-1$
+		buffer.append(getName().getIdentifier());
+		buffer.append(" ");//$NON-NLS-1$
+		for (Iterator it = bodyDeclarations().iterator(); it.hasNext(); ) {
+			BodyDeclaration d = (BodyDeclaration) it.next();
+			d.appendDebugString(buffer);
+			if (it.hasNext()) {
+				buffer.append(";");//$NON-NLS-1$
+			}
+		}
+		buffer.append("]");//$NON-NLS-1$
+	}
+		
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */

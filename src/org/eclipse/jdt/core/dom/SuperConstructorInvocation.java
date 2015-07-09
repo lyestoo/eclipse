@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -51,6 +51,13 @@ public class SuperConstructorInvocation extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return SUPER_CONSTRUCTOR_INVOCATION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		SuperConstructorInvocation result = new SuperConstructorInvocation(target);
 		result.setLeadingComment(getLeadingComment());
@@ -63,14 +70,9 @@ public class SuperConstructorInvocation extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof SuperConstructorInvocation)) {
-			return false;
-		}
-		SuperConstructorInvocation o = (SuperConstructorInvocation) other;
-		return 
-			(ASTNode.equalNodes(getExpression(), o.getExpression())
-			&& ASTNode.equalLists(arguments(), o.arguments()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -102,9 +104,9 @@ public class SuperConstructorInvocation extends Statement {
 	 * 
 	 * @param expression the expression node, or <code>null</code> if 
 	 *    there is none
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setExpression(Expression expression) {
 		// a SuperConstructorInvocation may occur inside an Expression
@@ -122,6 +124,21 @@ public class SuperConstructorInvocation extends Statement {
 	 */ 
 	public List arguments() {
 		return arguments;
+	}
+
+	/**
+	 * Resolves and returns the binding for the constructor invoked by this
+	 * expression.
+	 * <p>
+	 * Note that bindings are generally unavailable unless requested when the
+	 * AST is being built.
+	 * </p>
+	 * 
+	 * @return the constructor binding, or <code>null</code> if the binding
+	 *    cannot be resolved
+	 */	
+	public IMethodBinding resolveConstructorBinding() {
+		return getAST().getBindingResolver().resolveConstructor(this);
 	}
 
 	/* (omit javadoc for this method)

@@ -18,7 +18,8 @@ public class ClassScope extends Scope {
 	}
 	
 	void buildAnonymousTypeBinding(SourceTypeBinding enclosingType, ReferenceBinding supertype) {
-		buildLocalType(enclosingType, enclosingType.fPackage);
+		
+		LocalTypeBinding anonymousType = buildLocalType(enclosingType, enclosingType.fPackage);
 
 		SourceTypeBinding sourceType = referenceContext.binding;
 		if (supertype.isInterface()) {
@@ -30,6 +31,7 @@ public class ClassScope extends Scope {
 		}
 		connectMemberTypes();
 		buildFieldsAndMethods();
+		anonymousType.faultInTypesForFieldsAndMethods();
 		sourceType.verifyMethods(environment().methodVerifier());
 	}
 	
@@ -104,9 +106,6 @@ public class ClassScope extends Scope {
 		for (int i = 0; i < count; i++)
 			fieldBindings[i].id = i;
 		referenceContext.binding.fields = fieldBindings;
-		if (referenceContext.binding.isLocalType())
-			referenceContext.binding.fields();
-		// fault the types for the local type's fields now since we need them
 	}
 	
 	void buildFieldsAndMethods() {
@@ -176,9 +175,12 @@ public class ClassScope extends Scope {
 	}
 	
 	void buildLocalTypeBinding(SourceTypeBinding enclosingType) {
-		buildLocalType(enclosingType, enclosingType.fPackage);
+
+		LocalTypeBinding localType = buildLocalType(enclosingType, enclosingType.fPackage);
 		connectTypeHierarchy();
 		buildFieldsAndMethods();
+		localType.faultInTypesForFieldsAndMethods();
+
 		referenceContext.binding.verifyMethods(environment().methodVerifier());
 	}
 	
@@ -214,9 +216,6 @@ public class ClassScope extends Scope {
 
 		referenceContext.binding.methods = methodBindings;
 		referenceContext.binding.modifiers |= AccUnresolved; // until methods() is sent
-		if (referenceContext.binding.isLocalType())
-			referenceContext.binding.methods();
-		// fault the types for the local type's methods now since we need them
 	}
 	SourceTypeBinding buildType(SourceTypeBinding enclosingType, PackageBinding packageBinding) {
 		// provide the typeDeclaration with needed scopes
@@ -309,10 +308,12 @@ public class ClassScope extends Scope {
 					modifiers |= AccDeprecatedImplicitly;
 			} else {
 				MethodBinding method = ((AbstractMethodDeclaration) refContext).binding;
-				if (method.isStrictfp())
-					modifiers |= AccStrictfp;
-				if (method.isDeprecated())
-					modifiers |= AccDeprecatedImplicitly;
+				if (method != null){
+					if (method.isStrictfp())
+						modifiers |= AccStrictfp;
+					if (method.isDeprecated())
+						modifiers |= AccDeprecatedImplicitly;
+				}
 			}
 		}
 		// after this point, tests on the 16 bits reserved.
@@ -557,7 +558,6 @@ public class ClassScope extends Scope {
 			if (isJavaLangObject(sourceType))
 				return true;
 			sourceType.superclass = getJavaLangObject();
-			compilationUnitScope().addTypeReference(sourceType.superclass);
 			return !detectCycle(sourceType, sourceType.superclass, null);
 			// ensure Object is initialized if it comes from a source file
 		}
@@ -762,7 +762,6 @@ public class ClassScope extends Scope {
 	private ReferenceBinding findSupertype(TypeReference typeReference) {
 		typeReference.aboutToResolve(this); // allows us to trap completion & selection nodes
 		char[][] compoundName = typeReference.getTypeName();
-// replaces 2 calls to addNamespaceReference
 		compilationUnitScope().recordQualifiedReference(compoundName);
 		SourceTypeBinding sourceType = referenceContext.binding;
 		int size = compoundName.length;
@@ -775,20 +774,16 @@ public class ClassScope extends Scope {
 			// match against the sourceType even though nested members cannot be supertypes
 		} else {
 			Binding typeOrPackage = parent.getTypeOrPackage(compoundName[0], TYPE | PACKAGE);
-			if (typeOrPackage == null || !typeOrPackage.isValidBinding()) {
-				compilationUnitScope().addNamespaceReference(new ProblemPackageBinding(compoundName[0], NotFound));
-				// record package ref
+			if (typeOrPackage == null || !typeOrPackage.isValidBinding())
 				return new ProblemReferenceBinding(
 					compoundName[0],
 					typeOrPackage == null ? NotFound : typeOrPackage.problemId());
-			}
+
 			boolean checkVisibility = false;
 			for (; n < size; n++) {
 				if (!(typeOrPackage instanceof PackageBinding))
 					break;
-
 				PackageBinding packageBinding = (PackageBinding) typeOrPackage;
-				compilationUnitScope().addNamespaceReference(packageBinding);
 				typeOrPackage = packageBinding.getTypeOrPackage(compoundName[n]);
 				if (typeOrPackage == null || !typeOrPackage.isValidBinding())
 					return new ProblemReferenceBinding(
@@ -802,7 +797,6 @@ public class ClassScope extends Scope {
 				return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, n), NotFound);
 			superType = (ReferenceBinding) typeOrPackage;
 			compilationUnitScope().recordTypeReference(superType); // to record supertypes
-			compilationUnitScope().addTypeReference(superType);
 
 			if (checkVisibility
 				&& n == size) { // if we're finished and know the final supertype then check visibility

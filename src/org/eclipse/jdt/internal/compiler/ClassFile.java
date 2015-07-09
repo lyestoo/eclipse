@@ -6,9 +6,9 @@ package org.eclipse.jdt.internal.compiler;
  */
 import java.io.*;
 import java.util.*;
-import org.eclipse.jdt.internal.compiler.Compiler;
-import org.eclipse.jdt.internal.compiler.*;
+
 import org.eclipse.jdt.internal.compiler.impl.*;
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -86,24 +86,34 @@ public class ClassFile
 		header[headerOffset++] = (byte) (0xCAFEBABEL >> 16);
 		header[headerOffset++] = (byte) (0xCAFEBABEL >> 8);
 		header[headerOffset++] = (byte) (0xCAFEBABEL >> 0);
-		if (((SourceTypeBinding) referenceBinding)
-			.scope
-			.environment()
-			.options
-			.targetJDK
-			== CompilerOptions.JDK1_2) {
-			// Compatible with JDK 1.2
-			header[headerOffset++] = 0;
-			// minorVersion = 0 means we just need to offset the current offset by 2
-			header[headerOffset++] = 0;
-			header[headerOffset++] = 0;
-			header[headerOffset++] = 46;
-		} else {
-			// Compatible with JDK 1.1
-			header[headerOffset++] = 0;
-			header[headerOffset++] = 3;
-			header[headerOffset++] = 0;
-			header[headerOffset++] = 45;
+		switch(((SourceTypeBinding) referenceBinding).scope.environment().options.targetJDK) {
+			case CompilerOptions.JDK1_4 :
+				// Compatible with JDK 1.4
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 48;
+				break;
+			case CompilerOptions.JDK1_3 :
+				// Compatible with JDK 1.3
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 47;
+				break;
+			case CompilerOptions.JDK1_2 :
+				// Compatible with JDK 1.2
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 46;
+				break;
+			case CompilerOptions.JDK1_1 :
+				// Compatible with JDK 1.1
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 3;
+				header[headerOffset++] = 0;
+				header[headerOffset++] = 45;
 		}
 		constantPoolOffset = headerOffset;
 		headerOffset += 2;
@@ -225,6 +235,7 @@ public class ClassFile
 		// leave two bytes for the number of attributes and store the current offset
 		int attributeOffset = contentsOffset;
 		contentsOffset += 2;
+		int contentsLength;
 
 		// source attribute
 		if ((produceDebugAttributes & CompilerOptions.Source) != 0) {
@@ -237,7 +248,6 @@ public class ClassFile
 			}
 			// check that there is enough space to write all the bytes for the field info corresponding
 			// to the @fieldBinding
-			int contentsLength;
 			if (contentsOffset + 8 >= (contentsLength = contents.length)) {
 				System.arraycopy(
 					contents,
@@ -266,7 +276,6 @@ public class ClassFile
 		if (referenceBinding.isDeprecated()) {
 			// check that there is enough space to write all the bytes for the field info corresponding
 			// to the @fieldBinding
-			int contentsLength;
 			if (contentsOffset + 6 >= (contentsLength = contents.length)) {
 				System.arraycopy(
 					contents,
@@ -289,7 +298,6 @@ public class ClassFile
 		// Inner class attribute
 		if (numberOfInnerClasses != 0) {
 			// Generate the inner class attribute
-			int contentsLength;
 			int exSize;
 			if (contentsOffset + (exSize = (8 * numberOfInnerClasses + 8))
 				>= (contentsLength = contents.length)) {
@@ -356,6 +364,15 @@ public class ClassFile
 			attributeNumber++;
 		}
 		// update the number of attributes
+		contentsLength = contents.length;
+		if (attributeOffset + 2 >= contentsLength) {
+			System.arraycopy(
+				contents,
+				0,
+				(contents = new byte[contentsLength + INCREMENT_SIZE]),
+				0,
+				contentsLength);
+		}
 		contents[attributeOffset++] = (byte) (attributeNumber >> 8);
 		contents[attributeOffset] = (byte) attributeNumber;
 
@@ -419,8 +436,7 @@ public class ClassFile
 		int fieldAttributeOffset = contentsOffset;
 		contentsOffset += 2;
 		// 4.7.2 only static constant fields get a ConstantAttribute
-		if (fieldBinding.isStatic()
-			&& fieldBinding.constant != Constant.NotAConstant
+		if (fieldBinding.constant != Constant.NotAConstant
 			&& fieldBinding.constant.typeID() != T_null) {
 			// Now we generate the constant attribute corresponding to the fieldBinding
 			int constantValueNameIndex =
@@ -657,9 +673,11 @@ public class ClassFile
 		methodBinding.modifiers &= ~(AccStrictfp | AccNative | AccAbstract);
 
 		generateMethodInfoHeader(methodBinding);
-		// We know that we won't get more than 1 attribute: the code attribute
-		contents[contentsOffset++] = 0;
-		contents[contentsOffset++] = 1; // Code attribute
+		int methodAttributeOffset = contentsOffset;
+		int attributeNumber = generateMethodInfoAttribute(methodBinding);
+		
+		// Code attribute
+		attributeNumber++;
 		int codeAttributeOffset = contentsOffset;
 		generateCodeAttributeHeader();
 		final ProblemReporter problemReporter = method.scope.problemReporter();
@@ -702,6 +720,7 @@ public class ClassFile
 				.referenceCompilationUnit()
 				.compilationResult
 				.lineSeparatorPositions);
+		completeMethodInfo(methodAttributeOffset, attributeNumber);
 	}
 
 	/**
@@ -744,70 +763,12 @@ public class ClassFile
 		methodBinding.modifiers &= ~(AccStrictfp | AccNative | AccAbstract);
 
 		generateMethodInfoHeader(methodBinding);
-		// leave two spaces for the number of attributes
-		int attributeOffset = contentsOffset;
-		contentsOffset += 2;
-		ReferenceBinding[] thrownsExceptions;
-		int attributeNumber = 0;
-		int contentsLength;
-
-		if ((thrownsExceptions = methodBinding.thrownExceptions) != NoExceptions) {
-			// The method has a throw clause. So we need to add an exception attribute
-			// check that there is enough space to write all the bytes for the exception attribute
-			int length = thrownsExceptions.length;
-			if (contentsOffset + (8 + length * 2) >= (contentsLength = contents.length)) {
-				System.arraycopy(
-					contents,
-					0,
-					(contents =
-						new byte[contentsLength + Math.max(INCREMENT_SIZE, (8 + length * 2))]),
-					0,
-					contentsLength);
-			}
-			int exceptionNameIndex =
-				constantPool.literalIndex(AttributeNamesConstants.ExceptionsName);
-			contents[contentsOffset++] = (byte) (exceptionNameIndex >> 8);
-			contents[contentsOffset++] = (byte) exceptionNameIndex;
-			// The attribute length = length * 2 + 2 in case of a exception attribute
-			int attributeLength = length * 2 + 2;
-			contents[contentsOffset++] = (byte) (attributeLength >> 24);
-			contents[contentsOffset++] = (byte) (attributeLength >> 16);
-			contents[contentsOffset++] = (byte) (attributeLength >> 8);
-			contents[contentsOffset++] = (byte) attributeLength;
-			contents[contentsOffset++] = (byte) (length >> 8);
-			contents[contentsOffset++] = (byte) length;
-			for (int i = 0; i < length; i++) {
-				int exceptionIndex = constantPool.literalIndex(thrownsExceptions[i]);
-				contents[contentsOffset++] = (byte) (exceptionIndex >> 8);
-				contents[contentsOffset++] = (byte) exceptionIndex;
-			}
-			attributeNumber++;
-		}
-
-		// Deprecated attribute
-		// Check that there is enough space to write the deprecated attribute
-		if (contentsOffset + 6 >= (contentsLength = contents.length)) {
-			System.arraycopy(
-				contents,
-				0,
-				(contents = new byte[contentsLength + INCREMENT_SIZE]),
-				0,
-				contentsLength);
-		}
-		if (methodBinding.isDeprecated()) {
-			int deprecatedAttributeNameIndex =
-				constantPool.literalIndex(AttributeNamesConstants.DeprecatedName);
-			contents[contentsOffset++] = (byte) (deprecatedAttributeNameIndex >> 8);
-			contents[contentsOffset++] = (byte) deprecatedAttributeNameIndex;
-			// the length of a deprecated attribute is equals to 0
-			contents[contentsOffset++] = 0;
-			contents[contentsOffset++] = 0;
-			contents[contentsOffset++] = 0;
-			contents[contentsOffset++] = 0;
-
-			attributeNumber++;
-		}
-
+		int methodAttributeOffset = contentsOffset;
+		int attributeNumber = generateMethodInfoAttribute(methodBinding);
+		
+		// Code attribute
+		attributeNumber++;
+		
 		int codeAttributeOffset = contentsOffset;
 		generateCodeAttributeHeader();
 		final ProblemReporter problemReporter = method.scope.problemReporter();
@@ -844,7 +805,6 @@ public class ClassFile
 			codeStream.generateCodeAttributeForProblemMethod(
 				problemReporter.options.runtimeExceptionNameForCompileError,
 				problemString);
-		attributeNumber++; // code attribute
 		completeCodeAttributeForProblemMethod(
 			method,
 			methodBinding,
@@ -855,8 +815,7 @@ public class ClassFile
 				.referenceCompilationUnit()
 				.compilationResult
 				.lineSeparatorPositions);
-		contents[attributeOffset++] = (byte) (attributeNumber >> 8);
-		contents[attributeOffset] = (byte) attributeNumber;
+		completeMethodInfo(methodAttributeOffset, attributeNumber);
 	}
 
 	/**
@@ -927,6 +886,175 @@ public class ClassFile
 				}
 			}
 		}
+	}
+
+	/**
+	 * INTERNAL USE-ONLY
+	 * Generate the byte for problem method infos that correspond to missing abstract methods.
+	 * http://dev.eclipse.org/bugs/show_bug.cgi?id=3179
+	 *
+	 * @param methodDeclarations Array of all missing abstract methods
+	 */
+	public void generateMissingAbstractMethods(MethodDeclaration[] methodDeclarations, CompilationResult compilationResult) {
+		if (methodDeclarations != null) {
+			for (int i = 0, max = methodDeclarations.length; i < max; i++) {
+				MethodDeclaration methodDeclaration = methodDeclarations[i];
+				MethodBinding methodBinding = methodDeclaration.binding;
+		 		String readableName = new String(methodBinding.readableName());
+		 		IProblem[] problems = compilationResult.problems;
+		 		int problemsCount = compilationResult.problemCount;
+				for (int j = 0; j < problemsCount; j++) {
+					IProblem problem = problems[j];
+					if (problem != null
+						&& problem.getID() == IProblem.AbstractMethodMustBeImplemented
+						&& problem.getMessage().indexOf(readableName) != -1) {
+							// we found a match
+							addMissingAbstractProblemMethod(methodDeclaration, methodBinding, problem, compilationResult);
+						}
+				}
+			}
+		}
+	}
+	
+	private void addMissingAbstractProblemMethod(MethodDeclaration methodDeclaration, MethodBinding methodBinding, IProblem problem, CompilationResult compilationResult) {
+		// always clear the strictfp/native/abstract bit for a problem method
+		methodBinding.modifiers &= ~(AccStrictfp | AccNative | AccAbstract);
+		
+		generateMethodInfoHeader(methodBinding);
+		int methodAttributeOffset = contentsOffset;
+		int attributeNumber = generateMethodInfoAttribute(methodBinding);
+		
+		// Code attribute
+		attributeNumber++;
+		
+		int codeAttributeOffset = contentsOffset;
+		generateCodeAttributeHeader();
+		StringBuffer buffer = new StringBuffer(25);
+		buffer.append("\t"  + problem.getMessage() + "\n" ); //$NON-NLS-1$ //$NON-NLS-2$
+		buffer.insert(0, Util.bind("compilation.unresolvedProblem" )); //$NON-NLS-1$
+		String problemString = buffer.toString();
+		this.problemLine = problem.getSourceLineNumber();
+		
+		final ProblemReporter problemReporter = methodDeclaration.scope.problemReporter();
+		codeStream.init(this);
+		codeStream.preserveUnusedLocals = true;
+		codeStream.initializeMaxLocals(methodBinding);
+
+		// return codeStream.generateCodeAttributeForProblemMethod(comp.options.runtimeExceptionNameForCompileError, "")
+		int[] exceptionHandler =
+			codeStream.generateCodeAttributeForProblemMethod(
+				problemReporter.options.runtimeExceptionNameForCompileError,
+				problemString);
+				
+		completeCodeAttributeForMissingAbstractProblemMethod(
+			methodBinding,
+			codeAttributeOffset,
+			exceptionHandler,
+			compilationResult.lineSeparatorPositions);
+			
+		completeMethodInfo(methodAttributeOffset, attributeNumber);
+	}
+
+	/**
+	 * 
+	 */
+	public void completeCodeAttributeForMissingAbstractProblemMethod(
+		MethodBinding binding,
+		int codeAttributeOffset,
+		int[] exceptionHandler,
+		int[] startLineIndexes) {
+		// reinitialize the localContents with the byte modified by the code stream
+		byte[] localContents = contents = codeStream.bCodeStream;
+		int localContentsOffset = codeStream.classFileOffset;
+		// codeAttributeOffset is the position inside localContents byte array before we started to write// any information about the codeAttribute// That means that to write the attribute_length you need to offset by 2 the value of codeAttributeOffset// to get the right position, 6 for the max_stack etc...
+		int max_stack = codeStream.stackMax;
+		localContents[codeAttributeOffset + 6] = (byte) (max_stack >> 8);
+		localContents[codeAttributeOffset + 7] = (byte) max_stack;
+		int max_locals = codeStream.maxLocals;
+		localContents[codeAttributeOffset + 8] = (byte) (max_locals >> 8);
+		localContents[codeAttributeOffset + 9] = (byte) max_locals;
+		int code_length = codeStream.position;
+		localContents[codeAttributeOffset + 10] = (byte) (code_length >> 24);
+		localContents[codeAttributeOffset + 11] = (byte) (code_length >> 16);
+		localContents[codeAttributeOffset + 12] = (byte) (code_length >> 8);
+		localContents[codeAttributeOffset + 13] = (byte) code_length;
+		// write the exception table
+		int contentsLength;
+		if (localContentsOffset + 50 >= (contentsLength = localContents.length)) {
+			System.arraycopy(
+				contents,
+				0,
+				(localContents = contents = new byte[contentsLength + INCREMENT_SIZE]),
+				0,
+				contentsLength);
+		}
+		localContents[localContentsOffset++] = 0;
+		localContents[localContentsOffset++] = 1;
+		int start = exceptionHandler[0];
+		localContents[localContentsOffset++] = (byte) (start >> 8);
+		localContents[localContentsOffset++] = (byte) start;
+		int end = exceptionHandler[1];
+		localContents[localContentsOffset++] = (byte) (end >> 8);
+		localContents[localContentsOffset++] = (byte) end;
+		int handlerPC = exceptionHandler[2];
+		localContents[localContentsOffset++] = (byte) (handlerPC >> 8);
+		localContents[localContentsOffset++] = (byte) handlerPC;
+		int nameIndex = constantPool.literalIndexForJavaLangException();
+		localContents[localContentsOffset++] = (byte) (nameIndex >> 8);
+		localContents[localContentsOffset++] = (byte) nameIndex; // debug attributes
+		int codeAttributeAttributeOffset = localContentsOffset;
+		int attributeNumber = 0; // leave two bytes for the attribute_length
+		localContentsOffset += 2; // first we handle the linenumber attribute
+
+		if (codeStream.generateLineNumberAttributes) {
+			/* Create and add the line number attribute (used for debugging) 
+			    * Build the pairs of:
+			    * (bytecodePC lineNumber)
+			    * according to the table of start line indexes and the pcToSourceMap table
+			    * contained into the codestream
+			    */
+			int lineNumberNameIndex =
+				constantPool.literalIndex(AttributeNamesConstants.LineNumberTableName);
+			localContents[localContentsOffset++] = (byte) (lineNumberNameIndex >> 8);
+			localContents[localContentsOffset++] = (byte) lineNumberNameIndex;
+			localContents[localContentsOffset++] = 0;
+			localContents[localContentsOffset++] = 0;
+			localContents[localContentsOffset++] = 0;
+			localContents[localContentsOffset++] = 6;
+			localContents[localContentsOffset++] = 0;
+			localContents[localContentsOffset++] = 1;
+			if (problemLine == 0) {
+				problemLine = searchLineNumber(startLineIndexes, binding.sourceStart());
+			}
+			// first entry at pc = 0
+			localContents[localContentsOffset++] = 0;
+			localContents[localContentsOffset++] = 0;
+			localContents[localContentsOffset++] = (byte) (problemLine >> 8);
+			localContents[localContentsOffset++] = (byte) problemLine;
+			// now we change the size of the line number attribute
+			attributeNumber++;
+		}
+		
+		// then we do the local variable attribute
+		// update the number of attributes// ensure first that there is enough space available inside the localContents array
+		if (codeAttributeAttributeOffset + 2
+			>= (contentsLength = localContents.length)) {
+			System.arraycopy(
+				contents,
+				0,
+				(localContents = contents = new byte[contentsLength + INCREMENT_SIZE]),
+				0,
+				contentsLength);
+		}
+		localContents[codeAttributeAttributeOffset++] = (byte) (attributeNumber >> 8);
+		localContents[codeAttributeAttributeOffset] = (byte) attributeNumber;
+		// update the attribute length
+		int codeAttributeLength = localContentsOffset - (codeAttributeOffset + 6);
+		localContents[codeAttributeOffset + 2] = (byte) (codeAttributeLength >> 24);
+		localContents[codeAttributeOffset + 3] = (byte) (codeAttributeLength >> 16);
+		localContents[codeAttributeOffset + 4] = (byte) (codeAttributeLength >> 8);
+		localContents[codeAttributeOffset + 5] = (byte) codeAttributeLength;
+		contentsOffset = localContentsOffset;
 	}
 
 	/**
@@ -2314,7 +2442,7 @@ public class ClassFile
 		if ((fields != null) && (fields != NoFields)) {
 			for (int i = 0, max = fields.length; i < max; i++) {
 				if (fields[i].constant == null) {
-					FieldReference.getConstantFor(fields[i], false, null, 0);
+					FieldReference.getConstantFor(fields[i], false, null, null, 0);
 				}
 			}
 			classFile.addFieldInfos();
@@ -2406,7 +2534,7 @@ public class ClassFile
 	/**
 	 * INTERNAL USE-ONLY
 	 * That method generates the header of a code attribute.
-	 * - the index inside the constant pool for the attribute name (i.e. Code)
+	 * - the index inside the constant pool for the attribute name (i.e.&nbsp;Code)
 	 * - leave some space for attribute_length(4), max_stack(2), max_locals(2), code_length(4).
 	 */
 	public void generateCodeAttributeHeader() {
@@ -2633,17 +2761,6 @@ public class ClassFile
 	 */
 	public char[][] getCompoundName() {
 		return CharOperation.splitOn('/', fileName());
-	}
-
-	/**
-	 * EXTERNAL API
-	 * Answer a smaller byte format, which is only contains some structural information.
-	 *
-	 * Those bytes are decodable with a regular class file reader, such as:
-	 * DietClassFileReader
-	 */
-	public byte[] getReducedBytes() {
-		return getBytes(); // might be improved
 	}
 
 	/**

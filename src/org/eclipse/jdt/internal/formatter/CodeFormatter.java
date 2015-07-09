@@ -5,10 +5,13 @@ package org.eclipse.jdt.internal.formatter;
  * WebSphere Studio Workbench
  * (c) Copyright IBM Corp 2000
  */
-import org.eclipse.jdt.internal.compiler.parser.InvalidInputException;
+import org.eclipse.jdt.core.ICodeFormatter;
+import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.core.compiler.ITerminalSymbols;
+import org.eclipse.jdt.core.compiler.InvalidInputException;
+import org.eclipse.jdt.internal.compiler.ConfigurableOption;
 import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
-import org.eclipse.jdt.internal.compiler.parser.TerminalSymbols;
 import org.eclipse.jdt.internal.formatter.impl.FormatterOptions;
 import org.eclipse.jdt.internal.formatter.impl.SplitLine;
 import java.io.BufferedReader;
@@ -22,14 +25,14 @@ import java.util.*;
  * on this instance to format <code>aString</code>.
  * It will return the formatted string.</ul>
 */
-public class CodeFormatter implements TerminalSymbols {
+public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 
 	public FormatterOptions options;
 
 	/** 
 	 * Represents a block in the <code>constructions</code> stack.
 	 */
-	public static final int BLOCK = TerminalSymbols.TokenNameLBRACE;
+	public static final int BLOCK = ITerminalSymbols.TokenNameLBRACE;
 
 	/** 
 	 * Represents a block following a control statement in the <code>constructions</code> stack.
@@ -113,12 +116,21 @@ public class CodeFormatter implements TerminalSymbols {
 	private int multipleLineCommentCounter;
 	
 	/** 
+	 * Creates a new instance of Code Formatter using the given settings.
+	 * 
+	 * @deprecated backport 1.0 internal functionality
+	 */
+	public CodeFormatter(ConfigurableOption[] settings) {
+		this(convertConfigurableOptions(settings));
+	}
+	
+	/** 
 	 * Creates a new instance of Code Formatter using the FormattingOptions object
 	 * given as argument
 	 * @deprecated Use CodeFormatter(ConfigurableOption[]) instead
 	 */
 	public CodeFormatter() {
-		this(null);
+		this((Map)null);
 	}
 	/** 
 	 * Creates a new instance of Code Formatter using the given settings.
@@ -156,6 +168,50 @@ public class CodeFormatter implements TerminalSymbols {
 			default :
 				return true;
 		}
+	}
+	
+		/** 
+	 * @deprecated backport 1.0 internal functionality
+	 */
+	private static Map convertConfigurableOptions(ConfigurableOption[] settings) {
+		Hashtable options = new Hashtable(10);
+		
+		for (int i = 0; i < settings.length; i++) {
+			if(settings[i].getComponentName().equals(CodeFormatter.class.getName())){
+				String optionName = settings[i].getOptionName();
+				int valueIndex = settings[i].getCurrentValueIndex();
+				
+				if(optionName.equals("newline.openingBrace")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.newline.openingBrace", valueIndex == 0 ? "insert" : "do not insert"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				
+				} else if(optionName.equals("newline.controlStatement")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.newline.controlStatement",  valueIndex == 0 ? "insert" : "do not insert"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				
+				} else if(optionName.equals("newline.clearAll")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.newline.clearAll",  valueIndex == 0 ? "clear all" : "preserve one"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				
+				} else if(optionName.equals("newline.elseIf")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.newline.elseIf",  valueIndex == 0 ? "do not insert" : "insert" ); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				
+				} else if(optionName.equals("newline.emptyBlock")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.newline.emptyBlock",  valueIndex == 0 ? "insert" : "do not insert"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				
+				} else if(optionName.equals("lineSplit")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.lineSplit", String.valueOf(valueIndex)); //$NON-NLS-1$ //$NON-NLS-2$
+				
+				} else if(optionName.equals("style.assignment")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.style.assignment",  valueIndex == 0 ? "compact" : "normal"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				
+				} else if(optionName.equals("tabulation.char")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.tabulation.char",  valueIndex == 0 ? "tab" : "space"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				
+				} else if(optionName.equals("tabulation.size")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.tabulation.size", String.valueOf(valueIndex)); //$NON-NLS-1$ //$NON-NLS-2$
+				}
+			}
+		}
+		
+		return options;
 	}
 
 	/** 
@@ -326,9 +382,10 @@ public class CodeFormatter implements TerminalSymbols {
 				if (token == Scanner.TokenNamethrows) {
 					inThrowsClause = true;
 				}
-				if (token == Scanner.TokenNameclass || token == Scanner.TokenNameinterface) {
+				if ((token == Scanner.TokenNameclass || token == Scanner.TokenNameinterface) && previousToken != Scanner.TokenNameDOT) {
 					inClassOrInterfaceHeader = true;
 				}
+
 				/* ## APPEND newlines and indentations to the output string
 				*/
 				// Do not add a new line between ELSE and IF, if the option elseIfOnSameLine is true.
@@ -586,33 +643,36 @@ public class CodeFormatter implements TerminalSymbols {
 					case TokenNamenew :
 						break;
 					case TokenNameLPAREN :
-
-						// Put a space between the previous and current token if the
-						// previous token was not a keyword, open paren, logical
-						// compliment (eg: !), semi-colon, open brace, close brace,
-						// super, or this.
-						if (previousCompilableToken != TokenNameLBRACKET
-							&& previousToken != TokenNameIdentifier
-							&& previousToken != 0
-							&& previousToken != TokenNameNOT
-							&& previousToken != TokenNameLPAREN
-							&& previousToken != TokenNameTWIDDLE
-							&& previousToken != TokenNameSEMICOLON
-							&& previousToken != TokenNameLBRACE
-							&& previousToken != TokenNameRBRACE
-							&& previousToken != TokenNamesuper
-							&& previousToken != TokenNamethis) {
-							space();
+						if (previousToken == TokenNamesynchronized) {
+							indentationLevel += pushControlStatement(previousToken);
+						} else {
+							// Put a space between the previous and current token if the
+							// previous token was not a keyword, open paren, logical
+							// compliment (eg: !), semi-colon, open brace, close brace,
+							// super, or this.
+							if (previousCompilableToken != TokenNameLBRACKET
+								&& previousToken != TokenNameIdentifier
+								&& previousToken != 0
+								&& previousToken != TokenNameNOT
+								&& previousToken != TokenNameLPAREN
+								&& previousToken != TokenNameTWIDDLE
+								&& previousToken != TokenNameSEMICOLON
+								&& previousToken != TokenNameLBRACE
+								&& previousToken != TokenNameRBRACE
+								&& previousToken != TokenNamesuper
+								&& previousToken != TokenNamethis) {
+								space();
+							}
+							// If in a for/if/while statement, increase the parenthesis count
+							// for the current openParenthesisCount
+							// else increase the count for stand alone parenthesis.
+							if (openParenthesisCount > 0)
+								openParenthesis[openParenthesisCount - 1]++;
+							else
+								openParenthesis[0]++;
+	
+							pendingSpace = false;
 						}
-						// If in a for/if/while statement, increase the parenthesis count
-						// for the current openParenthesisCount
-						// else increase the count for stand alone parenthesis.
-						if (openParenthesisCount > 0)
-							openParenthesis[openParenthesisCount - 1]++;
-						else
-							openParenthesis[0]++;
-
-						pendingSpace = false;
 						break;
 					case TokenNameRPAREN :
 
@@ -677,6 +737,7 @@ public class CodeFormatter implements TerminalSymbols {
 									case TokenNamefinally :
 									case TokenNamewhile :
 									case TokenNamedo :
+									case TokenNamesynchronized :
 										clearNonBlockIndents = true;
 									default :
 										break;
@@ -863,7 +924,7 @@ public class CodeFormatter implements TerminalSymbols {
 	public String formatSourceString(String sourceString) {
 		char[] sourceChars = sourceString.toCharArray();
 		formattedSource = new StringBuffer(sourceChars.length);
-		scanner.setSourceBuffer(sourceChars);
+		scanner.setSource(sourceChars);
 		format();
 		return formattedSource.toString();
 	}
@@ -876,7 +937,7 @@ public class CodeFormatter implements TerminalSymbols {
 	 * @return the formatted ouput.
 	 */
 	public String format(String string, int indentationLevel) {
-		return format(string, indentationLevel, null);
+		return format(string, indentationLevel, (int[])null);
 	}	
 	
 	/** 
@@ -889,7 +950,13 @@ public class CodeFormatter implements TerminalSymbols {
 	 * @return the formatted ouput.
 	 */
 	public String format(String string, int indentationLevel, int[] positions) {
-		// XXX temporary inefficient implementation to meet API
+		return this.format(string, indentationLevel, positions, null);
+	}
+	
+	public String format(String string, int indentationLevel, int[] positions, String lineSeparator) {
+		if (lineSeparator != null){
+			this.options.setLineSeparator(lineSeparator);
+		}
 		if (positions != null) {
 			this.setPositionsToMap(positions);
 			this.setInitialIndentationLevel(indentationLevel);
@@ -909,7 +976,19 @@ public class CodeFormatter implements TerminalSymbols {
 	 * @return the formatted ouput.
 	 */
 	public String format(String string) {
-		return this.format(string, 0, null);
+		return this.format(string, 0, (int[])null);
+	}
+	
+	/** 
+	 * Formats a given source string, starting indenting it at a particular 
+	 * depth and using the given options
+	 * 
+	 * @deprecated backport 1.0 internal functionality
+	 */
+	public static String format(String sourceString, int initialIndentationLevel, ConfigurableOption[] options) {
+		CodeFormatter formatter = new CodeFormatter(options);
+		formatter.setInitialIndentationLevel(initialIndentationLevel);
+		return formatter.formatSourceString(sourceString);
 	}
 	
 	/**
@@ -952,6 +1031,29 @@ public class CodeFormatter implements TerminalSymbols {
 			}
 		}
 		return offset;
+	}
+	
+	/**
+	 * Returns an array of descriptions for the configurable options.
+	 * The descriptions may be changed and passed back to a different
+	 * compiler.
+	 * 
+	 * @deprecated backport 1.0 internal functionality
+	 */
+	public static ConfigurableOption[] getDefaultOptions(Locale locale) {
+		String componentName = CodeFormatter.class.getName();
+		FormatterOptions options = new FormatterOptions();
+		return new ConfigurableOption[] {
+			new ConfigurableOption(componentName, "newline.openingBrace",  locale, options.newLineBeforeOpeningBraceMode ? 0 : 1), //$NON-NLS-1$
+			new ConfigurableOption(componentName, "newline.controlStatement",  locale, options.newlineInControlStatementMode ? 0 : 1), //$NON-NLS-1$
+			new ConfigurableOption(componentName, "newline.clearAll",  locale, options.clearAllBlankLinesMode ? 0 : 1), //$NON-NLS-1$
+			new ConfigurableOption(componentName, "newline.elseIf",  locale, options.compactElseIfMode ? 0 : 1), //$NON-NLS-1$
+			new ConfigurableOption(componentName, "newline.emptyBlock",  locale, options.newLineInEmptyBlockMode ? 0 : 1), //$NON-NLS-1$
+			new ConfigurableOption(componentName, "line.split",  locale, options.maxLineLength),//$NON-NLS-1$
+			new ConfigurableOption(componentName, "style.compactAssignment",  locale, options.compactAssignmentMode ? 0 : 1), //$NON-NLS-1$
+			new ConfigurableOption(componentName, "tabulation.char",  locale, options.indentWithTab ? 0 : 1), //$NON-NLS-1$
+			new ConfigurableOption(componentName, "tabulation.size",  locale, options.tabSize)	//$NON-NLS-1$
+		};
 	}
 
 	/**
@@ -1444,7 +1546,7 @@ public class CodeFormatter implements TerminalSymbols {
 		}
 		SplitLine splitLine = null;
 		if (options.maxLineLength == 0
-			|| currentString.length() < options.maxLineLength
+			|| getLength(currentString, depth) < options.maxLineLength
 			|| (splitLine = split(currentString, offsetInGlobalLine)) == null) {
 
 			// depending on the type of operator, outputs new line before of after dumping it
@@ -1810,9 +1912,10 @@ public class CodeFormatter implements TerminalSymbols {
 	/**
 	 * Set the positions to map. The mapped positions should be retrieved using the
 	 * getMappedPositions() method.
-	 * @see getMappedPositions()
 	 * @param positions int[]
 	 * @deprecated Set the positions to map using the format(String, int, int[]) method.
+	 * 
+	 * @see #getMappedPositions()
 	 */
 	public void setPositionsToMap(int[] positions) {
 		positionsToMap = positions;
@@ -1848,6 +1951,13 @@ public class CodeFormatter implements TerminalSymbols {
 	 * or null if the string cannot be split
 	 */
 	public SplitLine split(String stringToSplit, int offsetInGlobalLine) {
+		/*
+		 * See http://dev.eclipse.org/bugs/show_bug.cgi?id=12540 and
+		 * http://dev.eclipse.org/bugs/show_bug.cgi?id=14387 
+		 */
+		if (stringToSplit.indexOf("//$NON-NLS") != -1) { //$NON-NLS-1$
+			return null;
+		}
 		// local variables
 		int currentToken = 0;
 		int splitTokenType = 0;
@@ -1875,7 +1985,7 @@ public class CodeFormatter implements TerminalSymbols {
 		// to remember the first token of the line
 		int previousToken = -1;
 		// to remember the previous token.
-		splitScanner.setSourceBuffer(stringToSplit.toCharArray());
+		splitScanner.setSource(stringToSplit.toCharArray());
 
 		try {
 			// start the loop
@@ -2376,6 +2486,24 @@ public class CodeFormatter implements TerminalSymbols {
 			mappedPositions[indexInMap] += splitDelta;
 			indexInMap++;
 		}
+	}
+	
+	private int getLength(String s, int tabDepth) {
+		int length = 0;
+		for (int i = 0; i < tabDepth; i++) {
+			length += options.tabSize;
+		}
+		for (int i = 0, max = s.length(); i < max; i++) {
+			char currentChar = s.charAt(i);
+			switch (currentChar) {
+				case '\t' :
+					length += options.tabSize;
+					break;
+				default :
+					length++;
+			}
+		}
+		return length;
 	}
 	
 	/** 

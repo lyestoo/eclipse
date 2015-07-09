@@ -162,7 +162,7 @@ protected void consumeEnterAnonymousClassBody() {
 	}
 	QualifiedAllocationExpression alloc;
 	AnonymousLocalTypeDeclaration anonymousType = 
-		new AnonymousLocalTypeDeclaration(); 
+		new AnonymousLocalTypeDeclaration(this.compilationUnit.compilationResult); 
 	alloc = 
 		anonymousType.allocation = new SelectionOnQualifiedAllocationExpression(anonymousType); 
 	markCurrentMethodWithLocalType();
@@ -223,6 +223,20 @@ protected void consumeEnterVariable() {
 		isOrphanCompletionNode = false; // already attached inside variable decl
 	}
 }
+
+protected void consumeExitVariableWithInitialization() {
+	super.consumeExitVariableWithInitialization();
+	
+	// does not keep the initialization if selection is not inside
+	AbstractVariableDeclaration variable = (AbstractVariableDeclaration) astStack[astPtr];
+	int start = variable.initialization.sourceStart;
+	int end =  variable.initialization.sourceEnd;
+	if ((selectionStart < start) &&  (selectionEnd < start) ||
+		(selectionStart > end) && (selectionEnd > end)) {
+		variable.initialization = null;
+	}
+}
+
 protected void consumeFieldAccess(boolean isSuperAccess) {
 	// FieldAccess ::= Primary '.' 'Identifier'
 	// FieldAccess ::= 'super' '.' 'Identifier'
@@ -253,6 +267,38 @@ protected void consumeFieldAccess(boolean isSuperAccess) {
 		this.lastIgnoredToken = -1;
 	}
 	this.isOrphanCompletionNode = true;	
+}
+protected void consumeFormalParameter() {
+	if (this.indexOfAssistIdentifier() < 0) {
+		super.consumeFormalParameter();
+	} else {
+
+		identifierLengthPtr--;
+		char[] name = identifierStack[identifierPtr];
+		long namePositions = identifierPositionStack[identifierPtr--];
+		TypeReference type = getTypeReference(intStack[intPtr--] + intStack[intPtr--]);
+		intPtr -= 2;
+		Argument arg = 
+			new SelectionOnArgumentName(
+				name, 
+				namePositions, 
+				type, 
+				intStack[intPtr + 1] & ~AccDeprecated); // modifiers
+		pushOnAstStack(arg);
+		
+		assistNode = arg;
+		this.lastCheckPoint = (int) namePositions;
+		isOrphanCompletionNode = true;
+		
+		if (!diet){
+			this.restartRecovery	= true;	// force to restart in recovery mode
+			this.lastIgnoredToken = -1;	
+		}
+
+		/* if incomplete method header, listLength counter will not have been reset,
+			indicating that some arguments are available on the stack */
+		listLength++;
+	} 	
 }
 protected void consumeMethodInvocationName() {
 	// MethodInvocation ::= Name '(' ArgumentListopt ')'
@@ -404,6 +450,20 @@ public ImportReference createAssistImportReference(char[][] tokens, long[] posit
 }
 public ImportReference createAssistPackageReference(char[][] tokens, long[] positions){
 	return new SelectionOnPackageReference(tokens, positions);
+}
+protected LocalDeclaration createLocalDeclaration(Expression initialization,char[] name,int sourceStart,int sourceEnd) {
+	if (this.indexOfAssistIdentifier() < 0) {
+		return super.createLocalDeclaration(initialization, name, sourceStart, sourceEnd);
+	} else {
+		SelectionOnLocalName local = new SelectionOnLocalName(initialization, name, sourceStart, sourceEnd);
+		this.assistNode = local;
+		this.lastCheckPoint = sourceEnd + 1;
+		if (!diet){
+			this.restartRecovery	= true;	// force to restart in recovery mode
+			this.lastIgnoredToken = -1;	
+		}
+		return local;
+	}
 }
 public NameReference createQualifiedAssistNameReference(char[][] previousIdentifiers, char[] name, long[] positions){
 	return new SelectionOnQualifiedNameReference(

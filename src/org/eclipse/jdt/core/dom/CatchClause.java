@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -50,6 +50,13 @@ public class CatchClause extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return CATCH_CLAUSE;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		CatchClause result = new CatchClause(target);
 		result.setBody((Block) getBody().clone(target));
@@ -61,14 +68,9 @@ public class CatchClause extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof CatchClause)) {
-			return false;
-		}
-		CatchClause o = (CatchClause) other;
-		return 
-			(ASTNode.equalNodes(getException(), o.getException())
-			&&ASTNode.equalNodes(getBody(), o.getBody()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -101,9 +103,9 @@ public class CatchClause extends ASTNode {
 	 * Sets the variable declaration of this catch clause.
 	 * 
 	 * @param decl the exception variable declaration node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setException(SingleVariableDeclaration exception) {
 		if (exception == null) {
@@ -132,9 +134,9 @@ public class CatchClause extends ASTNode {
 	 * Sets the body of this catch clause.
 	 * 
 	 * @param body the catch clause block node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setBody(Block body) {
 		if (body == null) {

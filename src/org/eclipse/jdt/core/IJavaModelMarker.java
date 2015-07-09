@@ -1,8 +1,15 @@
+/**********************************************************************
+Copyright (c) 2000, 2001, 2002 IBM Corp. and others.
+All rights reserved.   This program and the accompanying materials
+are made available under the terms of the Common Public License v0.5
+which accompanies this distribution, and is available at
+http://www.eclipse.org/legal/cpl-v05.html
+ 
+Contributors:
+     IBM Corporation - initial API and implementation
+**********************************************************************/
 package org.eclipse.jdt.core;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
+
 import org.eclipse.jdt.internal.core.*;
 
 /**
@@ -25,10 +32,16 @@ public interface IJavaModelMarker {
 	/**
 	 * Java model transient problem marker type (value <code>"org.eclipse.jdt.core.transient_problem"</code>).
 	 * This can be used to recognize those markers in the workspace that flag transcient
-	 * problems detected by the Java tooling (such as a cycle in the build path, a problem
+	 * problems detected by the Java tooling (such as a problem
 	 * detected by the outliner, or a problem detected during a code completion)
 	 */
 	public static final String TRANSIENT_PROBLEM = JavaCore.PLUGIN_ID + ".transient_problem"; //$NON-NLS-1$
+    
+    /** 
+	 * Id marker attribute (value <code>"arguments"</code>).
+	 * Reserved for future use.
+	 */
+	 public static final String ARGUMENTS = "arguments"; //$NON-NLS-1$
     
 	/** 
 	 * Id marker attribute (value <code>"id"</code>).
@@ -44,11 +57,11 @@ public interface IJavaModelMarker {
 
 	/** 
 	 * Cycle detected marker attribute (value <code>"cycleDetected"</code>).
-	 * Used only on transient problem markers.
-	 * The value of this attribute is the name of the project that caused a 
-	 * cycle in the projects classpaths.
+	 * Used only on buildpath problem markers.
+	 * The value of this attribute is either "true" or "false".
 	 */
 	 public static final String CYCLE_DETECTED = "cycleDetected"; //$NON-NLS-1$
+
 	/**
 	 * Build path problem marker type (value <code>"org.eclipse.jdt.core.buildpath_problem"</code>).
 	 * This can be used to recognize those markers in the workspace that flag problems 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -55,6 +55,13 @@ public class QualifiedName extends Name {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return QUALIFIED_NAME;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		QualifiedName result = new QualifiedName(target);
 		result.setQualifier((Name) getQualifier().clone(target));
@@ -65,16 +72,11 @@ public class QualifiedName extends Name {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof QualifiedName)) {
-			return false;
-		}
-		QualifiedName o = (QualifiedName) other;
-		return 
-			(ASTNode.equalNodes(getQualifier(), o.getQualifier())
-			&& ASTNode.equalNodes(getName(), o.getName()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
-	
+
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
@@ -105,9 +107,9 @@ public class QualifiedName extends Name {
 	 * Sets the qualifier of this qualified name to the given name.
 	 * 
 	 * @param the qualifier of this qualified name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setQualifier(Name qualifier) {
 		if (qualifier == null) {
@@ -135,8 +137,8 @@ public class QualifiedName extends Name {
 	 * Sets the name part of this qualified name to the given simple name.
 	 * 
 	 * @param name the identifier of this qualified name
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
 	 */ 
 	public void setName(SimpleName name) {
 		if (name == null) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 IBM Corporation and others.
+ * Copyright (c) 2001 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -58,6 +58,13 @@ public class ConditionalExpression extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
+	public int getNodeType() {
+		return CONDITIONAL_EXPRESSION;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
 	ASTNode clone(AST target) {
 		ConditionalExpression result = new ConditionalExpression(target);
 		result.setExpression((Expression) getExpression().clone(target));
@@ -71,15 +78,9 @@ public class ConditionalExpression extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	boolean equalSubtrees(Object other) {
-		if (!(other instanceof ConditionalExpression)) {
-			return false;
-		}
-		ConditionalExpression o = (ConditionalExpression) other;
-		return 
-			(ASTNode.equalNodes(getExpression(), o.getExpression())
-			&& ASTNode.equalNodes(getThenExpression(), o.getThenExpression())
-			&& ASTNode.equalNodes(getElseExpression(), o.getElseExpression()));
+	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+		// dispatch to correct overloaded match method
+		return matcher.match(this, other);
 	}
 
 	/* (omit javadoc for this method)
@@ -113,9 +114,9 @@ public class ConditionalExpression extends Expression {
 	 * Sets the condition of this conditional expression.
 	 * 
 	 * @param expression the condition node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setExpression(Expression expression) {
 		if (expression == null) {
@@ -144,9 +145,9 @@ public class ConditionalExpression extends Expression {
 	 * Sets the "then" part of this conditional expression.
 	 * 
 	 * @param expression the "then" expression node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setThenExpression(Expression expression) {
 		if (expression == null) {
@@ -175,9 +176,9 @@ public class ConditionalExpression extends Expression {
 	 * Sets the "else" part of this conditional expression.
 	 * 
 	 * @param expression the "else" expression node
-	 * @exception $precondition-violation:different-ast$
-	 * @exception $precondition-violation:not-unparented$
-	 * @exception $postcondition-violation:ast-cycle$
+	 * @exception IllegalArgumentException if the node belongs to a different AST
+	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if a cycle in would be created
 	 */ 
 	public void setElseExpression(Expression expression) {
 		if (expression == null) {
