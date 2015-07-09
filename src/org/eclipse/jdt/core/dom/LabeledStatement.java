@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Labeled statement AST node type.
@@ -22,6 +25,50 @@ package org.eclipse.jdt.core.dom;
  * @since 2.0
  */
 public class LabeledStatement extends Statement {
+			
+	/**
+	 * The "label" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor LABEL_PROPERTY = 
+		new ChildPropertyDescriptor(LabeledStatement.class, "label", SimpleName.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "body" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor BODY_PROPERTY = 
+		new ChildPropertyDescriptor(LabeledStatement.class, "body", Statement.class, MANDATORY, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List propertyList = new ArrayList(3);
+		createPropertyList(LabeledStatement.class, propertyList);
+		addProperty(LABEL_PROPERTY, propertyList);
+		addProperty(BODY_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(propertyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
 			
 	/**
 	 * The label; lazily initialized; defaults to a unspecified,
@@ -52,14 +99,45 @@ public class LabeledStatement extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == LABEL_PROPERTY) {
+			if (get) {
+				return getLabel();
+			} else {
+				setLabel((SimpleName) child);
+				return null;
+			}
+		}
+		if (property == BODY_PROPERTY) {
+			if (get) {
+				return getBody();
+			} else {
+				setBody((Statement) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return LABELED_STATEMENT;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		LabeledStatement result = new LabeledStatement(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLabel(
@@ -72,7 +150,7 @@ public class LabeledStatement extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -96,13 +174,17 @@ public class LabeledStatement extends Statement {
 	 * @return the variable name node
 	 */ 
 	public SimpleName getLabel() {
-		if (labelName == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setLabel(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.labelName == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.labelName == null) {
+					preLazyInit();
+					this.labelName= new SimpleName(this.ast);
+					postLazyInit(this.labelName, LABEL_PROPERTY);
+				}
+			}
 		}
-		return labelName;
+		return this.labelName;
 	}
 		
 	/**
@@ -119,8 +201,10 @@ public class LabeledStatement extends Statement {
 		if (label == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.labelName, label, false);
+		ASTNode oldChild = this.labelName;
+		preReplaceChild(oldChild, label, LABEL_PROPERTY);
 		this.labelName = label;
+		postReplaceChild(oldChild, label, LABEL_PROPERTY);
 	}
 	
 	/**
@@ -129,17 +213,29 @@ public class LabeledStatement extends Statement {
 	 * @return the body statement node
 	 */ 
 	public Statement getBody() {
-		if (body == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setBody(new EmptyStatement(getAST()));
-			getAST().setModificationCount(count);
+		if (this.body == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.body == null) {
+					preLazyInit();
+					this.body= new EmptyStatement(this.ast);
+					postLazyInit(this.body, BODY_PROPERTY);
+				}
+			}
 		}
-		return body;
+		return this.body;
 	}
 	
 	/**
 	 * Sets the body of this labeled statement.
+	 * <p>
+	 * Special note: The Java language does not allow a local variable declaration
+	 * to appear as the body of a labeled statement (they may only appear within a
+	 * block). However, the AST will allow a <code>VariableDeclarationStatement</code>
+	 * as the body of a <code>LabeledStatement</code>. To get something that will
+	 * compile, be sure to embed the <code>VariableDeclarationStatement</code>
+	 * inside a <code>Block</code>.
+	 * </p>
 	 * 
 	 * @param statement the body statement node
 	 * @exception IllegalArgumentException if:
@@ -153,9 +249,10 @@ public class LabeledStatement extends Statement {
 		if (statement == null) {
 			throw new IllegalArgumentException();
 		}
-		// a LabeledStatement may occur inside a Statement - must check cycles
-		replaceChild(this.body, statement, true);
+		ASTNode oldChild = this.body;
+		preReplaceChild(oldChild, statement, BODY_PROPERTY);
 		this.body = statement;
+		postReplaceChild(oldChild, statement, BODY_PROPERTY);
 	}
 	
 	/* (omit javadoc for this method)
@@ -171,8 +268,8 @@ public class LabeledStatement extends Statement {
 	int treeSize() {
 		return
 			memSize()
-			+ (labelName == null ? 0 : getLabel().treeSize())
-			+ (body == null ? 0 : getBody().treeSize());
+			+ (this.labelName == null ? 0 : getLabel().treeSize())
+			+ (this.body == null ? 0 : getBody().treeSize());
 	}
 }
 

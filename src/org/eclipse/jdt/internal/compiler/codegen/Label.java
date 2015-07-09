@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -23,6 +23,7 @@ public class Label {
 	public int[] forwardReferences = new int[10]; // Add an overflow check here.
 	public int forwardReferenceCount = 0;
 	private boolean isWide = false;
+	
 public Label() {
 	// for creating labels ahead of code generation
 }
@@ -57,7 +58,7 @@ public void appendForwardReferencesFrom(Label otherLabel) {
 	forwardReferenceCount = neededSpace;
 }
 /*
-* Put down  a refernece to the array at the location in the codestream.
+* Put down  a reference to the array at the location in the codestream.
 */
 void branch() {
 	if (position == POS_NOT_SET) {
@@ -71,7 +72,7 @@ void branch() {
 		 */
 		int offset = position - codeStream.position + 1;
 		if (Math.abs(offset) > 0x7FFF && !this.codeStream.wideMode) {
-			throw new AbortMethod(CodeStream.RESTART_IN_WIDE_MODE);
+			throw new AbortMethod(CodeStream.RESTART_IN_WIDE_MODE, null);
 		}
 		codeStream.writeSignedShort(offset);
 	}
@@ -100,6 +101,7 @@ public boolean hasForwardReferences() {
  * Some placed labels might be branching to a goto bytecode which we can optimize better.
  */
 public void inlineForwardReferencesFromLabelsTargeting(int gotoLocation) {
+	
 /*
  Code required to optimized unreachable gotos.
 	public boolean isBranchTarget(int location) {
@@ -128,6 +130,11 @@ public void inlineForwardReferencesFromLabelsTargeting(int gotoLocation) {
 		}
 	}
 }
+public void initialize(CodeStream stream) {
+    this.codeStream = stream;
+   	this.position = POS_NOT_SET;
+	this.forwardReferenceCount = 0; 
+}
 public boolean isStandardLabel(){
 	return true;
 }
@@ -135,6 +142,8 @@ public boolean isStandardLabel(){
 * Place the label. If we have forward references resolve them.
 */
 public void place() { // Currently lacking wide support.
+	if (CodeStream.DEBUG) System.out.println("\t\t\t\t<place at: "+codeStream.position+" - "+ this); //$NON-NLS-1$ //$NON-NLS-2$
+
 	if (position == POS_NOT_SET) {
 		position = codeStream.position;
 		codeStream.addLabel(this);
@@ -184,7 +193,7 @@ public void place() { // Currently lacking wide support.
 		for (int i = 0; i < forwardReferenceCount; i++) {
 			int offset = position - forwardReferences[i] + 1;
 			if (Math.abs(offset) > 0x7FFF && !this.codeStream.wideMode) {
-				throw new AbortMethod(CodeStream.RESTART_IN_WIDE_MODE);
+				throw new AbortMethod(CodeStream.RESTART_IN_WIDE_MODE, null);
 			}
 			if (this.codeStream.wideMode) {
 				if (this.isWide) {
@@ -215,7 +224,7 @@ public void place() { // Currently lacking wide support.
 							int forwardPosition = label.forwardReferences[j];
 							int offset = position - forwardPosition + 1;
 							if (Math.abs(offset) > 0x7FFF && !this.codeStream.wideMode) {
-								throw new AbortMethod(CodeStream.RESTART_IN_WIDE_MODE);
+								throw new AbortMethod(CodeStream.RESTART_IN_WIDE_MODE, null);
 							}
 							if (this.codeStream.wideMode) {
 								if (this.isWide) {
@@ -237,8 +246,11 @@ public void place() { // Currently lacking wide support.
  * Print out the receiver
  */
 public String toString() {
-	StringBuffer buffer = new StringBuffer("(position="); //$NON-NLS-1$
-	buffer.append(position);
+	String basic = getClass().getName();
+	basic = basic.substring(basic.lastIndexOf('.')+1);
+	StringBuffer buffer = new StringBuffer(basic); 
+	buffer.append('@').append(Integer.toHexString(hashCode()));
+	buffer.append("(position=").append(position); //$NON-NLS-1$
 	buffer.append(", forwards = ["); //$NON-NLS-1$
 	for (int i = 0; i < forwardReferenceCount - 1; i++)
 		buffer.append(forwardReferences[i] + ", "); //$NON-NLS-1$
@@ -246,10 +258,5 @@ public String toString() {
 		buffer.append(forwardReferences[forwardReferenceCount-1]);
 	buffer.append("] )"); //$NON-NLS-1$
 	return buffer.toString();
-}
-
-public void resetStateForCodeGeneration() {
-	this.position = POS_NOT_SET;
-	this.forwardReferenceCount = 0;
 }
 }

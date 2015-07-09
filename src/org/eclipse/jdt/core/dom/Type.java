@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,14 +13,20 @@ package org.eclipse.jdt.core.dom;
 
 /**
  * Abstract base class of all type AST node types. A type node represents a 
- * reference to a primitive type (including void), to a named class or 
- * interface type, or to an array type.
+ * reference to a primitive type (including void), to an array type, or to a
+ * simple named type (or type variable), to a qualified type, to a
+ * parameterized type, or to a wildcard type. Note that not all of these
+ * are meaningful in all contexts; for example, a wildcard type is only
+ * meaningful in the type argument position of a parameterized type.
  * <p>
  * <pre>
  * Type:
  *    PrimitiveType
- *    SimpleType
  *    ArrayType
+ *    SimpleType
+ *    QualifiedType
+ *    ParameterizedType
+ *    WildcardType
  * PrimitiveType:
  *    <b>byte</b>
  *    <b>short</b>
@@ -31,10 +37,16 @@ package org.eclipse.jdt.core.dom;
  *    <b>double</b>
  *    <b>boolean</b>
  *    <b>void</b>
- * SimpleType:
- *    TypeName
  * ArrayType:
  *    Type <b>[</b> <b>]</b>
+ * SimpleType:
+ *    TypeName
+ * ParameterizedType:
+ *    Type <b>&lt;</b> Type { <b>,</b> Type } <b>&gt;</b>
+ * QualifiedType:
+ *    Type <b>.</b> SimpleName
+ * WildcardType:
+ *    <b>?</b> [ ( <b>extends</b> | <b>super</b>) Type ] 
  * </pre>
  * </p>
  * 
@@ -88,6 +100,62 @@ public abstract class Type extends ASTNode {
 	}
 
 	/**
+	 * Returns whether this type is a parameterized type
+	 * (<code>ParameterizedType</code>). 
+	 * 
+	 * @return <code>true</code> if this is a parameterized type, and 
+	 *    <code>false</code> otherwise
+	 * @since 3.0
+	 */
+	public final boolean isParameterizedType() {
+		return (this instanceof ParameterizedType);
+	}
+
+	/**
+	 * Returns whether this type is a qualified type
+	 * (<code>QualifiedType</code>). 
+	 * <p>
+	 * Note that a type like "A.B" can be represented either of two ways:
+	 * <ol>
+	 * <li>
+	 * <code>QualifiedType(SimpleType(SimpleName("A")),SimpleName("B"))</code>
+	 * </li>
+	 * <li>
+	 * <code>SimpleType(QualifiedName(SimpleName("A"),SimpleName("B")))</code>
+	 * </li>
+	 * </ol>
+	 * The first form is preferred when "A" is known to be a type. However, a 
+	 * parser cannot always determine this. Clients should be prepared to handle
+	 * either rather than make assumptions. (Note also that the first form
+	 * became possible as of JLS3; only the second form existed in the 
+	 * JLS2 API.)
+	 * </p>
+	 * 
+	 * @return <code>true</code> if this is a qualified type, and 
+	 *    <code>false</code> otherwise
+	 * @since 3.0
+	 */
+	public final boolean isQualifiedType() {
+		return (this instanceof QualifiedType);
+	}
+
+	/**
+	 * Returns whether this type is a wildcard type
+	 * (<code>WildcardType</code>).
+	 * <p>
+	 * Note that a wildcard type is only meaningful as a 
+	 * type argument of a <code>ParameterizedType</code> node.
+	 * </p>
+	 * 
+	 * @return <code>true</code> if this is a wildcard type, and 
+	 *    <code>false</code> otherwise
+	 * @since 3.0
+	 */
+	public final boolean isWildcardType() {
+		return (this instanceof WildcardType);
+	}
+
+	/**
 	 * Resolves and returns the binding for this type.
 	 * <p>
 	 * Note that bindings are generally unavailable unless requested when the
@@ -98,33 +166,6 @@ public abstract class Type extends ASTNode {
 	 *    resolved
 	 */	
 	public final ITypeBinding resolveBinding() {
-		return getAST().getBindingResolver().resolveType(this);
+		return this.ast.getBindingResolver().resolveType(this);
 	}
-	
-// JSR-014
-//	/**
-//	 * Returns whether this type is a parameterized type 
-//   * (<code>ParameterizedType</code>).
-//	 * 
-//	 * @return <code>true</code> if this is a parameterized type, and 
-//	 *    <code>false</code> otherwise
-//	 */
-//	public final boolean isParameterizedType() {
-//		return (this instanceof ParameterizedType);
-//	}
-
-//	public IBinding resolvedType();
 }
-
-//// JSR-014
-//public class ParameterizedType extends Type {
-//	public ParameterizedType(AST ast) {
-//		super(ast);
-//	}
-//
-//	public Type getGenericType();
-//	public void setGenericType(Type genericType);
-//
-//	public NodeList<Type> parameters();
-//}
-

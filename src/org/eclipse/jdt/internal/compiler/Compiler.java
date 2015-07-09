@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -181,6 +181,15 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 	 * Add an additional binary type
 	 */
 	public void accept(IBinaryType binaryType, PackageBinding packageBinding) {
+		if (options.verbose) {
+			System.out.println(
+				Util.bind(
+					"compilation.loadBinary" , //$NON-NLS-1$
+					new String[] {
+						new String(binaryType.getName())}));
+//			new Exception("TRACE BINARY").printStackTrace(System.out);
+//		    System.out.println();
+		}
 		lookupEnvironment.createBinaryTypeFrom(binaryType, packageBinding);
 	}
 
@@ -193,14 +202,6 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 		CompilationResult unitResult =
 			new CompilationResult(sourceUnit, totalUnits, totalUnits, this.options.maxProblemsPerUnit);
 		try {
-			// diet parsing for large collection of unit
-			CompilationUnitDeclaration parsedUnit;
-			if (totalUnits < parseThreshold) {
-				parsedUnit = parser.parse(sourceUnit, unitResult);
-			} else {
-				parsedUnit = parser.dietParse(sourceUnit, unitResult);
-			}
-
 			if (options.verbose) {
 				String count = String.valueOf(totalUnits + 1);
 				System.out.println(
@@ -211,7 +212,13 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 							count,
 							new String(sourceUnit.getFileName())}));
 			}
-
+			// diet parsing for large collection of unit
+			CompilationUnitDeclaration parsedUnit;
+			if (totalUnits < parseThreshold) {
+				parsedUnit = parser.parse(sourceUnit, unitResult);
+			} else {
+				parsedUnit = parser.dietParse(sourceUnit, unitResult);
+			}
 			// initial type binding creation
 			lookupEnvironment.buildTypeBindings(parsedUnit);
 			this.addCompilationUnit(sourceUnit, parsedUnit);
@@ -272,12 +279,6 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			CompilationResult unitResult =
 				new CompilationResult(sourceUnits[i], i, maxUnits, this.options.maxProblemsPerUnit);
 			try {
-				// diet parsing for large collection of units
-				if (totalUnits < parseThreshold) {
-					parsedUnit = parser.parse(sourceUnits[i], unitResult);
-				} else {
-					parsedUnit = parser.dietParse(sourceUnits[i], unitResult);
-				}
 				if (options.verbose) {
 					System.out.println(
 						Util.bind(
@@ -286,6 +287,12 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 								String.valueOf(i + 1),
 								String.valueOf(maxUnits),
 								new String(sourceUnits[i].getFileName())}));
+				}
+				// diet parsing for large collection of units
+				if (totalUnits < parseThreshold) {
+					parsedUnit = parser.parse(sourceUnits[i], unitResult);
+				} else {
+					parsedUnit = parser.dietParse(sourceUnits[i], unitResult);
 				}
 				// initial type binding creation
 				lookupEnvironment.buildTypeBindings(parsedUnit);
@@ -329,15 +336,15 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 				} finally {
 					// cleanup compilation unit result
 					unit.cleanUp();
-					if (options.verbose)
-						System.out.println(Util.bind("compilation.done", //$NON-NLS-1$
-					new String[] {
-						String.valueOf(i + 1),
-						String.valueOf(totalUnits),
-						new String(unitsToProcess[i].getFileName())}));
 				}
 				unitsToProcess[i] = null; // release reference to processed unit declaration
 				requestor.acceptResult(unit.compilationResult.tagAsAccepted());
+				if (options.verbose)
+					System.out.println(Util.bind("compilation.done", //$NON-NLS-1$
+				new String[] {
+					String.valueOf(i + 1),
+					String.valueOf(totalUnits),
+					new String(unit.getFileName())}));
 			}
 		} catch (AbortCompilation e) {
 			this.handleInternalException(e, unit);
@@ -400,9 +407,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 						Error, // severity
 						0, // source start
 						0, // source end
-						0, // line number		
-						unit,
-						result),
+						0), // line number		
 					unit);
 
 			/* hand back the compilation result */
@@ -428,9 +433,8 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 		if (abortException.isSilent) {
 			if (abortException.silentException == null) {
 				return;
-			} else {
-				throw abortException.silentException;
 			}
+			throw abortException.silentException;
 		}
 
 		/* uncomment following line to see where the abort came from */
@@ -438,29 +442,32 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 
 		// Exception may tell which compilation result it is related, and which problem caused it
 		CompilationResult result = abortException.compilationResult;
-		if ((result == null) && (unit != null))
+		if ((result == null) && (unit != null)) {
 			result = unit.compilationResult; // current unit being processed ?
+		}
+		// Lookup environment may be in middle of connecting types
+		if ((result == null) && lookupEnvironment.unitBeingCompleted != null) {
+		    result = lookupEnvironment.unitBeingCompleted.compilationResult;
+		}
 		if ((result == null) && (unitsToProcess != null) && (totalUnits > 0))
 			result = unitsToProcess[totalUnits - 1].compilationResult;
 		// last unit in beginToCompile ?
 		if (result != null && !result.hasBeenAccepted) {
-			/* distant problem which could not be reported back there */
-			if (abortException.problemId != 0) {
-				result
-					.record(
-						problemReporter
-						.createProblem(
-							result.getFileName(),
-							abortException.problemId,
-							abortException.problemArguments,
-							abortException.messageArguments,
-							Error, // severity
-							0, // source start
-							0, // source end
-							0, // line number		
-							unit,
-							result),
-						unit);				
+			/* distant problem which could not be reported back there? */
+			if (abortException.problem != null) {
+				recordDistantProblem: {
+					IProblem distantProblem = abortException.problem;
+					IProblem[] knownProblems = result.problems;
+					for (int i = 0; i < result.problemCount; i++) {
+						if (knownProblems[i] == distantProblem) { // already recorded
+							break recordDistantProblem;
+						}
+					}
+					if (distantProblem instanceof DefaultProblem) { // fixup filename TODO (philippe) should improve API to make this official
+						((DefaultProblem) distantProblem).setOriginatingFileName(result.getFileName());
+					}
+					result	.record(distantProblem, unit);
+				}
 			} else {
 				/* distant internal exception which could not be reported back there */
 				if (abortException.exception != null) {
@@ -473,20 +480,6 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 				requestor.acceptResult(result.tagAsAccepted());
 			}
 		} else {
-			/*
-			if (abortException.problemId != 0){ 
-				IProblem problem =
-					problemReporter.createProblem(
-						"???".toCharArray(),
-						abortException.problemId, 
-						abortException.problemArguments, 
-						Error, // severity
-						0, // source start
-						0, // source end
-						0); // line number
-				System.out.println(problem.getMessage());
-			}
-			*/
 			abortException.printStackTrace();
 		}
 	}

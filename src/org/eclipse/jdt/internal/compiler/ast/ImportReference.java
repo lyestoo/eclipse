@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,10 +10,10 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
-public class ImportReference extends AstNode {
+public class ImportReference extends ASTNode {
 
 	public char[][] tokens;
 	public long[] sourcePositions; //each entry is using the code : (start<<32) + end
@@ -23,6 +23,7 @@ public class ImportReference extends AstNode {
 	public int declarationSourceEnd;
 	public boolean used;
 	public int modifiers; // 1.5 addition for static imports
+	public Annotation[] annotations;
 
 	public ImportReference(
 			char[][] tokens,
@@ -64,9 +65,14 @@ public class ImportReference extends AstNode {
 		return output;
 	}
 
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, CompilationUnitScope scope) {
+	public void traverse(ASTVisitor visitor, CompilationUnitScope scope) {
 
 		visitor.visit(this, scope);
+		if (this.annotations != null) {
+			int annotationsLength = this.annotations.length;
+			for (int i = 0; i < annotationsLength; i++)
+				this.annotations[i].traverse(visitor, scope);
+		}
 		visitor.endVisit(this, scope);
 	}
 }

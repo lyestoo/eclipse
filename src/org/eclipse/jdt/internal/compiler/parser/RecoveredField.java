@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,9 +13,8 @@ package org.eclipse.jdt.internal.compiler.parser;
 /**
  * Internal field structure for parsing recovery 
  */
-import org.eclipse.jdt.internal.compiler.ast.AnonymousLocalTypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ArrayTypeReference;
-import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.Expression;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Statement;
@@ -60,7 +59,7 @@ public RecoveredElement add(Statement statement, int bracketBalanceValue) {
 public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalanceValue) {
 
 	if (this.alreadyCompletedFieldInitialization 
-			|| !(typeDeclaration instanceof AnonymousLocalTypeDeclaration)
+			|| ((typeDeclaration.bits & ASTNode.IsAnonymousTypeMASK) == 0)
 			|| (this.fieldDeclaration.declarationSourceEnd != 0 && typeDeclaration.sourceStart > this.fieldDeclaration.declarationSourceEnd)) {
 		return super.add(typeDeclaration, bracketBalanceValue);
 	} else { 
@@ -87,7 +86,7 @@ public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalanceV
 /* 
  * Answer the associated parsed structure
  */
-public AstNode parseTree(){
+public ASTNode parseTree(){
 	return fieldDeclaration;
 }
 /*
@@ -99,7 +98,7 @@ public int sourceEnd(){
 public String toString(int tab){
 	StringBuffer buffer = new StringBuffer(tabString(tab));
 	buffer.append("Recovered field:\n"); //$NON-NLS-1$
-	buffer.append(fieldDeclaration.print(tab + 1, buffer));
+	fieldDeclaration.print(tab + 1, buffer);
 	if (this.anonymousTypes != null) {
 		for (int i = 0; i < this.anonymousTypeCount; i++){
 			buffer.append("\n"); //$NON-NLS-1$
@@ -113,11 +112,10 @@ public FieldDeclaration updatedFieldDeclaration(){
 	if (this.anonymousTypes != null && fieldDeclaration.initialization == null) {
 		for (int i = 0; i < this.anonymousTypeCount; i++){
 			if (anonymousTypes[i].preserveContent){
-				fieldDeclaration.initialization = 
-					((AnonymousLocalTypeDeclaration)this.anonymousTypes[i].updatedTypeDeclaration()).allocation;
+				fieldDeclaration.initialization = this.anonymousTypes[i].updatedTypeDeclaration().allocation;
 			}
 		}
-		if (this.anonymousTypeCount > 0) fieldDeclaration.bits |= AstNode.HasLocalTypeMASK;
+		if (this.anonymousTypeCount > 0) fieldDeclaration.bits |= ASTNode.HasLocalTypeMASK;
 	}
 	return fieldDeclaration;
 }
@@ -132,6 +130,9 @@ public RecoveredElement updateOnClosingBrace(int braceStart, int braceEnd){
 		bracketBalance--;
 		if (bracketBalance == 0) alreadyCompletedFieldInitialization = true;
 		return this;
+	} else if (bracketBalance == 0) {
+		alreadyCompletedFieldInitialization = true;
+		updateSourceEndIfNecessary(braceEnd - 1);
 	}
 	if (parent != null){
 		return parent.updateOnClosingBrace(braceStart, braceEnd);

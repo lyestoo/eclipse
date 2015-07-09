@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Field access expression AST node type.
@@ -39,7 +42,7 @@ package org.eclipse.jdt.core.dom;
  *   expression (<code>FieldAccess</code>) containing simple names. Either
  *   is acceptable, and there is no way to choose between them without
  *   information about what the names resolve to
- *   (<code>AST.parseCompilationUnit</code> may return either).</li>
+ *   (<code>ASTParser</code> may return either).</li>
  *   <li>Other expressions ending in an identifier, such as "foo().bar" can
  *   only be represented as field access expressions
  *   (<code>FieldAccess</code>).</li>
@@ -53,6 +56,50 @@ package org.eclipse.jdt.core.dom;
  */
 public class FieldAccess extends Expression {
 	
+	/**
+	 * The "expression" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor EXPRESSION_PROPERTY = 
+		new ChildPropertyDescriptor(FieldAccess.class, "expression", Expression.class, MANDATORY, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "name" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor NAME_PROPERTY = 
+		new ChildPropertyDescriptor(FieldAccess.class, "name", SimpleName.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List properyList = new ArrayList(3);
+		createPropertyList(FieldAccess.class, properyList);
+		addProperty(EXPRESSION_PROPERTY, properyList);
+		addProperty(NAME_PROPERTY, properyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(properyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/**
 	 * The expression; lazily initialized; defaults to an unspecified,
 	 * but legal, simple name.
@@ -82,14 +129,45 @@ public class FieldAccess extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == EXPRESSION_PROPERTY) {
+			if (get) {
+				return getExpression();
+			} else {
+				setExpression((Expression) child);
+				return null;
+			}
+		}
+		if (property == NAME_PROPERTY) {
+			if (get) {
+				return getName();
+			} else {
+				setName((SimpleName) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return FIELD_ACCESS;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		FieldAccess result = new FieldAccess(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setExpression((Expression) getExpression().clone(target));
@@ -100,7 +178,7 @@ public class FieldAccess extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -124,13 +202,17 @@ public class FieldAccess extends Expression {
 	 * @return the expression node
 	 */ 
 	public Expression getExpression() {
-		if (expression == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setExpression(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.expression == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.expression == null) {
+					preLazyInit();
+					this.expression = new SimpleName(this.ast);
+					postLazyInit(this.expression, EXPRESSION_PROPERTY);
+				}
+			}
 		}
-		return expression;
+		return this.expression;
 	}
 		
 	/**
@@ -148,9 +230,10 @@ public class FieldAccess extends Expression {
 		if (expression == null) {
 			throw new IllegalArgumentException();
 		}
-		// a FieldAccess may occur inside an Expression - must check cycles
-		replaceChild(this.expression, expression, true);
+		ASTNode oldChild = this.expression;
+		preReplaceChild(oldChild, expression, EXPRESSION_PROPERTY);
 		this.expression = expression;
+		postReplaceChild(oldChild, expression, EXPRESSION_PROPERTY);
 	}
 
 	/**
@@ -159,13 +242,17 @@ public class FieldAccess extends Expression {
 	 * @return the field name
 	 */ 
 	public SimpleName getName() {
-		if (fieldName == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setName(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.fieldName == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.fieldName == null) {
+					preLazyInit();
+					this.fieldName = new SimpleName(this.ast);
+					postLazyInit(this.fieldName, NAME_PROPERTY);
+				}
+			}
 		}
-		return fieldName;
+		return this.fieldName;
 	}
 		
 	/**
@@ -182,9 +269,10 @@ public class FieldAccess extends Expression {
 		if (fieldName == null) {
 			throw new IllegalArgumentException();
 		}
-		// a FieldAccess cannot occur inside a SimpleName
-		replaceChild(this.fieldName, fieldName, false);
+		ASTNode oldChild = this.fieldName;
+		preReplaceChild(oldChild, fieldName, NAME_PROPERTY);
 		this.fieldName = fieldName;
+		postReplaceChild(oldChild, fieldName, NAME_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)
@@ -208,7 +296,7 @@ public class FieldAccess extends Expression {
 	 * @since 3.0
 	 */
 	public IVariableBinding resolveFieldBinding() {
-		return getAST().getBindingResolver().resolveField(this);
+		return this.ast.getBindingResolver().resolveField(this);
 	}
 	
 	/* (omit javadoc for this method)
@@ -217,8 +305,8 @@ public class FieldAccess extends Expression {
 	int treeSize() {
 		return 
 			memSize()
-			+ (expression == null ? 0 : getExpression().treeSize())
-			+ (fieldName == null ? 0 : getName().treeSize());
+			+ (this.expression == null ? 0 : getExpression().treeSize())
+			+ (this.fieldName == null ? 0 : getName().treeSize());
 	}
 }
 

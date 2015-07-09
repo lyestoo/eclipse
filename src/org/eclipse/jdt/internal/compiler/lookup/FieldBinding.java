@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,14 +16,12 @@ import org.eclipse.jdt.internal.compiler.impl.Constant;
 public class FieldBinding extends VariableBinding {
 	public ReferenceBinding declaringClass;
 protected FieldBinding() {
+	super(null, null, 0, null);
 	// for creating problem field
 }
 public FieldBinding(char[] name, TypeBinding type, int modifiers, ReferenceBinding declaringClass, Constant constant) {
-	this.modifiers = modifiers;
-	this.type = type;
-	this.name = name;
+	super(name, type, modifiers, constant);
 	this.declaringClass = declaringClass;
-	this.constant = constant;
 
 	// propagate the deprecated modifier
 	if (this.declaringClass != null)
@@ -36,11 +34,8 @@ public FieldBinding(FieldDeclaration field, TypeBinding type, int modifiers, Ref
 }
 // special API used to change field declaring class for runtime visibility check
 public FieldBinding(FieldBinding initialFieldBinding, ReferenceBinding declaringClass) {
-	this.modifiers = initialFieldBinding.modifiers;
-	this.type = initialFieldBinding.type;
-	this.name = initialFieldBinding.name;
+	super(initialFieldBinding.name, initialFieldBinding.type, initialFieldBinding.modifiers, initialFieldBinding.constant());
 	this.declaringClass = declaringClass;
-	this.constant = initialFieldBinding.constant;
 	this.id = initialFieldBinding.id;
 }
 /* API
@@ -84,6 +79,7 @@ public final boolean canBeSeenBy(TypeBinding receiverType, InvocationSite invoca
 					return false;
 				}
 				if (isStatic()){
+					if (depth > 0) invocationSite.setDepth(depth);
 					return true; // see 1FMEPDL - return invocationSite.isTypeAccess();
 				}
 				if (currentType == receiverType || currentType.isSuperclassOf((ReferenceBinding) receiverType)){
@@ -110,7 +106,7 @@ public final boolean canBeSeenBy(TypeBinding receiverType, InvocationSite invoca
 				temp = temp.enclosingType();
 			}
 
-			ReferenceBinding outerDeclaringClass = declaringClass;
+			ReferenceBinding outerDeclaringClass = (ReferenceBinding)declaringClass.erasure();
 			temp = outerDeclaringClass.enclosingType();
 			while (temp != null) {
 				outerDeclaringClass = temp;
@@ -135,6 +131,15 @@ public final boolean canBeSeenBy(TypeBinding receiverType, InvocationSite invoca
 	} while ((currentType = currentType.superclass()) != null);
 	return false;
 }
+
+/**
+ * X<T> t   -->  LX<TT;>;
+ */
+public char[] genericSignature() {
+    if ((this.modifiers & AccGenericSignature) == 0) return null;
+    return this.type.genericTypeSignature();
+}
+
 public final int getAccessFlags() {
 	return modifiers & AccJustFlag;
 }
@@ -205,5 +210,11 @@ public final boolean isViewedAsDeprecated() {
 
 public final boolean isVolatile() {
 	return (modifiers & AccVolatile) != 0;
+}
+/**
+ * Returns the original field (as opposed to parameterized instances)
+ */
+public FieldBinding original() {
+	return this;
 }
 }

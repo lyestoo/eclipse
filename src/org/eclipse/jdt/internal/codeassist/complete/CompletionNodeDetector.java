@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -17,12 +17,12 @@ import org.eclipse.jdt.internal.compiler.lookup.*;
 /**
  * Detect the presence of a node in expression
  */
-public class CompletionNodeDetector extends AbstractSyntaxTreeVisitorAdapter {
-	private AstNode searchedNode;
-	private AstNode parent;
+public class CompletionNodeDetector extends ASTVisitor {
+	private ASTNode searchedNode;
+	private ASTNode parent;
 	private boolean result;
 	
-	public CompletionNodeDetector(AstNode searchedNode, AstNode visitedAst){
+	public CompletionNodeDetector(ASTNode searchedNode, ASTNode visitedAst){
 		this.searchedNode = searchedNode;
 		this.result = false;
 		
@@ -35,7 +35,7 @@ public class CompletionNodeDetector extends AbstractSyntaxTreeVisitorAdapter {
 		return result;
 	}
 	
-	public AstNode getCompletionNodeParent() {
+	public ASTNode getCompletionNodeParent() {
 		return parent;
 	}
 	public void endVisit(AllocationExpression allocationExpression, BlockScope scope) {
@@ -97,6 +97,18 @@ public class CompletionNodeDetector extends AbstractSyntaxTreeVisitorAdapter {
 	}
 	public void endVisit(OR_OR_Expression or_or_Expression, BlockScope scope) {
 		endVisit(or_or_Expression);
+	}
+	public void endVisit(ParameterizedQualifiedTypeReference parameterizedQualifiedTypeReference, BlockScope scope) {
+		endVisit(parameterizedQualifiedTypeReference);
+	}
+	public void endVisit(ParameterizedQualifiedTypeReference parameterizedQualifiedTypeReference, ClassScope scope) {
+		endVisit(parameterizedQualifiedTypeReference);
+	}
+	public void endVisit(ParameterizedSingleTypeReference parameterizedSingleTypeReference, BlockScope scope) {
+		endVisit(parameterizedSingleTypeReference);
+	}
+	public void endVisit(ParameterizedSingleTypeReference parameterizedSingleTypeReference, ClassScope scope) {
+		endVisit(parameterizedSingleTypeReference);
 	}
 	public void endVisit(PostfixExpression postfixExpression, BlockScope scope) {
 		endVisit(postfixExpression);
@@ -200,6 +212,18 @@ public class CompletionNodeDetector extends AbstractSyntaxTreeVisitorAdapter {
 	public boolean visit(OR_OR_Expression or_or_Expression, BlockScope scope) {
 		return this.visit(or_or_Expression);
 	}
+	public boolean visit(ParameterizedQualifiedTypeReference parameterizedQualifiedTypeReference, BlockScope scope) {
+		return this.visit(parameterizedQualifiedTypeReference);
+	}
+	public boolean visit(ParameterizedQualifiedTypeReference parameterizedQualifiedTypeReference, ClassScope scope) {
+		return this.visit(parameterizedQualifiedTypeReference);
+	}
+	public boolean visit(ParameterizedSingleTypeReference parameterizedSingleTypeReference, BlockScope scope) {
+		return this.visit(parameterizedSingleTypeReference);
+	}
+	public boolean visit(ParameterizedSingleTypeReference parameterizedSingleTypeReference, ClassScope scope) {
+		return this.visit(parameterizedSingleTypeReference);
+	}
 	public boolean visit(PostfixExpression postfixExpression, BlockScope scope) {
 		return this.visit(postfixExpression);
 	}
@@ -243,7 +267,7 @@ public class CompletionNodeDetector extends AbstractSyntaxTreeVisitorAdapter {
 		return this.visit(unaryExpression);
 	}
 	
-	private void endVisit(AstNode astNode) {
+	private void endVisit(ASTNode astNode) {
 		if(result && parent == null && astNode != searchedNode) {
 			if(!(astNode instanceof AllocationExpression && ((AllocationExpression) astNode).type == searchedNode)
 				&& !(astNode instanceof ConditionalExpression && ((ConditionalExpression) astNode).valueIfTrue == searchedNode)
@@ -252,7 +276,7 @@ public class CompletionNodeDetector extends AbstractSyntaxTreeVisitorAdapter {
 			}
 		}
 	}
-	private boolean visit(AstNode astNode) {
+	private boolean visit(ASTNode astNode) {
 		if(astNode == searchedNode) {
 			result = true;
 		}

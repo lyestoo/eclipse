@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.*;
@@ -19,11 +19,12 @@ import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 
 public class SingleNameReference extends NameReference implements OperatorIds {
+    
 	public char[] token;
-
 	public MethodBinding[] syntheticAccessors; // [0]=read accessor [1]=write accessor
 	public static final int READ = 0;
 	public static final int WRITE = 1;
+	public TypeBinding genericCast;
 	
 	public SingleNameReference(char[] source, long pos) {
 		super();
@@ -33,6 +34,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 	}
 	public FlowInfo analyseAssignment(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo, Assignment assignment, boolean isCompound) {
 	
+		boolean isReachable = flowInfo.isReachable();
 		// compound assignment extra work
 		if (isCompound) { // check the variable part is initialized if blank final
 			switch (bits & RestrictiveFlagMASK) {
@@ -44,7 +46,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 							currentScope.problemReporter().uninitializedBlankFinalField(fieldBinding, this);
 						}
 					}
-					manageSyntheticReadAccessIfNecessary(currentScope, flowInfo);
+					manageSyntheticAccessIfNecessary(currentScope, flowInfo, true /*read-access*/);
 					break;
 				case LOCAL : // reading a local variable
 					// check if assigning a final blank field
@@ -53,7 +55,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 						currentScope.problemReporter().uninitializedLocalVariable(localBinding, this);
 						// we could improve error msg here telling "cannot use compound assignment on final local variable"
 					}
-					if (flowInfo.isReachable()) {
+					if (isReachable) {
 						localBinding.useFlag = LocalVariableBinding.USED;
 					} else if (localBinding.useFlag == LocalVariableBinding.UNUSED) {
 						localBinding.useFlag = LocalVariableBinding.FAKE_USED;
@@ -65,7 +67,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 		}
 		switch (bits & RestrictiveFlagMASK) {
 			case FIELD : // assigning to a field
-				manageSyntheticWriteAccessIfNecessary(currentScope, flowInfo);
+				manageSyntheticAccessIfNecessary(currentScope, flowInfo, false /*write-access*/);
 	
 				// check if assigning a final field
 				FieldBinding fieldBinding;
@@ -75,7 +77,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 						if (flowInfo.isPotentiallyAssigned(fieldBinding)) {
 							currentScope.problemReporter().duplicateInitializationOfBlankFinalField(fieldBinding, this);
 						} else {
-							flowContext.recordSettingFinal(fieldBinding, this);						
+							flowContext.recordSettingFinal(fieldBinding, this, flowInfo);						
 						}
 						flowInfo.markAsDefinitelyAssigned(fieldBinding);
 					} else {
@@ -92,12 +94,13 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 				}
 				if (localBinding.isFinal()) {
 					if ((bits & DepthMASK) == 0) {
-						if (isCompound || !localBinding.isBlankFinal()){
+						// tolerate assignment to final local in unreachable code (45674)
+						if ((isReachable && isCompound) || !localBinding.isBlankFinal()){
 							currentScope.problemReporter().cannotAssignToFinalLocal(localBinding, this);
 						} else if (flowInfo.isPotentiallyAssigned(localBinding)) {
 							currentScope.problemReporter().duplicateInitializationOfFinalLocal(localBinding, this);
 						} else {
-							flowContext.recordSettingFinal(localBinding, this);								
+							flowContext.recordSettingFinal(localBinding, this, flowInfo);								
 						}
 					} else {
 						currentScope.problemReporter().cannotAssignToFinalOuterLocal(localBinding, this);
@@ -116,7 +119,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 		switch (bits & RestrictiveFlagMASK) {
 			case FIELD : // reading a field
 				if (valueRequired) {
-					manageSyntheticReadAccessIfNecessary(currentScope, flowInfo);
+					manageSyntheticAccessIfNecessary(currentScope, flowInfo, true /*read-access*/);
 				}
 				// check if reading a final blank field
 				FieldBinding fieldBinding;
@@ -165,8 +168,8 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 		MethodScope ms = scope.methodScope();
 		if ((this.bits & IsStrictlyAssignedMASK) == 0
 			&& ms.enclosingSourceType() == fieldBinding.declaringClass
-			&& ms.fieldDeclarationIndex != MethodScope.NotInFieldDecl
-			&& fieldBinding.id >= ms.fieldDeclarationIndex) {
+			&& ms.lastVisibleFieldID >= 0
+			&& fieldBinding.id >= ms.lastVisibleFieldID) {
 			//if the field is static and ms is not .... then it is valid
 			if (!fieldBinding.isStatic() || ms.isStatic)
 				scope.problemReporter().forwardReference(this, 0, scope.enclosingSourceType());
@@ -176,6 +179,24 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 		return fieldBinding.type;
 	
 	}
+	
+	/**
+	 * @see org.eclipse.jdt.internal.compiler.ast.Expression#computeConversion(org.eclipse.jdt.internal.compiler.lookup.Scope, org.eclipse.jdt.internal.compiler.lookup.TypeBinding, org.eclipse.jdt.internal.compiler.lookup.TypeBinding)
+	 */
+	public void computeConversion(Scope scope, TypeBinding runtimeTimeType, TypeBinding compileTimeType) {
+		if ((bits & FIELD) != 0 && this.binding != null && this.binding.isValidBinding()) {
+			// set the generic cast after the fact, once the type expectation is fully known (no need for strict cast)
+			FieldBinding originalBinding = ((FieldBinding)this.binding).original();
+			if (originalBinding != this.binding) {
+			    // extra cast needed if method return type has type variable
+			    if ((originalBinding.type.tagBits & TagBits.HasTypeVariable) != 0 && runtimeTimeType.id != T_Object) {
+			        this.genericCast = originalBinding.type.genericCast(runtimeTimeType);
+			    }
+			} 	
+		}
+		super.computeConversion(scope, runtimeTimeType, compileTimeType);
+}	
+
 	public void generateAssignment(BlockScope currentScope, CodeStream codeStream, Assignment assignment, boolean valueRequired) {
 	
 		// optimizing assignment like: i = i + 1 or i = 1 + i
@@ -216,6 +237,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 				if (valueRequired) {
 					codeStream.generateImplicitConversion(assignment.implicitConversion);
 				}
+				// no need for generic cast as value got dupped
 				return;
 			case LOCAL : // assigning to a local variable
 				LocalVariableBinding localBinding = (LocalVariableBinding) this.codegenBinding;
@@ -273,7 +295,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 				case FIELD : // reading a field
 					FieldBinding fieldBinding;
 					if (valueRequired) {
-						if ((fieldBinding = (FieldBinding) this.codegenBinding).constant == NotAConstant) { // directly use inlined value for constant fields
+						if (!(fieldBinding = (FieldBinding) this.codegenBinding).isConstantValue()) { // directly use inlined value for constant fields
 							boolean isStatic;
 							if (!(isStatic = fieldBinding.isStatic())) {
 								if ((bits & DepthMASK) != 0) {
@@ -295,8 +317,9 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 								codeStream.invokestatic(syntheticAccessors[READ]);
 							}
 							codeStream.generateImplicitConversion(implicitConversion);
-						} else { // directly use the inlined value
-							codeStream.generateConstant(fieldBinding.constant, implicitConversion);
+							if (this.genericCast != null) codeStream.checkcast(this.genericCast);
+					} else { // directly use the inlined value
+							codeStream.generateConstant(fieldBinding.constant(), implicitConversion);
 						}
 					}
 					break;
@@ -372,7 +395,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 				// using incr bytecode if possible
 				switch (localBinding.type.id) {
 					case T_String :
-						codeStream.generateStringAppend(currentScope, this, expression);
+						codeStream.generateStringConcatenationAppend(currentScope, this, expression);
 						if (valueRequired) {
 							codeStream.dup();
 						}
@@ -408,7 +431,8 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 			// we enter here if the single name reference is a field of type java.lang.String or if the type of the 
 			// operation is java.lang.Object
 			// For example: o = o + ""; // where the compiled type of o is java.lang.Object.
-			codeStream.generateStringAppend(currentScope, null, expression);
+			codeStream.generateStringConcatenationAppend(currentScope, null, expression);
+			// no need for generic cast on previous #getfield since using Object string buffer methods.			
 		} else {
 			// promote the array reference to the suitable operation type
 			codeStream.generateImplicitConversion(implicitConversion);
@@ -427,6 +451,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 		switch (bits & RestrictiveFlagMASK) {
 			case FIELD : // assigning to a field
 				fieldStore(codeStream, (FieldBinding) this.codegenBinding, writeAccessor, valueRequired);
+				// no need for generic cast as value got dupped
 				return;
 			case LOCAL : // assigning to a local variable
 				LocalVariableBinding localBinding = (LocalVariableBinding) this.codegenBinding;
@@ -485,6 +510,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 				codeStream.sendOperator(postIncrement.operator, fieldBinding.type.id);
 				codeStream.generateImplicitConversion(postIncrement.assignmentImplicitConversion);
 				fieldStore(codeStream, fieldBinding, syntheticAccessors == null ? null : syntheticAccessors[WRITE], false);
+				// no need for generic cast 
 				return;
 			case LOCAL : // assigning to a local variable
 				LocalVariableBinding localBinding = (LocalVariableBinding) this.codegenBinding;
@@ -520,6 +546,13 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 		
 		codeStream.aload_0();
 	}
+
+	/**
+	 * @see org.eclipse.jdt.internal.compiler.lookup.InvocationSite#genericTypeArguments()
+	 */
+	public TypeBinding[] genericTypeArguments() {
+		return null;
+	}
 	
 	public void manageEnclosingInstanceAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
 	
@@ -531,7 +564,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 			currentScope.emulateOuterAccess((LocalVariableBinding) binding);
 		}
 	}
-	public void manageSyntheticReadAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
+	public void manageSyntheticAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo, boolean isReadAccess) {
 	
 		if (!flowInfo.isReachable()) return;
 	
@@ -541,18 +574,18 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 	
 		if ((bits & FIELD) != 0) {
 			FieldBinding fieldBinding = (FieldBinding) binding;
+			FieldBinding codegenField = fieldBinding.original();
+			this.codegenBinding = codegenField;
 			if (((bits & DepthMASK) != 0)
-				&& (fieldBinding.isPrivate() // private access
-					|| (fieldBinding.isProtected() // implicit protected access
-							&& fieldBinding.declaringClass.getPackage() 
-								!= currentScope.enclosingSourceType().getPackage()))) {
+				&& (codegenField.isPrivate() // private access
+					|| (codegenField.isProtected() // implicit protected access
+							&& codegenField.declaringClass.getPackage() != currentScope.enclosingSourceType().getPackage()))) {
 				if (syntheticAccessors == null)
 					syntheticAccessors = new MethodBinding[2];
-				syntheticAccessors[READ] = 
-					((SourceTypeBinding)currentScope.enclosingSourceType().
-						enclosingTypeAt((bits & DepthMASK) >> DepthSHIFT)).
-							addSyntheticMethod(fieldBinding, true);
-				currentScope.problemReporter().needToEmulateFieldReadAccess(fieldBinding, this);
+				syntheticAccessors[isReadAccess ? READ : WRITE] = 
+				    ((SourceTypeBinding)currentScope.enclosingSourceType().
+						enclosingTypeAt((bits & DepthMASK) >> DepthSHIFT)).addSyntheticMethod(codegenField, isReadAccess);
+				currentScope.problemReporter().needToEmulateFieldAccess(codegenField, this, isReadAccess);
 				return;
 			}
 			// if the binding declaring class is not visible, need special action
@@ -562,47 +595,15 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 			if (fieldBinding.declaringClass != this.actualReceiverType
 				&& !this.actualReceiverType.isArrayType()	
 				&& fieldBinding.declaringClass != null
-				&& fieldBinding.constant == NotAConstant
+				&& !fieldBinding.isConstantValue()
 				&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2 
 						&& !fieldBinding.isStatic()
 						&& fieldBinding.declaringClass.id != T_Object) // no change for Object fields (if there was any)
-					|| !fieldBinding.declaringClass.canBeSeenBy(currentScope))){
-				this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(fieldBinding, (ReferenceBinding)this.actualReceiverType);
-			}
-		}
-	}
-	public void manageSyntheticWriteAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
-	
-		if (!flowInfo.isReachable()) return;
-		if ((bits & FIELD) != 0) {
-			FieldBinding fieldBinding = (FieldBinding) binding;
-			if (((bits & DepthMASK) != 0) 
-				&& (fieldBinding.isPrivate() // private access
-					|| (fieldBinding.isProtected() // implicit protected access
-							&& fieldBinding.declaringClass.getPackage() 
-								!= currentScope.enclosingSourceType().getPackage()))) {
-				if (syntheticAccessors == null)
-					syntheticAccessors = new MethodBinding[2];
-				syntheticAccessors[WRITE] = 
-					((SourceTypeBinding)currentScope.enclosingSourceType().
-						enclosingTypeAt((bits & DepthMASK) >> DepthSHIFT)).
-							addSyntheticMethod(fieldBinding, false);
-				currentScope.problemReporter().needToEmulateFieldWriteAccess(fieldBinding, this);
-				return;
-			}
-			// if the binding declaring class is not visible, need special action
-			// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
-			// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
-			// and not from Object or implicit static field access.	
-			if (fieldBinding.declaringClass != this.actualReceiverType
-				&& !this.actualReceiverType.isArrayType()	
-				&& fieldBinding.declaringClass != null
-				&& fieldBinding.constant == NotAConstant
-				&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2 
-						&& !fieldBinding.isStatic()
-						&& fieldBinding.declaringClass.id != T_Object) // no change for Object fields (if there was any)
-					|| !fieldBinding.declaringClass.canBeSeenBy(currentScope))){
-				this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(fieldBinding, (ReferenceBinding)this.actualReceiverType);
+					|| !codegenField.declaringClass.canBeSeenBy(currentScope))){
+				this.codegenBinding = 
+				    currentScope.enclosingSourceType().getUpdatedFieldBinding(
+					       codegenField, 
+					        (ReferenceBinding)this.actualReceiverType.erasure());
 			}
 		}
 	}
@@ -629,7 +630,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 	
 		this.actualReceiverType = this.receiverType = scope.enclosingSourceType();
 		
-		if ((this.codegenBinding = this.binding = scope.getBinding(token, bits & RestrictiveFlagMASK, this)).isValidBinding()) {
+		if ((this.codegenBinding = this.binding = scope.getBinding(token, bits & RestrictiveFlagMASK, this, true /*resolve*/)).isValidBinding()) {
 			switch (bits & RestrictiveFlagMASK) {
 				case VARIABLE : // =========only variable============
 				case VARIABLE | TYPE : //====both variable and type============
@@ -639,7 +640,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 							bits &= ~RestrictiveFlagMASK;  // clear bits
 							bits |= LOCAL;
 							if ((this.bits & IsStrictlyAssignedMASK) == 0) {
-								constant = variable.constant;
+								constant = variable.constant();
 							} else {
 								constant = NotAConstant;
 							}
@@ -662,9 +663,19 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 				case TYPE : //========only type==============
 					constant = Constant.NotAConstant;
 					//deprecated test
-					if (isTypeUseDeprecated((TypeBinding) binding, scope))
-						scope.problemReporter().deprecatedType((TypeBinding) binding, this);
-					return this.resolvedType = (TypeBinding) binding;
+					TypeBinding type = (TypeBinding)binding;
+					if (isTypeUseDeprecated(type, scope))
+						scope.problemReporter().deprecatedType(type, this);
+					// check raw type
+					if (type.isArrayType()) {
+					    TypeBinding leafComponentType = type.leafComponentType();
+					    if (leafComponentType.isGenericType()) { // raw type
+					        return this.resolvedType = scope.createArrayType(scope.environment().createRawType((ReferenceBinding)leafComponentType, null), type.dimensions());
+					    }
+					} else if (type.isGenericType()) {
+				        return this.resolvedType = scope.environment().createRawType((ReferenceBinding)type, null); // raw type
+					}		
+					return this.resolvedType = type;
 			}
 		}
 	
@@ -672,7 +683,7 @@ public class SingleNameReference extends NameReference implements OperatorIds {
 		return this.resolvedType = this.reportError(scope);
 	}
 		
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+	public void traverse(ASTVisitor visitor, BlockScope scope) {
 		
 		visitor.visit(this, scope);
 		visitor.endVisit(this, scope);

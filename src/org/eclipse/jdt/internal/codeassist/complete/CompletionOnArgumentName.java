@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -24,9 +24,9 @@ public class CompletionOnArgumentName extends Argument {
 	public char[] realName;
 	public boolean isCatchArgument = false;
 
-	public CompletionOnArgumentName(char[] name , long posNom , TypeReference tr , int modifiers){
+	public CompletionOnArgumentName(char[] name , long posNom , TypeReference tr , int modifiers, boolean isVarArgs){
 
-		super(CharOperation.concat(name, FAKENAMESUFFIX), posNom, tr, modifiers);
+		super(CharOperation.concat(name, FAKENAMESUFFIX), posNom, tr, modifiers, isVarArgs);
 		this.realName = name;
 	}
 	

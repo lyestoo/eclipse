@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,7 +11,6 @@
 
 package org.eclipse.jdt.core.dom;
 
-import org.eclipse.jdt.internal.compiler.ast.AstNode;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 
 /**
@@ -26,7 +25,6 @@ import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
  */
 class BindingResolver {
 	
-	protected long modificationCount;
 	/**
 	 * Creates a binding resolver.
 	 */
@@ -34,15 +32,6 @@ class BindingResolver {
 		// default implementation: do nothing
 	}
 
-	/**
-	 * Store the number of modifications done using the ast. This is used to validate
-	 * resolveBinding methods. If the number changed, all resolve bindings methods
-	 * simply return null.
-	 */
-	protected void storeModificationCount(long modificationCounter) {
-		this.modificationCount = modificationCounter;
-	}
-	
 	/**
 	 * Allows the user to store information about the given old/new pair of
 	 * AST nodes.
@@ -52,9 +41,9 @@ class BindingResolver {
 	 * </p>
 	 * 
 	 * @param newNode the new AST node
-	 * @param oldNode the old AST node
+	 * @param oldASTNode the old AST node
 	 */
-	void store(ASTNode newNode, AstNode oldASTNode) {
+	void store(ASTNode newNode, org.eclipse.jdt.internal.compiler.ast.ASTNode oldASTNode) {
 		// default implementation: do nothing
 	}
 
@@ -103,7 +92,7 @@ class BindingResolver {
 	 * Resolves the given well known type by name and returns the type binding
 	 * for it.
 	 * <p>
-	 * The implementation of <code>ASTNode.resolveWellKnownType</code>
+	 * The implementation of <code>AST.resolveWellKnownType</code>
 	 * forwards to this method.
 	 * </p>
 	 * <p>
@@ -144,6 +133,36 @@ class BindingResolver {
 	}
 	
 	/**
+	 * TODO (jeem) add javadoc
+	 */
+	ITypeBinding resolveTypeParameter(TypeParameter typeParameter) {
+		return null;
+	}
+	
+	/**
+	 * Resolves the given enum declaration and returns the binding
+	 * for it.
+	 * <p>
+	 * The implementation of <code>EnumDeclaration.resolveBinding</code> 
+	 * forwards to this method. How the enum declaration resolves is often
+	 * a function of the context in which the declaration node is embedded
+	 * as well as the enum declaration subtree itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param type the enum declaration of interest
+	 * @return the binding for the given enum declaration, or <code>null</code>
+	 *    if no binding is available
+	 * @since 3.0
+	 */
+	ITypeBinding resolveType(EnumDeclaration type) {
+		return null;
+	}
+	
+	/**
 	 * Resolves the given anonymous class declaration and returns the binding
 	 * for it.
 	 * <p>
@@ -162,6 +181,29 @@ class BindingResolver {
 	 *    if no binding is available
 	 */
 	ITypeBinding resolveType(AnonymousClassDeclaration type) {
+		return null;
+	}
+	
+	/**
+	 * Resolves the given annotation type declaration and returns the binding
+	 * for it.
+	 * <p>
+	 * The implementation of <code>AnnotationTypeDeclaration.resolveBinding</code> 
+	 * forwards to this method. How the declaration resolves is often a 
+	 * function of the context in which the declaration node is embedded as well
+	 * as the declaration subtree itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param type the annotation type declaration of interest
+	 * @return the binding for the given annotation type declaration, or <code>null</code>
+	 *    if no binding is available
+	 * @since 3.0
+	 */
+	ITypeBinding resolveType(AnnotationTypeDeclaration type) {
 		return null;
 	}
 	
@@ -248,28 +290,68 @@ class BindingResolver {
 	IVariableBinding resolveVariable(VariableDeclaration variable) {
 		return null;
 	}
+	
+	/**
+	 * Resolves the loop variable of the given enhanced for statement and 
+	 * returns the binding for it.
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param statement the enhanced for statement of interest
+	 * @return the binding for the loop variable for the given enhanced for
+	 *    statement, or <code>null</code> if no binding is available
+	 * @since 3.0
+	 */
+	IVariableBinding resolveVariable(EnhancedForStatement statement) {
+		return null;
+	}
 
 	/**
-	 * Resolves the given field declaration and returns the binding for it.
+	 * Resolves the given enum constant declaration and returns the binding for
+	 * the field.
 	 * <p>
-	 * The implementation of <code>FieldDeclaration.resolveBinding</code>
-	 * forwards to this method. How the field declaration resolves is often
-	 * a function of the context in which the variable declaration node is 
-	 * embedded as well as the variable declaration subtree itself.
+	 * The implementation of <code>EnumConstantDeclaration.resolveVariable</code>
+	 * forwards to this method.
 	 * </p>
 	 * <p>
 	 * The default implementation of this method returns <code>null</code>.
 	 * Subclasses may reimplement.
 	 * </p>
 	 * 
-	 * @param variable the field declaration of interest
-	 * @return the binding for the given field declaration, or 
+	 * @param enumConstant the enum constant declaration of interest
+	 * @return the field binding for the given enum constant declaration, or 
 	 *    <code>null</code> if no binding is available
+	 * @since 3.0
 	 */
-	IVariableBinding resolveVariable(FieldDeclaration variable) {
+	IVariableBinding resolveVariable(EnumConstantDeclaration enumConstant) {
 		return null;
 	}
 		
+	/**
+	 * Resolves the given annotation type declaration and returns the binding
+	 * for it.
+	 * <p>
+	 * The implementation of <code>AnnotationTypeMemberDeclaration.resolveBinding</code> 
+	 * forwards to this method. How the declaration resolves is often a 
+	 * function of the context in which the declaration node is embedded as well
+	 * as the declaration subtree itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param member the annotation type member declaration of interest
+	 * @return the binding for the given annotation type member declaration, or <code>null</code>
+	 *    if no binding is available
+	 * @since 3.0
+	 */
+	IVariableBinding resolveMember(AnnotationTypeMemberDeclaration member) {
+		return null;
+	}
+	
 	/**
 	 * Resolves the type of the given expression and returns the type binding
 	 * for it. 
@@ -347,9 +429,9 @@ class BindingResolver {
 	 * 
 	 * @param importDeclaration the import declaration of interest
 	 * @return the binding for the given package declaration, or 
-	 * @return the package binding (for on-demand imports) or type binding
-	 *    (for single-type imports), or <code>null</code> if no binding is
-	 *    available
+	 *         the package binding (for on-demand imports) or type binding
+	 *         (for single-type imports), or <code>null</code> if no binding is
+	 *         available
 	 */
 	IBinding resolveImport(ImportDeclaration importDeclaration) {
 		return null;
@@ -441,6 +523,48 @@ class BindingResolver {
 	}
 	
 	/**
+	 * Resolves the given reference and returns the binding for it.
+	 * <p>
+	 * The implementation of <code>MemberRef.resolveBinding</code> forwards to
+	 * this method. How the name resolves is often a function of the context
+	 * in which the name node is embedded as well as the name itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param ref the reference of interest
+	 * @return the binding for the reference, or <code>null</code> if no binding is
+	 *    available
+	 * @since 3.0
+	 */
+	IBinding resolveReference(MemberRef ref) {
+		return null;
+	}
+
+	/**
+	 * Resolves the given reference and returns the binding for it.
+	 * <p>
+	 * The implementation of <code>MethodRef.resolveBinding</code> forwards to
+	 * this method. How the name resolves is often a function of the context
+	 * in which the name node is embedded as well as the name itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param ref the reference of interest
+	 * @return the binding for the reference, or <code>null</code> if no binding is
+	 *    available
+	 * @since 3.0
+	 */
+	IBinding resolveReference(MethodRef ref) {
+		return null;
+	}
+
+	/**
 	 * Finds the corresponding AST node from which the given binding originated.
 	 * Returns <code>null</code> if the binding does not correspond to any node
 	 * in the compilation unit.
@@ -462,6 +586,8 @@ class BindingResolver {
 	 *    <code>VariableDeclarationExpression</code></li>
 	 * <li>method - a <code>MethodDeclaration</code> </li>
 	 * <li>constructor - a <code>MethodDeclaration</code> </li>
+	 * <li>annotation type - an <code>AnnotationTypeDeclaration</code>
+	 * <li>annotation type member - an <code>AnnotationTypeMemberDeclaration</code>
 	 * </ul>
 	 * </p>
 	 * <p>
@@ -545,7 +671,7 @@ class BindingResolver {
 	 * Subclasses may reimplement.
 	 * </p>
 	 * 
-	 * @param variableBinding the old variable binding
+	 * @param binding the old variable binding
 	 * @return the new variable binding
 	 */
 	IVariableBinding getVariableBinding(org.eclipse.jdt.internal.compiler.lookup.VariableBinding binding) {
@@ -576,9 +702,9 @@ class BindingResolver {
 	 * </p>
 	 *
 	 * @param currentNode the new node
-	 * @return AstNode
+	 * @return org.eclipse.jdt.internal.compiler.ast.ASTNode
 	 */
-	AstNode getCorrespondingNode(ASTNode currentNode) {
+	org.eclipse.jdt.internal.compiler.ast.ASTNode getCorrespondingNode(ASTNode currentNode) {
 		return null;
 	} 
 

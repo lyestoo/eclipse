@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,6 +21,8 @@ class ASTSyntaxErrorPropagator extends ASTVisitor {
 	private IProblem[] problems;
 	
 	ASTSyntaxErrorPropagator(IProblem[] problems) {
+		// visit Javadoc.tags() as well
+		super(true);
 		this.problems = problems;
 	}
 
@@ -55,7 +57,7 @@ class ASTSyntaxErrorPropagator extends ASTVisitor {
 			int start = node.getStartPosition();
 			int end = start + node.getLength();
 			if ((start <= position) && (position <= end)) {
-				node.setFlags(ASTNode.MALFORMED);
+				node.setFlags(node.getFlags() | ASTNode.MALFORMED);
 				// clear the bits on parent
 				ASTNode currentNode = node.getParent();
 				while (currentNode != null) {

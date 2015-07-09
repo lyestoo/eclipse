@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -18,7 +18,6 @@ import org.eclipse.jdt.internal.compiler.lookup.*;
 public class ReturnStatement extends Statement {
 		
 	public Expression expression;
-	public TypeBinding expressionType;
 	public boolean isSynchronized;
 	public SubRoutineStatement[] subroutines;
 	public boolean isAnySubRoutineEscaping = false;
@@ -60,7 +59,7 @@ public class ReturnStatement extends Statement {
 			}
 			traversedContext.recordReturnFrom(flowInfo.unconditionalInits());
 	
-			AstNode node;
+			ASTNode node;
 			if ((node = traversedContext.associatedNode) instanceof SynchronizedStatement) {
 				isSynchronized = true;
 	
@@ -92,7 +91,7 @@ public class ReturnStatement extends Statement {
 			}
 		} else {
 			this.saveValueVariable = null;
-			if ((!isSynchronized) && (expressionType == BooleanBinding)) {
+			if (!isSynchronized && this.expression != null && this.expression.resolvedType == BooleanBinding) {
 				this.expression.bits |= ValueForReturnMASK;
 			}
 		}
@@ -187,7 +186,9 @@ public class ReturnStatement extends Statement {
 			expression.printExpression(0, output) ;
 		return output.append(';');
 	}
+	
 	public void resolve(BlockScope scope) {
+		
 		MethodScope methodScope = scope.methodScope();
 		MethodBinding methodBinding;
 		TypeBinding methodType =
@@ -196,6 +197,7 @@ public class ReturnStatement extends Statement {
 					? null 
 					: methodBinding.returnType)
 				: VoidBinding;
+		TypeBinding expressionType;
 		if (methodType == VoidBinding) {
 			// the expression should be null
 			if (expression == null)
@@ -208,27 +210,31 @@ public class ReturnStatement extends Statement {
 			if (methodType != null) scope.problemReporter().shouldReturn(methodType, this);
 			return;
 		}
-		if ((expressionType = expression.resolveType(scope)) == null)
-			return;
-	
-		if (methodType != null && expression.isConstantValueOfTypeAssignableToType(expressionType, methodType)) {
-			// dealing with constant
-			expression.implicitWidening(methodType, expressionType);
-			return;
-		}
+		expression.setExpectedType(methodType); // needed in case of generic method invocation
+		if ((expressionType = expression.resolveType(scope)) == null) return;
 		if (expressionType == VoidBinding) {
 			scope.problemReporter().attemptToReturnVoidValue(this);
 			return;
 		}
-		if (methodType != null && expressionType.isCompatibleWith(methodType)) {
-			expression.implicitWidening(methodType, expressionType);
+		if (methodType == null) 
+			return;
+	
+		if (expressionType.isRawType() && (methodType.isBoundParameterizedType() || methodType.isGenericType())) {
+		    scope.problemReporter().unsafeRawConversion(this.expression, expressionType, methodType);
+		}
+		
+		if (expression.isConstantValueOfTypeAssignableToType(expressionType, methodType)) {
+			// dealing with constant
+			expression.computeConversion(scope, methodType, expressionType);
 			return;
 		}
-		if (methodType != null){
-			scope.problemReporter().typeMismatchErrorActualTypeExpectedType(expression, expressionType, methodType);
+		if (expressionType.isCompatibleWith(methodType)) {
+			expression.computeConversion(scope, methodType, expressionType);
+			return;
 		}
+		scope.problemReporter().typeMismatchError(expressionType, methodType, expression);
 	}
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+	public void traverse(ASTVisitor visitor, BlockScope scope) {
 		if (visitor.visit(this, scope)) {
 			if (expression != null)
 				expression.traverse(visitor, scope);

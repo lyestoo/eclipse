@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -8,20 +8,20 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
-
 package org.eclipse.jdt.core.dom;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Array creation expression AST node type.
- *
+ * For JLS2:
  * <pre>
  * ArrayCreation:
- *		<b>new</b> PrimitiveType <b>[</b> Expression <b>]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> <b>]</b> }
- *		<b>new</b> TypeName <b>[</b> Expression ]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> <b>]</b> }
- *		<b>new</b> PrimitiveType <b>[</b> <b>]</b> { <b>[</b> <b>]</b> } ArrayInitializer
- * 		<b>new</b> TypeName <b>[</b> <b>]</b> { <b>[</b> <b>]</b> } ArrayInitializer
+ *    <b>new</b> PrimitiveType <b>[</b> Expression <b>]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> <b>]</b> }
+ *    <b>new</b> TypeName <b>[</b> Expression ]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> <b>]</b> }
+ *    <b>new</b> PrimitiveType <b>[</b> <b>]</b> { <b>[</b> <b>]</b> } ArrayInitializer
+ *    <b>new</b> TypeName <b>[</b> <b>]</b> { <b>[</b> <b>]</b> } ArrayInitializer
  * </pre>
  * <p>
  * The mapping from Java language syntax to AST nodes is as follows:
@@ -32,11 +32,73 @@ import java.util.List;
  *   list.</li>
  * </ul>
  * </p>
+ * For JLS3, type arguments are added:
+ * <pre>
+ * ArrayCreation:
+ *    <b>new</b> PrimitiveType <b>[</b> Expression <b>]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> <b>]</b> }
+ *    <b>new</b> TypeName [ <b>&lt;</b> Type { <b>,</b> Type } <b>&gt;</b> ]
+ *        <b>[</b> Expression ]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> <b>]</b> }
+ *    <b>new</b> PrimitiveType <b>[</b> <b>]</b> { <b>[</b> <b>]</b> } ArrayInitializer
+ *    <b>new</b> TypeName [ <b>&lt;</b> Type { <b>,</b> Type } <b>&gt;</b> ]
+ *        <b>[</b> <b>]</b> { <b>[</b> <b>]</b> } ArrayInitializer
+ * </pre>
  *
  * @since 2.0
  */
 public class ArrayCreation extends Expression {
 	
+	/**
+	 * The "type" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor TYPE_PROPERTY = 
+		new ChildPropertyDescriptor(ArrayCreation.class, "type", ArrayType.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "dimensions" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildListPropertyDescriptor DIMENSIONS_PROPERTY = 
+		new ChildListPropertyDescriptor(ArrayCreation.class, "dimensions", Expression.class, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "initializer" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor INITIALIZER_PROPERTY = 
+		new ChildPropertyDescriptor(ArrayCreation.class, "initializer", ArrayInitializer.class, OPTIONAL, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List properyList = new ArrayList(4);
+		createPropertyList(ArrayCreation.class, properyList);
+		addProperty(TYPE_PROPERTY, properyList);
+		addProperty(DIMENSIONS_PROPERTY, properyList);
+		addProperty(INITIALIZER_PROPERTY, properyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(properyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/**
 	 * The array type; lazily initialized; defaults to a unspecified,
 	 * legal array type.
@@ -48,7 +110,7 @@ public class ArrayCreation extends Expression {
 	 * <code>Expression</code>). Defaults to an empty list.
 	 */
 	private ASTNode.NodeList dimensions =
-		new ASTNode.NodeList(true, Expression.class);
+		new ASTNode.NodeList(DIMENSIONS_PROPERTY);
 
 	/**
 	 * The optional array initializer, or <code>null</code> if none;
@@ -71,14 +133,56 @@ public class ArrayCreation extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+		
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == INITIALIZER_PROPERTY) {
+			if (get) {
+				return getInitializer();
+			} else {
+				setInitializer((ArrayInitializer) child);
+				return null;
+			}
+		}
+		if (property == TYPE_PROPERTY) {
+			if (get) {
+				return getType();
+			} else {
+				setType((ArrayType) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final List internalGetChildListProperty(ChildListPropertyDescriptor property) {
+		if (property == DIMENSIONS_PROPERTY) {
+			return dimensions();
+		}
+		// allow default implementation to flag the error
+		return super.internalGetChildListProperty(property);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return ARRAY_CREATION;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		ArrayCreation result = new ArrayCreation(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setType((ArrayType) getType().clone(target));
@@ -91,7 +195,7 @@ public class ArrayCreation extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -104,7 +208,7 @@ public class ArrayCreation extends Expression {
 		if (visitChildren) {
 			// visit children in normal left to right reading order
 			acceptChild(visitor, getType());
-			acceptChildren(visitor, dimensions);
+			acceptChildren(visitor, this.dimensions);
 			acceptChild(visitor, getInitializer());
 		}
 		visitor.endVisit(this);
@@ -116,14 +220,18 @@ public class ArrayCreation extends Expression {
 	 * @return the array type
 	 */ 
 	public ArrayType getType() {
-		if (arrayType == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setType(getAST().newArrayType(
-				getAST().newPrimitiveType(PrimitiveType.INT)));
-			getAST().setModificationCount(count);
+		if (this.arrayType == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.arrayType == null) {
+					preLazyInit();
+					this.arrayType = this.ast.newArrayType(
+							this.ast.newPrimitiveType(PrimitiveType.INT));
+					postLazyInit(this.arrayType, TYPE_PROPERTY);
+				}
+			}
 		}
-		return arrayType;
+		return this.arrayType;
 	}
 
 	/**
@@ -141,8 +249,10 @@ public class ArrayCreation extends Expression {
 			throw new IllegalArgumentException();
 		}
 		// an ArrayCreation cannot occur inside a ArrayType - cycles not possible
-		replaceChild(this.arrayType, type, false);
+		ASTNode oldChild = this.arrayType;
+		preReplaceChild(oldChild, type, TYPE_PROPERTY);
 		this.arrayType = type;
+		postReplaceChild(oldChild, type, TYPE_PROPERTY);
 	}
 	
 	/**
@@ -153,7 +263,7 @@ public class ArrayCreation extends Expression {
 	 *    (element type: <code>Expression</code>)
 	 */ 
 	public List dimensions() {
-		return dimensions;
+		return this.dimensions;
 	}
 	
 	/**
@@ -182,8 +292,10 @@ public class ArrayCreation extends Expression {
 	public void setInitializer(ArrayInitializer initializer) {
 		// an ArrayCreation may occur inside an ArrayInitializer
 		// must check cycles
-		replaceChild(this.optionalInitializer, initializer, true);
+		ASTNode oldChild = this.optionalInitializer;
+		preReplaceChild(oldChild, initializer, INITIALIZER_PROPERTY);
 		this.optionalInitializer = initializer;
+		postReplaceChild(oldChild, initializer, INITIALIZER_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)
@@ -198,9 +310,9 @@ public class ArrayCreation extends Expression {
 	 */
 	int treeSize() {
 		int size = memSize()
-			+ (arrayType == null ? 0 : getType().treeSize())
-			+ (optionalInitializer == null ? 0 : getInitializer().treeSize())
-			+ dimensions.listSize();
+			+ (this.arrayType == null ? 0 : getType().treeSize())
+			+ (this.optionalInitializer == null ? 0 : getInitializer().treeSize())
+			+ this.dimensions.listSize();
 		return size;
 	}
 }

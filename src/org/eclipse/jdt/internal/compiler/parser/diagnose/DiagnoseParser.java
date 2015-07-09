@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,6 +11,7 @@
 package org.eclipse.jdt.internal.compiler.parser.diagnose;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.parser.ParserBasicInformation;
 import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
@@ -18,6 +19,7 @@ import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 
 public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 	private static final boolean DEBUG = false;
+	private boolean DEBUG_PARSECHECK = false;
 	
 	private static final String EMPTY_STRING = ""; //$NON-NLS-1$
 	private static final int STACK_INCREMENT = 256;
@@ -38,6 +40,8 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 	private static final int BUFF_SIZE    = 32;
 	private static final int MAX_DISTANCE = 30;
 	private static final int MIN_DISTANCE = 3;
+	
+	private CompilerOptions options;
 	
 	private LexStream lexStream;
 	private int errorToken;
@@ -133,12 +137,13 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 	    }
 	}
 
-	public DiagnoseParser(Parser parser, int firstToken, int start, int end) {
-		this(parser, firstToken, start, end, new int[0], new int[0], new int[0]);
+	public DiagnoseParser(Parser parser, int firstToken, int start, int end, CompilerOptions options) {
+		this(parser, firstToken, start, end, new int[0], new int[0], new int[0], options);
 	}
 
-	public DiagnoseParser(Parser parser, int firstToken, int start, int end, int[] intervalStartToSkip, int[] intervalEndToSkip, int[] intervalFlagsToSkip) {
+	public DiagnoseParser(Parser parser, int firstToken, int start, int end, int[] intervalStartToSkip, int[] intervalEndToSkip, int[] intervalFlagsToSkip, CompilerOptions options) {
 		this.parser = parser;
+		this.options = options;
 		this.lexStream = new LexStream(BUFF_SIZE, parser.scanner, intervalStartToSkip, intervalEndToSkip, intervalFlagsToSkip, firstToken, start, end);
 	}
 	
@@ -362,6 +367,10 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 				if(parser.reportOnlyOneSyntaxError) {
 					return;
 				}
+				
+				if(this.parser.problemReporter().options.maxProblemsPerUnit < this.parser.compilationUnit.compilationResult.problemCount) {
+					return;
+				}
 
 				act = stack[stateStackTop];
 
@@ -484,7 +493,7 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 		// remaining tokens in the input.
 		//
 		int i;
-		for (i = BUFF_UBOUND; lexStream.kind(buffer[i]) == EOFT_SYMBOL; i--);
+		for (i = BUFF_UBOUND; lexStream.kind(buffer[i]) == EOFT_SYMBOL; i--){/*empty*/}
 
 		reportError(DELETION_CODE,
 					Parser.terminal_index[prevtokKind],//Parser.terminal_index[lexStream.kind(prevtok)],
@@ -695,16 +704,18 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 		//
 		//  Next, try merging the error token with its successor.
 		//
-		symbol = mergeCandidate(stck[stack_top], repair.bufferPosition);
-		if (symbol != 0) {
-			j = parseCheck(stck, stack_top, symbol, repair.bufferPosition+2);
-			if ((j > repair.distance) || (j == repair.distance && repair.misspellIndex < 10)) {
-				repair.misspellIndex = 10;
-				repair.symbol = symbol;
-				repair.distance = j;
-				repair.code = MERGE_CODE;
+	    if(buffer[repair.bufferPosition] != 0 && buffer[repair.bufferPosition + 1] != 0) {// do not merge the first token
+			symbol = mergeCandidate(stck[stack_top], repair.bufferPosition);
+			if (symbol != 0) {
+				j = parseCheck(stck, stack_top, symbol, repair.bufferPosition+2);
+				if ((j > repair.distance) || (j == repair.distance && repair.misspellIndex < 10)) {
+					repair.misspellIndex = 10;
+					repair.symbol = symbol;
+					repair.distance = j;
+					repair.code = MERGE_CODE;
+				}
 			}
-		}
+	    }
 
 		//
 		// Next, try deletion of the error token.
@@ -826,30 +837,33 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 		// in the current state, except EOFT and ERROR_SYMBOL.
 		//
 		symbol = root;
-		while(symbol != 0) {
-			if (symbol == EOLT_SYMBOL && lexStream.afterEol(buffer[repair.bufferPosition+1])) {
-				k = 10;
-			} else {
-				k = misspell(symbol, buffer[repair.bufferPosition]);
+		
+		if(buffer[repair.bufferPosition] != 0) {// do not replace the first token
+			while(symbol != 0) {
+				if (symbol == EOLT_SYMBOL && lexStream.afterEol(buffer[repair.bufferPosition+1])) {
+					k = 10;
+				} else {
+					k = misspell(symbol, buffer[repair.bufferPosition]);
+				}
+				j = parseCheck(stck, stack_top, symbol, repair.bufferPosition+1);
+				if (j > repair.distance) {
+					repair.misspellIndex = k;
+					repair.distance = j;
+					repair.symbol = symbol;
+					repair.code = SUBSTITUTION_CODE;
+				} else if (j == repair.distance && k > repair.misspellIndex) {
+					repair.misspellIndex = k;
+					repair.symbol = symbol;
+					repair.code = SUBSTITUTION_CODE;
+				} else if (j == repair.distance && k > repair.misspellIndex && isBetterSymbol(symbol, repair.symbol)) {
+					repair.misspellIndex = k;
+					repair.symbol = symbol;
+					repair.code = SUBSTITUTION_CODE;
+				}
+				i = symbol;
+				symbol = list[symbol];
+				list[i] = 0;                             // reset element
 			}
-			j = parseCheck(stck, stack_top, symbol, repair.bufferPosition+1);
-			if (j > repair.distance) {
-				repair.misspellIndex = k;
-				repair.distance = j;
-				repair.symbol = symbol;
-				repair.code = SUBSTITUTION_CODE;
-			} else if (j == repair.distance && k > repair.misspellIndex) {
-				repair.misspellIndex = k;
-				repair.symbol = symbol;
-				repair.code = SUBSTITUTION_CODE;
-			} else if (j == repair.distance && k > repair.misspellIndex && isBetterSymbol(symbol, repair.symbol)) {
-				repair.misspellIndex = k;
-				repair.symbol = symbol;
-				repair.code = SUBSTITUTION_CODE;
-			}
-			i = symbol;
-			symbol = list[symbol];
-			list[i] = 0;                             // reset element
 		}
 
 
@@ -1313,6 +1327,8 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 	}
 	
 	private void scopeTrialCheck(int stck[], int stack_top, PrimaryRepairInfo repair, int indx) {
+		if(indx > 20) return; // avoid too much recursive call to improve performance
+		
 		int act = stck[stack_top];
 	
 	    for (int i = stateSeen[stack_top]; i != NIL; i = statePool[i].next) {
@@ -1393,7 +1409,7 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 	                for (j = Parser.scope_state_set[i];
 	                     stck[stack_position] != Parser.scope_state[j] &&
 	                     Parser.scope_state[j] != 0;
-	                     j++);
+	                     j++){/*empty*/}
 	                //
 	                // If the top state is valid for scope recovery,
 	                // the left-hand side of the scope is used as
@@ -1550,7 +1566,7 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 			for (next_last_index = MAX_DISTANCE - 1;
 				 next_last_index >= 1 &&
 				 lexStream.kind(buffer[next_last_index]) == EOFT_SYMBOL;
-				 next_last_index--);
+				 next_last_index--){/*empty*/}
 			next_last_index = next_last_index + 1;
 
 			save_location = locationStack[nextStackTop];
@@ -1592,7 +1608,7 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 
 		for (last_index = MAX_DISTANCE - 1;
 			 last_index >= 1 && lexStream.kind(buffer[last_index]) == EOFT_SYMBOL;
-			 last_index--);
+			 last_index--){/*empty*/}
 		last_index++;
 
 		misplaced = misplacementRecovery(stack, stateStackTop,
@@ -1901,6 +1917,9 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 		act = stck[stack_top];
 		if (first_token > NT_OFFSET) {
 			tempStackTop = stack_top;
+			if(DEBUG_PARSECHECK) {
+				System.out.println(tempStackTop);
+			}
 			max_pos = stack_top;
 			indx = buffer_position;
 			ct = lexStream.kind(buffer[indx]);
@@ -1908,8 +1927,26 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 			int lhs_symbol = first_token - NT_OFFSET;
 			act = Parser.ntAction(act, lhs_symbol);
 			if (act <= NUM_RULES) {
+				// same loop as 'process_non_terminal'
 				do {
 					tempStackTop -= (Parser.rhs[act]-1);
+					
+					if(DEBUG_PARSECHECK) {
+						System.out.print(tempStackTop);
+						System.out.print(" ("); //$NON-NLS-1$
+						System.out.print(-(Parser.rhs[act]-1));
+						System.out.print(") [max:"); //$NON-NLS-1$
+						System.out.print(max_pos);
+						System.out.print("]\tprocess_non_terminal\t"); //$NON-NLS-1$
+						System.out.print(act);
+						System.out.print("\t"); //$NON-NLS-1$
+						System.out.print(Parser.name[Parser.non_terminal_index[Parser.lhs[act]]]);
+						System.out.println();
+					}
+					
+					if(Parser.rules_compliance[act] > this.options.sourceLevel) {
+					 	return 0;
+					}
 					lhs_symbol = Parser.lhs[act];
 					act = (tempStackTop > max_pos
 										  ? tempStack[tempStackTop]
@@ -1921,6 +1958,11 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 			}
 		} else {
 			tempStackTop = stack_top - 1;
+			
+			if(DEBUG_PARSECHECK) {
+				System.out.println(tempStackTop);
+			}
+			
 			max_pos = tempStackTop;
 			indx = buffer_position - 1;
 			ct = first_token;
@@ -1928,6 +1970,17 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 		}
 
 		process_terminal: for (;;) {
+			if(DEBUG_PARSECHECK) {
+				System.out.print(tempStackTop + 1);
+				System.out.print(" (+1) [max:"); //$NON-NLS-1$
+				System.out.print(max_pos);
+				System.out.print("]\tprocess_terminal    \t"); //$NON-NLS-1$
+				System.out.print(ct);
+				System.out.print("\t"); //$NON-NLS-1$
+				System.out.print(Parser.name[Parser.terminal_index[ct]]);
+				System.out.println();
+			}
+			
 			if (++tempStackTop >= stackLength)  // Stack overflow!!!
 				return indx;
 			tempStack[tempStackTop] = act;
@@ -1936,6 +1989,14 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 
 			if (act <= NUM_RULES) {               // reduce action
 				tempStackTop--;
+				
+				if(DEBUG_PARSECHECK) {
+					System.out.print(tempStackTop);
+					System.out.print(" (-1) [max:"); //$NON-NLS-1$
+					System.out.print(max_pos);
+					System.out.print("]\treduce"); //$NON-NLS-1$
+					System.out.println();
+				}
 			} else if (act < ACCEPT_ACTION ||     // shift action
 					 act > ERROR_ACTION) {        // shift-reduce action
 				if (indx == MAX_DISTANCE)
@@ -1944,8 +2005,17 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 				ct = lexStream.kind(buffer[indx]);
 				lexStream.reset(lexStream.next(buffer[indx]));
 				if (act > ERROR_ACTION) {
-					 act -= ERROR_ACTION;
+					act -= ERROR_ACTION;
+					
+					if(DEBUG_PARSECHECK) {
+						System.out.print(tempStackTop);
+						System.out.print("\tshift reduce"); //$NON-NLS-1$
+						System.out.println();
+					}
 				} else {
+					if(DEBUG_PARSECHECK) {
+						System.out.println("\tshift"); //$NON-NLS-1$
+					}
 					continue process_terminal;
 				}
 			} else if (act == ACCEPT_ACTION) {           // accept action
@@ -1954,9 +2024,29 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 				return indx;                         // error action
 			}
 
+			// same loop as first token initialization
 			process_non_terminal:
 			do {
 				tempStackTop -= (Parser.rhs[act]-1);
+				
+				if(DEBUG_PARSECHECK) {
+					System.out.print(tempStackTop);
+					System.out.print(" ("); //$NON-NLS-1$
+					System.out.print(-(Parser.rhs[act]-1));
+					System.out.print(") [max:"); //$NON-NLS-1$
+					System.out.print(max_pos);
+					System.out.print("]\tprocess_non_terminal\t"); //$NON-NLS-1$
+					System.out.print(act);
+					System.out.print("\t"); //$NON-NLS-1$
+					System.out.print(Parser.name[Parser.non_terminal_index[Parser.lhs[act]]]);
+					System.out.println();
+				}
+				
+				if(act <= NUM_RULES) {
+					if(Parser.rules_compliance[act] > this.options.sourceLevel) {
+					 	return 0;
+					}
+				}
 				int lhs_symbol = Parser.lhs[act];
 				act = (tempStackTop > max_pos
 									  ? tempStack[tempStackTop]
@@ -2119,7 +2209,11 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens {
 
 		int errorStart = -1;
 		if(lexStream.isInsideStream(leftToken)) {
-			errorStart = lexStream.start(leftToken);
+			if(leftToken == 0) {
+				errorStart = lexStream.start(leftToken + 1);
+			} else {
+				errorStart = lexStream.start(leftToken);
+			}
 		} else {
 			if(leftToken == errorToken) {
 				errorStart = errorTokenStart;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.problem;
 
+import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.CompilationResult;
 
 /*
@@ -19,7 +20,10 @@ import org.eclipse.jdt.internal.compiler.CompilationResult;
  * should only be thrown from within problem handlers.
  */
 public class AbortType extends AbortCompilationUnit {
-public AbortType(CompilationResult compilationResult) {
-	super(compilationResult);
+	
+	private static final long serialVersionUID = -5882417089349134385L; // backward compatible
+	
+public AbortType(CompilationResult compilationResult, IProblem problem) {
+	super(compilationResult, problem);
 }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -26,6 +26,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 	public ExplicitConstructorCall constructorCall;
 	public final static char[] ConstantPoolName = "<init>".toCharArray(); //$NON-NLS-1$
 	public boolean isDefaultConstructor = false;
+	public TypeParameter[] typeParameters;
 
 	public ConstructorDeclaration(CompilationResult compilationResult){
 		super(compilationResult);
@@ -118,7 +119,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 						&& (!flowInfo.isDefinitelyAssigned(fields[i]))) {
 						scope.problemReporter().uninitializedBlankFinalField(
 							field,
-							isDefaultConstructor ? (AstNode) scope.referenceType() : this);
+							isDefaultConstructor ? (ASTNode) scope.referenceType() : this);
 					}
 				}
 			}
@@ -156,10 +157,6 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 			if (e.compilationResult == CodeStream.RESTART_IN_WIDE_MODE) {
 				// a branch target required a goto_w, restart code gen in wide mode.
 				try {
-					if (statements != null) {
-						for (int i = 0, max = statements.length; i < max; i++)
-							statements[i].resetStateForCodeGeneration();
-					}
 					classFile.contentsOffset = problemResetPC;
 					classFile.methodCount--;
 					classFile.codeStream.wideMode = true; // request wide mode 
@@ -306,7 +303,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 
 		// if a problem got reported during code gen, then trigger problem method creation
 		if (ignoreFurtherInvestigation) {
-			throw new AbortMethod(scope.referenceCompilationUnit().compilationResult);
+			throw new AbortMethod(scope.referenceCompilationUnit().compilationResult, null);
 		}
 	}
 
@@ -317,7 +314,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 
 	public boolean isDefaultConstructor() {
 
-		return isDefaultConstructor;
+		return this.isDefaultConstructor;
 	}
 
 	public boolean isInitializationMethod() {
@@ -329,6 +326,9 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 	 * Returns true if the constructor is directly involved in a cycle.
 	 * Given most constructors aren't, we only allocate the visited list
 	 * lazily.
+	 * 
+	 * @param visited
+	 * @return
 	 */
 	public boolean isRecursive(ArrayList visited) {
 
@@ -341,7 +341,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 		}
 		
 		ConstructorDeclaration targetConstructor = 
-			((ConstructorDeclaration)this.scope.referenceType().declarationOf(constructorCall.binding));
+			((ConstructorDeclaration)this.scope.referenceType().declarationOf(constructorCall.binding.original()));
 		if (this == targetConstructor) return true; // direct case
 
 		if (visited == null) { // lazy allocation
@@ -388,6 +388,15 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 		return output;
 	}
 	
+	public void resolveJavadoc() {
+		
+		if (this.binding == null || this.javadoc != null) {
+			super.resolveJavadoc();
+		} else if (!isDefaultConstructor) {
+			this.scope.problemReporter().javadocMissing(this.sourceStart, this.sourceEnd, this.binding.modifiers);
+		}
+	}
+
 	/*
 	 * Type checking for constructor, just another method, except for special check
 	 * for recursive constructor invocations.
@@ -412,15 +421,29 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 				this.constructorCall.resolve(this.scope);
 			}
 		}
-		
+		if ((modifiers & AccSemicolonBody) != 0) {
+			scope.problemReporter().methodNeedBody(this);		
+		}
 		super.resolveStatements();
 	}
 
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		ClassScope classScope) {
 
+		
 		if (visitor.visit(this, classScope)) {
+			if (this.annotations != null) {
+				int annotationsLength = this.annotations.length;
+				for (int i = 0; i < annotationsLength; i++)
+					this.annotations[i].traverse(visitor, scope);
+			}
+			if (this.typeParameters != null) {
+				int typeParametersLength = this.typeParameters.length;
+				for (int i = 0; i < typeParametersLength; i++) {
+					this.typeParameters[i].traverse(visitor, scope);
+				}
+			}			
 			if (arguments != null) {
 				int argumentLength = arguments.length;
 				for (int i = 0; i < argumentLength; i++)
@@ -441,4 +464,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 		}
 		visitor.endVisit(this, classScope);
 	}
+	public TypeParameter[] typeParameters() {
+	    return this.typeParameters;
+	}		
 }

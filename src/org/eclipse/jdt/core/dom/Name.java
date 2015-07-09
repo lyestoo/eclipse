@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,9 +10,6 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
-
-import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
-import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 
 /**
  * Abstract base class for all AST nodes that represent names.
@@ -28,10 +25,16 @@ import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
  * 
  * @since 2.0
  */
-public abstract class Name extends Expression {
+public abstract class Name extends Expression implements IDocElement {
 	
 	/**
-	 * This index reprensents the position inside a qualified name.
+	 * Approximate base size of an expression node instance in bytes, 
+	 * including object header and instance fields.
+	 */
+	static final int BASE_NAME_NODE_SIZE = BASE_NODE_SIZE + 1 * 4;
+	
+	/**
+	 * This index represents the position inside a qualified name.
 	 */
 	int index;
 	
@@ -80,45 +83,36 @@ public abstract class Name extends Expression {
 	 *    resolved
 	 */	
 	public final IBinding resolveBinding() {
-		return getAST().getBindingResolver().resolveName(this);
+		return this.ast.getBindingResolver().resolveName(this);
+	}
+	
+	/**
+	 * Returns the standard dot-separated representation of this name.
+	 * If the name is a simple name, the result is the name's identifier.
+	 * If the name is a qualified name, the result is the name of the qualifier
+	 * (as computed by this method) followed by "." followed by the name's
+	 * identifier.
+	 * 
+	 * @return the fully qualified name
+	 * @since 3.0
+	 */
+	public final String getFullyQualifiedName() {
+		if (isSimpleName()) {
+			// avoid creating garbage for common case
+			return ((SimpleName) this).getIdentifier();
+		} else {
+			StringBuffer buffer = new StringBuffer(50);
+			appendName(buffer);
+			return new String(buffer);
+		}
 	}
 
-	BlockScope lookupScope() {
-		ASTNode currentNode = this;
-		while(currentNode != null
-			&&!(currentNode instanceof MethodDeclaration)
-			&& !(currentNode instanceof Initializer)
-			&& !(currentNode instanceof FieldDeclaration)) {
-			currentNode = currentNode.getParent();
-		}
-		if (currentNode == null) {
-			return null;
-		}
-		if (currentNode instanceof Initializer) {
-			Initializer initializer = (Initializer) currentNode;
-			while(!(currentNode instanceof TypeDeclaration)) {
-				currentNode = currentNode.getParent();
-			}
-			org.eclipse.jdt.internal.compiler.ast.TypeDeclaration typeDecl = (org.eclipse.jdt.internal.compiler.ast.TypeDeclaration) this.getAST().getBindingResolver().getCorrespondingNode(currentNode);
-			if ((initializer.getModifiers() & Modifier.STATIC) != 0) {
-				return typeDecl.staticInitializerScope;
-			} else {
-				return typeDecl.initializerScope;
-			}
-		} else if (currentNode instanceof FieldDeclaration) {
-			FieldDeclaration fieldDeclaration = (FieldDeclaration) currentNode;
-			while(!(currentNode instanceof TypeDeclaration)) {
-				currentNode = currentNode.getParent();
-			}
-			org.eclipse.jdt.internal.compiler.ast.TypeDeclaration typeDecl = (org.eclipse.jdt.internal.compiler.ast.TypeDeclaration) this.getAST().getBindingResolver().getCorrespondingNode(currentNode);
-			if ((fieldDeclaration.getModifiers() & Modifier.STATIC) != 0) {
-				return typeDecl.staticInitializerScope;
-			} else {
-				return typeDecl.initializerScope;
-			}
-		}
-		AbstractMethodDeclaration abstractMethodDeclaration = (AbstractMethodDeclaration) this.getAST().getBindingResolver().getCorrespondingNode(currentNode);
-		return abstractMethodDeclaration.scope;
-	}	
-	
+	/**
+	 * Appends the standard representation of this name to the given string
+	 * buffer.
+	 * 
+	 * @param buffer the buffer
+	 * @since 3.0
+	 */
+	abstract void appendName(StringBuffer buffer);	
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -56,7 +56,7 @@ public void computeConstant() {
 		if (length == 1) {	constant = Constant.fromValue(0); return ;}
 		final int shift,radix;
 		int j ;
-		if ( (source[1] == 'x') | (source[1] == 'X') )
+		if ( (source[1] == 'x') || (source[1] == 'X') )
 		{	shift = 4 ; j = 2; radix = 16;}
 		else
 		{	shift = 3 ; j = 1; radix = 8;}
@@ -143,7 +143,7 @@ public StringBuffer printExpression(int indent, StringBuffer output){
 	return super.printExpression(indent, output);
 }
 	
-public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+public void traverse(ASTVisitor visitor, BlockScope scope) {
 	visitor.visit(this, scope);
 	visitor.endVisit(this, scope);
 }

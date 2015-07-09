@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -41,13 +41,13 @@ public class CodeSnippetThisReference extends ThisReference implements Evaluatio
 	}
 	public boolean checkAccess(MethodScope methodScope) {
 		// this/super cannot be used in constructor call
-		if (evaluationContext.isConstructorCall) {
+		if (this.evaluationContext.isConstructorCall) {
 			methodScope.problemReporter().fieldsOrThisBeforeConstructorInvocation(this);
 			return false;
 		}
 	
 		// static may not refer to this/super
-		if (this.evaluationContext.declaringTypeName == null || evaluationContext.isStatic) {
+		if (this.evaluationContext.declaringTypeName == null || this.evaluationContext.isStatic) {
 			methodScope.problemReporter().errorThisSuperInStatic(this);
 			return false;
 		}
@@ -57,10 +57,16 @@ public class CodeSnippetThisReference extends ThisReference implements Evaluatio
 		int pc = codeStream.position;
 		if (valueRequired) {
 			codeStream.aload_0();
-			codeStream.getfield(delegateThis);
+			codeStream.getfield(this.delegateThis);
 		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
+	/**
+	 * @see org.eclipse.jdt.internal.compiler.lookup.InvocationSite#genericTypeArguments()
+	 */
+	public TypeBinding[] genericTypeArguments() {
+		return null;
+	}	
 	public boolean isSuperAccess(){
 		return false;
 	}
@@ -80,16 +86,16 @@ public class CodeSnippetThisReference extends ThisReference implements Evaluatio
 	public TypeBinding resolveType(BlockScope scope) {
 	
 		// implicit this
-		constant = NotAConstant;
+		this.constant = NotAConstant;
 		TypeBinding snippetType = null;
 		if (this.isImplicit || checkAccess(scope.methodScope())){
 			snippetType = scope.enclosingSourceType();
 		}
 		if (snippetType == null) return null;
 		
-		delegateThis = scope.getField(snippetType, DELEGATE_THIS, this);
-		if (delegateThis == null) return null; // internal error, field should have been found
-		if (delegateThis.isValidBinding()) return this.resolvedType = delegateThis.type;
+		this.delegateThis = scope.getField(snippetType, DELEGATE_THIS, this);
+		if (this.delegateThis == null) return null; // internal error, field should have been found
+		if (this.delegateThis.isValidBinding()) return this.resolvedType = this.delegateThis.type;
 		return this.resolvedType = snippetType;
 	}
 	public void setActualReceiverType(ReferenceBinding receiverType) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,4 +20,6 @@ public interface AttributeNamesConstants {
 	final char[] ExceptionsName = new char[] {'E', 'x', 'c', 'e', 'p', 't', 'i', 'o', 'n', 's'};
 	final char[] SourceName = new char[] {'S', 'o', 'u', 'r', 'c', 'e', 'F', 'i', 'l', 'e'};
 	final char[] DeprecatedName = new char[] {'D', 'e', 'p', 'r', 'e', 'c', 'a', 't', 'e', 'd'};
+	final char[] SignatureName = new char[] {'S', 'i', 'g', 'n', 'a', 't', 'u', 'r', 'e'};	
+	final char[] LocalVariableTypeTableName = new char[] {'L', 'o', 'c', 'a', 'l', 'V', 'a', 'r', 'i', 'a', 'b', 'l', 'e', 'T', 'y', 'p', 'e', 'T', 'a', 'b', 'l', 'e'};
 }

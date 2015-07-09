@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,7 +22,6 @@ import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-
 import org.eclipse.jdt.core.compiler.CharOperation;
 
 public class Util implements SuffixConstants {
@@ -77,23 +76,24 @@ public class Util implements SuffixConstants {
 		// for compatibility with MessageFormat which eliminates double quotes in original message
 		char[] messageWithNoDoubleQuotes =
 			CharOperation.replace(message.toCharArray(), DOUBLE_QUOTES, SINGLE_QUOTE);
-		message = new String(messageWithNoDoubleQuotes);
-
-		int length = message.length();
-		int start = -1;
+	
+		if (bindings == null) return new String(messageWithNoDoubleQuotes);
+	
+		int length = messageWithNoDoubleQuotes.length;
+		int start = 0;
 		int end = length;
 		StringBuffer output = null;
 		while (true) {
-			if ((end = message.indexOf('{', start)) > -1) {
-				if (output == null) output = new StringBuffer(80);
-				output.append(message.substring(start + 1, end));
-				if ((start = message.indexOf('}', end)) > -1) {
+			if ((end = CharOperation.indexOf('{', messageWithNoDoubleQuotes, start)) > -1) {
+				if (output == null) output = new StringBuffer(length+bindings.length*20);
+				output.append(messageWithNoDoubleQuotes, start, end - start);
+				if ((start = CharOperation.indexOf('}', messageWithNoDoubleQuotes, end + 1)) > -1) {
 					int index = -1;
+					String argId = new String(messageWithNoDoubleQuotes, end + 1, start - end - 1);
 					try {
-						index = Integer.parseInt(message.substring(end + 1, start));
+						index = Integer.parseInt(argId);
 						output.append(bindings[index]);
 					} catch (NumberFormatException nfe) { // could be nested message ID {compiler.name}
-						String argId = message.substring(end + 1, start);
 						boolean done = false;
 						if (!id.equals(argId)) {
 							String argMessage = null;
@@ -102,20 +102,21 @@ public class Util implements SuffixConstants {
 								output.append(argMessage);
 								done = true;
 							} catch (MissingResourceException e) {
-								// ignore
+								// unable to bind argument, ignore (will leave argument in)
 							}
 						}
-						if (!done) output.append(message.substring(end + 1, start + 1));
+						if (!done) output.append(messageWithNoDoubleQuotes, end + 1, start - end);
 					} catch (ArrayIndexOutOfBoundsException e) {
 						output.append("{missing " + Integer.toString(index) + "}"); //$NON-NLS-2$ //$NON-NLS-1$
 					}
+					start++;
 				} else {
-					output.append(message.substring(end, length));
+					output.append(messageWithNoDoubleQuotes, end, length);
 					break;
 				}
 			} else {
-				if (output == null) return message;
-				output.append(message.substring(start + 1, length));
+				if (output == null) return new String(messageWithNoDoubleQuotes);
+				output.append(messageWithNoDoubleQuotes, start, length - start);
 				break;
 			}
 		}
@@ -174,7 +175,7 @@ public class Util implements SuffixConstants {
 		InputStream stream = null;
 		try {
 			stream = new BufferedInputStream(new FileInputStream(file));
-			return Util.getInputStreamAsCharArray(stream, (int) file.length(), encoding);
+			return getInputStreamAsCharArray(stream, (int) file.length(), encoding);
 		} finally {
 			if (stream != null) {
 				try {
@@ -185,6 +186,24 @@ public class Util implements SuffixConstants {
 			}
 		}
 	}
+	/*
+	 * NIO support to get input stream as byte array.
+	 * Not used as with JDK 1.4.2 this support is slower than standard IO one...
+	 * Keep it as comment for future in case of next JDK versions improve performance
+	 * in this area...
+	 *
+	public static byte[] getInputStreamAsByteArray(FileInputStream stream, int length)
+		throws IOException {
+
+		FileChannel channel = stream.getChannel();
+		int size = (int)channel.size();
+		if (length >= 0 && length < size) size = length;
+		byte[] contents = new byte[size];
+		ByteBuffer buffer = ByteBuffer.wrap(contents);
+		channel.read(buffer);
+		return contents;
+	}
+	*/
 	/**
 	 * Returns the given input stream's contents as a byte array.
 	 * If a length is specified (ie. if length != -1), only length bytes
@@ -244,6 +263,29 @@ public class Util implements SuffixConstants {
 
 		return contents;
 	}
+	/*
+	 * NIO support to get input stream as char array.
+	 * Not used as with JDK 1.4.2 this support is slower than standard IO one...
+	 * Keep it as comment for future in case of next JDK versions improve performance
+	 * in this area...
+	public static char[] getInputStreamAsCharArray(FileInputStream stream, int length, String encoding)
+		throws IOException {
+		
+		FileChannel channel = stream.getChannel();
+		int size = (int)channel.size();
+		if (length >= 0 && length < size) size = length;
+		Charset charset = encoding==null?systemCharset:Charset.forName(encoding);
+		if (charset != null) {
+			MappedByteBuffer bbuffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, size);
+		    CharsetDecoder decoder = charset.newDecoder();
+		    CharBuffer buffer = decoder.decode(bbuffer);
+		    char[] contents = new char[buffer.limit()];
+		    buffer.get(contents);
+		    return contents;
+		}
+		throw new UnsupportedCharsetException(SYSTEM_FILE_ENCODING);
+	}
+	*/
 	/**
 	 * Returns the given input stream's contents as a character array.
 	 * If a length is specified (ie. if length != -1), only length chars
@@ -284,11 +326,19 @@ public class Util implements SuffixConstants {
 				}
 			} while (amountRead != -1);
 
+			// Do not keep first character for UTF-8 BOM encoding
+			int start = 0;
+			if (contentsLength > 0 && "UTF-8".equals(encoding)) { //$NON-NLS-1$
+				if (contents[0] == 0xFEFF) { // if BOM char then skip
+					contentsLength--;
+					start = 1;
+				}
+			}
 			// resize contents if necessary
 			if (contentsLength < contents.length) {
 				System.arraycopy(
 					contents,
-					0,
+					start,
 					contents = new char[contentsLength],
 					0,
 					contentsLength);
@@ -303,11 +353,19 @@ public class Util implements SuffixConstants {
 				len += readSize;
 				readSize = reader.read(contents, len, length - len);
 			}
+			// Do not keep first character for UTF-8 BOM encoding
+			int start = 0;
+			if (length > 0 && "UTF-8".equals(encoding)) { //$NON-NLS-1$
+				if (contents[0] == 0xFEFF) { // if BOM char then skip
+					len--;
+					start = 1;
+				}
+			}
 			// See PR 1FMS89U
 			// Now we need to resize in case the default encoding used more than one byte for each
 			// character
 			if (len != length)
-				System.arraycopy(contents, 0, (contents = new char[len]), 0, len);
+				System.arraycopy(contents, start, (contents = new char[len]), 0, len);
 		}
 
 		return contents;
@@ -379,6 +437,21 @@ public class Util implements SuffixConstants {
 		return true;		
 	}	
 	/**
+	 * Returns true iff str.toLowerCase().endsWith(".class")
+	 * implementation is not creating extra strings.
+	 */
+	public final static boolean isClassFileName(char[] name) {
+		int nameLength = name == null ? 0 : name.length;
+		int suffixLength = SUFFIX_CLASS.length;
+		if (nameLength < suffixLength) return false;
+
+		for (int i = 0, offset = nameLength - suffixLength; i < suffixLength; i++) {
+			char c = name[offset + i];
+			if (c != SUFFIX_class[i] && c != SUFFIX_CLASS[i]) return false;
+		}
+		return true;		
+	}	
+	/**
 	 * Returns true iff str.toLowerCase().endsWith(".java")
 	 * implementation is not creating extra strings.
 	 */
@@ -391,6 +464,21 @@ public class Util implements SuffixConstants {
 			char c = name.charAt(nameLength - i - 1);
 			int suffixIndex = suffixLength - i - 1;
 			if (c != SUFFIX_java[suffixIndex] && c != SUFFIX_JAVA[suffixIndex]) return false;
+		}
+		return true;		
+	}
+	/**
+	 * Returns true iff str.toLowerCase().endsWith(".java")
+	 * implementation is not creating extra strings.
+	 */
+	public final static boolean isJavaFileName(char[] name) {
+		int nameLength = name == null ? 0 : name.length;
+		int suffixLength = SUFFIX_JAVA.length;
+		if (nameLength < suffixLength) return false;
+
+		for (int i = 0, offset = nameLength - suffixLength; i < suffixLength; i++) {
+			char c = name[offset + i];
+			if (c != SUFFIX_java[i] && c != SUFFIX_JAVA[i]) return false;
 		}
 		return true;		
 	}
@@ -419,5 +507,17 @@ public class Util implements SuffixConstants {
 		}
 		return buffer.toString();
 	}
-	
+
+	/**
+	 * Converts a boolean value into Boolean.
+	 * @param bool The boolean to convert
+	 * @return The corresponding Boolean object (TRUE or FALSE).
+	 */
+	public static Boolean toBoolean(boolean bool) {
+		if (bool) {
+			return Boolean.TRUE;
+		} else {
+			return Boolean.FALSE;
+		}
+	}
 }

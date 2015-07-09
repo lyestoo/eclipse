@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -41,6 +41,8 @@ public class SynchronizedStatement extends SubRoutineStatement {
 		FlowContext flowContext,
 		FlowInfo flowInfo) {
 
+	    // TODO (philippe) shouldn't it be protected by a check whether reachable statement ?
+	    
 		// mark the synthetic variable as being used
 		synchroVariable.useFlag = LocalVariableBinding.USED;
 
@@ -69,12 +71,18 @@ public class SynchronizedStatement extends SubRoutineStatement {
 	 * @param codeStream org.eclipse.jdt.internal.compiler.codegen.CodeStream
 	 */
 	public void generateCode(BlockScope currentScope, CodeStream codeStream) {
-
+	
 		if ((bits & IsReachableMASK) == 0) {
 			return;
 		}
+		// in case the labels needs to be reinitialized
+		// when the code generation is restarted in wide mode
+		if (this.anyExceptionLabelsCount > 0) {
+			this.anyExceptionLabels = NO_EXCEPTION_HANDLER;
+			this.anyExceptionLabelsCount = 0;
+		}
 		int pc = codeStream.position;
-
+	
 		// generate the synchronization expression
 		expression.generateCode(scope, codeStream, true);
 		if (block.isEmptyBlock()) {
@@ -91,7 +99,7 @@ public class SynchronizedStatement extends SubRoutineStatement {
 			// enter the monitor
 			codeStream.store(synchroVariable, true);
 			codeStream.monitorenter();
-
+	
 			// generate  the body of the synchronized block
 			this.enterAnyExceptionHandler(codeStream);
 			block.generateCode(scope, codeStream);
@@ -99,14 +107,16 @@ public class SynchronizedStatement extends SubRoutineStatement {
 			if (!blockExit) {
 				codeStream.load(synchroVariable);
 				codeStream.monitorexit();
+				this.exitAnyExceptionHandler();
 				codeStream.goto_(endLabel);
+				this.enterAnyExceptionHandler(codeStream);
 			}
 			// generate the body of the exception handler
-			this.exitAnyExceptionHandler();
 			this.placeAllAnyExceptionHandlers();
 			codeStream.incrStackSize(1);
 			codeStream.load(synchroVariable);
 			codeStream.monitorexit();
+			this.exitAnyExceptionHandler();
 			codeStream.athrow();
 			if (!blockExit) {
 				endLabel.place();
@@ -157,8 +167,8 @@ public class SynchronizedStatement extends SubRoutineStatement {
 		//continue even on errors in order to have the TC done into the statements
 		synchroVariable = new LocalVariableBinding(SecretLocalDeclarationName, type, AccDefault, false);
 		scope.addLocalVariable(synchroVariable);
-		synchroVariable.constant = NotAConstant; // not inlinable
-		expression.implicitWidening(type, type);
+		synchroVariable.setConstant(NotAConstant); // not inlinable
+		expression.computeConversion(scope, type, type);
 		block.resolveUsing(scope);
 	}
 
@@ -172,7 +182,7 @@ public class SynchronizedStatement extends SubRoutineStatement {
 	}
 
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		BlockScope blockScope) {
 
 		if (visitor.visit(this, blockScope)) {

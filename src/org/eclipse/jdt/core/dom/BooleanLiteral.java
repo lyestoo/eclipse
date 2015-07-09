@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Boolean literal node.
@@ -24,6 +27,42 @@ package org.eclipse.jdt.core.dom;
  */
 public class BooleanLiteral extends Expression {
 	
+	/**
+	 * The "booleanValue" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor BOOLEAN_VALUE_PROPERTY = 
+		new SimplePropertyDescriptor(BooleanLiteral.class, "booleanValue", boolean.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List properyList = new ArrayList(2);
+		createPropertyList(BooleanLiteral.class, properyList);
+		addProperty(BOOLEAN_VALUE_PROPERTY, properyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(properyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/**
 	 * The boolean; defaults to the literal for <code>false</code>.
 	 */
@@ -44,14 +83,37 @@ public class BooleanLiteral extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final boolean internalGetSetBooleanProperty(SimplePropertyDescriptor property, boolean get, boolean newValue) {
+		if (property == BOOLEAN_VALUE_PROPERTY) {
+			if (get) {
+				return booleanValue();
+			} else {
+				setBooleanValue(newValue);
+				return false;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetBooleanProperty(property, get, newValue);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return BOOLEAN_LITERAL;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		BooleanLiteral result = new BooleanLiteral(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setBooleanValue(booleanValue());
@@ -61,7 +123,7 @@ public class BooleanLiteral extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -82,7 +144,7 @@ public class BooleanLiteral extends Expression {
 	 *    spelled <code>"false"</code>.
 	 */ 
 	public boolean booleanValue() {
-		return value;
+		return this.value;
 	}
 		
 	/**
@@ -93,8 +155,9 @@ public class BooleanLiteral extends Expression {
 	 *    spelled <code>"false"</code>.
 	 */ 
 	public void setBooleanValue(boolean value) {
-		modifying();
+		preValueChange(BOOLEAN_VALUE_PROPERTY);
 		this.value = value;
+		postValueChange(BOOLEAN_VALUE_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)

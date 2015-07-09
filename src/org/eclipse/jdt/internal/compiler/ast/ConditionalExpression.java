@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,8 +10,9 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -246,9 +247,7 @@ public class ConditionalExpression extends OperatorExpression {
 		if (needFalsePart) {
 			internalFalseLabel.place();
 			if (falseInitStateIndex != -1) {
-				codeStream.removeNotDefinitelyAssignedVariables(
-					currentScope,
-					falseInitStateIndex);
+				codeStream.removeNotDefinitelyAssignedVariables(currentScope, falseInitStateIndex);
 				codeStream.addDefinitelyAssignedVariables(currentScope, falseInitStateIndex);
 			}
 			valueIfFalse.generateOptimizedBoolean(currentScope, codeStream, trueLabel, falseLabel, valueRequired);
@@ -258,9 +257,7 @@ public class ConditionalExpression extends OperatorExpression {
 		}
 		// May loose some local variable initializations : affecting the local variable attributes
 		if (mergedInitStateIndex != -1) {
-			codeStream.removeNotDefinitelyAssignedVariables(
-				currentScope,
-				mergedInitStateIndex);
+			codeStream.removeNotDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
 		}
 		// no implicit conversion for boolean values
 		codeStream.updateLastRecordedEndPC(codeStream.position);
@@ -302,7 +299,7 @@ public class ConditionalExpression extends OperatorExpression {
 			constant = condConstant.booleanValue() ? trueConstant : falseConstant;
 		}
 		if (valueIfTrueType == valueIfFalseType) { // harmed the implicit conversion 
-			valueIfTrue.implicitWidening(valueIfTrueType, valueIfTrueType);
+			valueIfTrue.computeConversion(scope, valueIfTrueType, valueIfTrueType);
 			valueIfFalse.implicitConversion = valueIfTrue.implicitConversion;
 			if (valueIfTrueType == BooleanBinding) {
 				this.optimizedIfTrueConstant = valueIfTrue.optimizedBooleanConstant();
@@ -326,16 +323,16 @@ public class ConditionalExpression extends OperatorExpression {
 			// (Short x Byte) or (Byte x Short)"
 			if ((valueIfTrueType == ByteBinding && valueIfFalseType == ShortBinding)
 				|| (valueIfTrueType == ShortBinding && valueIfFalseType == ByteBinding)) {
-				valueIfTrue.implicitWidening(ShortBinding, valueIfTrueType);
-				valueIfFalse.implicitWidening(ShortBinding, valueIfFalseType);
+				valueIfTrue.computeConversion(scope, ShortBinding, valueIfTrueType);
+				valueIfFalse.computeConversion(scope, ShortBinding, valueIfFalseType);
 				return this.resolvedType = ShortBinding;
 			}
 			// <Byte|Short|Char> x constant(Int)  ---> <Byte|Short|Char>   and reciprocally
 			if ((valueIfTrueType == ByteBinding || valueIfTrueType == ShortBinding || valueIfTrueType == CharBinding)
 					&& (valueIfFalseType == IntBinding
 						&& valueIfFalse.isConstantValueOfTypeAssignableToType(valueIfFalseType, valueIfTrueType))) {
-				valueIfTrue.implicitWidening(valueIfTrueType, valueIfTrueType);
-				valueIfFalse.implicitWidening(valueIfTrueType, valueIfFalseType);
+				valueIfTrue.computeConversion(scope, valueIfTrueType, valueIfTrueType);
+				valueIfFalse.computeConversion(scope, valueIfTrueType, valueIfFalseType);
 				return this.resolvedType = valueIfTrueType;
 			}
 			if ((valueIfFalseType == ByteBinding
@@ -343,35 +340,35 @@ public class ConditionalExpression extends OperatorExpression {
 					|| valueIfFalseType == CharBinding)
 					&& (valueIfTrueType == IntBinding
 						&& valueIfTrue.isConstantValueOfTypeAssignableToType(valueIfTrueType, valueIfFalseType))) {
-				valueIfTrue.implicitWidening(valueIfFalseType, valueIfTrueType);
-				valueIfFalse.implicitWidening(valueIfFalseType, valueIfFalseType);
+				valueIfTrue.computeConversion(scope, valueIfFalseType, valueIfTrueType);
+				valueIfFalse.computeConversion(scope, valueIfFalseType, valueIfFalseType);
 				return this.resolvedType = valueIfFalseType;
 			}
 			// Manual binary numeric promotion
 			// int
 			if (BaseTypeBinding.isNarrowing(valueIfTrueType.id, T_int)
 					&& BaseTypeBinding.isNarrowing(valueIfFalseType.id, T_int)) {
-				valueIfTrue.implicitWidening(IntBinding, valueIfTrueType);
-				valueIfFalse.implicitWidening(IntBinding, valueIfFalseType);
+				valueIfTrue.computeConversion(scope, IntBinding, valueIfTrueType);
+				valueIfFalse.computeConversion(scope, IntBinding, valueIfFalseType);
 				return this.resolvedType = IntBinding;
 			}
 			// long
 			if (BaseTypeBinding.isNarrowing(valueIfTrueType.id, T_long)
 					&& BaseTypeBinding.isNarrowing(valueIfFalseType.id, T_long)) {
-				valueIfTrue.implicitWidening(LongBinding, valueIfTrueType);
-				valueIfFalse.implicitWidening(LongBinding, valueIfFalseType);
+				valueIfTrue.computeConversion(scope, LongBinding, valueIfTrueType);
+				valueIfFalse.computeConversion(scope, LongBinding, valueIfFalseType);
 				return this.resolvedType = LongBinding;
 			}
 			// float
 			if (BaseTypeBinding.isNarrowing(valueIfTrueType.id, T_float)
 					&& BaseTypeBinding.isNarrowing(valueIfFalseType.id, T_float)) {
-				valueIfTrue.implicitWidening(FloatBinding, valueIfTrueType);
-				valueIfFalse.implicitWidening(FloatBinding, valueIfFalseType);
+				valueIfTrue.computeConversion(scope, FloatBinding, valueIfTrueType);
+				valueIfFalse.computeConversion(scope, FloatBinding, valueIfFalseType);
 				return this.resolvedType = FloatBinding;
 			}
 			// double
-			valueIfTrue.implicitWidening(DoubleBinding, valueIfTrueType);
-			valueIfFalse.implicitWidening(DoubleBinding, valueIfFalseType);
+			valueIfTrue.computeConversion(scope, DoubleBinding, valueIfTrueType);
+			valueIfFalse.computeConversion(scope, DoubleBinding, valueIfFalseType);
 			return this.resolvedType = DoubleBinding;
 		}
 		// Type references (null null is already tested)
@@ -384,14 +381,22 @@ public class ConditionalExpression extends OperatorExpression {
 			return null;
 		}
 		if (valueIfFalseType.isCompatibleWith(valueIfTrueType)) {
-			valueIfTrue.implicitWidening(valueIfTrueType, valueIfTrueType);
-			valueIfFalse.implicitWidening(valueIfTrueType, valueIfFalseType);
+			valueIfTrue.computeConversion(scope, valueIfTrueType, valueIfTrueType);
+			valueIfFalse.computeConversion(scope, valueIfTrueType, valueIfFalseType);
 			return this.resolvedType = valueIfTrueType;
 		}
 		if (valueIfTrueType.isCompatibleWith(valueIfFalseType)) {
-			valueIfTrue.implicitWidening(valueIfFalseType, valueIfTrueType);
-			valueIfFalse.implicitWidening(valueIfFalseType, valueIfFalseType);
+			valueIfTrue.computeConversion(scope, valueIfFalseType, valueIfTrueType);
+			valueIfFalse.computeConversion(scope, valueIfFalseType, valueIfFalseType);
 			return this.resolvedType = valueIfFalseType;
+		}
+		// 1.5 addition: allow most common type 
+		if (scope.environment().options.sourceLevel >= ClassFileConstants.JDK1_5) {
+			TypeBinding commonType = scope.lowerUpperBound(new TypeBinding[] { valueIfTrueType, valueIfFalseType });
+//			TypeBinding commonType = scope.mostSpecificCommonType(new TypeBinding[] { valueIfTrueType, valueIfFalseType });
+			if (commonType != null) {
+				return this.resolvedType = commonType;
+			}
 		}
 		scope.problemReporter().conditionalArgumentsIncompatibleTypes(
 			this,
@@ -400,7 +405,7 @@ public class ConditionalExpression extends OperatorExpression {
 		return null;
 	}
 	
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+	public void traverse(ASTVisitor visitor, BlockScope scope) {
 		if (visitor.visit(this, scope)) {
 			condition.traverse(visitor, scope);
 			valueIfTrue.traverse(visitor, scope);

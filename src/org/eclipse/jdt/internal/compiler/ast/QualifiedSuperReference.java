@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public class QualifiedSuperReference extends QualifiedThisReference {
@@ -44,7 +44,7 @@ public class QualifiedSuperReference extends QualifiedThisReference {
 		if (currentCompatibleType == null)
 			return null; // error case
 
-		if (scope.isJavaLangObject(currentCompatibleType)) {
+		if (currentCompatibleType.id == T_Object) {
 			scope.problemReporter().cannotUseSuperInJavaLangObject(this);
 			return null;
 		}
@@ -52,7 +52,7 @@ public class QualifiedSuperReference extends QualifiedThisReference {
 	}
 
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		BlockScope blockScope) {
 
 		if (visitor.visit(this, blockScope)) {

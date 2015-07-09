@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Synchronized statement AST node type.
@@ -23,6 +26,50 @@ package org.eclipse.jdt.core.dom;
  */
 public class SynchronizedStatement extends Statement {
 
+	/**
+	 * The "expression" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor EXPRESSION_PROPERTY = 
+		new ChildPropertyDescriptor(SynchronizedStatement.class, "expression", Expression.class, MANDATORY, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "body" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor BODY_PROPERTY = 
+		new ChildPropertyDescriptor(SynchronizedStatement.class, "body", Block.class, MANDATORY, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List propertyList = new ArrayList(3);
+		createPropertyList(SynchronizedStatement.class, propertyList);
+		addProperty(EXPRESSION_PROPERTY, propertyList);
+		addProperty(BODY_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(propertyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/**
 	 * The expression; lazily initialized; defaults to an unspecified, but 
 	 * legal, expression.
@@ -51,14 +98,45 @@ public class SynchronizedStatement extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == EXPRESSION_PROPERTY) {
+			if (get) {
+				return getExpression();
+			} else {
+				setExpression((Expression) child);
+				return null;
+			}
+		}
+		if (property == BODY_PROPERTY) {
+			if (get) {
+				return getBody();
+			} else {
+				setBody((Block) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return SYNCHRONIZED_STATEMENT;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		SynchronizedStatement result = new SynchronizedStatement(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.copyLeadingComment(this);
@@ -70,7 +148,7 @@ public class SynchronizedStatement extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -94,13 +172,17 @@ public class SynchronizedStatement extends Statement {
 	 * @return the expression node
 	 */ 
 	public Expression getExpression() {
-		if (expression == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setExpression(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.expression == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.expression == null) {
+					preLazyInit();
+					this.expression = new SimpleName(this.ast);
+					postLazyInit(this.expression, EXPRESSION_PROPERTY);
+				}
+			}
 		}
-		return expression;
+		return this.expression;
 	}
 	
 	/**
@@ -118,10 +200,10 @@ public class SynchronizedStatement extends Statement {
 		if (expression == null) {
 			throw new IllegalArgumentException();
 		}
-		// a SynchronizedStatement may occur inside an Expression
-		// must check cycles
-		replaceChild(this.expression, expression, true);
+		ASTNode oldChild = this.expression;
+		preReplaceChild(oldChild, expression, EXPRESSION_PROPERTY);
 		this.expression = expression;
+		postReplaceChild(oldChild, expression, EXPRESSION_PROPERTY);
 	}
 
 	/**
@@ -130,13 +212,17 @@ public class SynchronizedStatement extends Statement {
 	 * @return the body block node
 	 */ 
 	public Block getBody() {
-		if (body == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setBody(new Block(getAST()));
-			getAST().setModificationCount(count);
+		if (this.body == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.body == null) {
+					preLazyInit();
+					this.body = new Block(this.ast);
+					postLazyInit(this.body, BODY_PROPERTY);
+				}
+			}
 		}
-		return body;
+		return this.body;
 	}
 	
 	/**
@@ -154,9 +240,10 @@ public class SynchronizedStatement extends Statement {
 		if (block == null) {
 			throw new IllegalArgumentException();
 		}
-		// a WhileStatement may occur inside a Statement - must check cycles
-		replaceChild(this.body, block, true);
+		ASTNode oldChild = this.body;
+		preReplaceChild(oldChild, block, BODY_PROPERTY);
 		this.body = block;
+		postReplaceChild(oldChild, block, BODY_PROPERTY);
 	}
 	
 	/* (omit javadoc for this method)
@@ -172,7 +259,7 @@ public class SynchronizedStatement extends Statement {
 	int treeSize() {
 		return
 			memSize()
-			+ (expression == null ? 0 : getExpression().treeSize())
-			+ (body == null ? 0 : getBody().treeSize());
+			+ (this.expression == null ? 0 : getExpression().treeSize())
+			+ (this.body == null ? 0 : getBody().treeSize());
 	}
 }

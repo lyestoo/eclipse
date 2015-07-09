@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,13 +13,12 @@ package org.eclipse.jdt.internal.compiler.parser;
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Argument;
-import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.Block;
 import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ExplicitConstructorCall;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.LocalDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.LocalTypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Statement;
 import org.eclipse.jdt.internal.compiler.ast.SuperReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
@@ -202,18 +201,25 @@ public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalanceV
 			
 		if (this.parent == null) {
 			return this; // ignore
-		} else {
-			return this.parent.add(typeDeclaration, bracketBalanceValue);
 		}
+		return this.parent.add(typeDeclaration, bracketBalanceValue);
 	}
-	if (typeDeclaration instanceof LocalTypeDeclaration){
+	if ((typeDeclaration.bits & ASTNode.IsLocalTypeMASK) != 0){
 		if (methodBody == null){
 			Block block = new Block(0);
 			block.sourceStart = methodDeclaration.bodyStart;
 			this.add(block, 1);
 		}
 		return methodBody.add(typeDeclaration, bracketBalanceValue, true);	
-	}	
+	}
+	if (typeDeclaration.isInterface()) {
+		this.updateSourceEndIfNecessary(this.previousAvailableLineEnd(typeDeclaration.declarationSourceStart - 1));
+		if (this.parent == null) {
+			return this; // ignore
+		}
+		// close the constructor
+		return this.parent.add(typeDeclaration, bracketBalanceValue);
+	}
 	if (localTypes == null) {
 		localTypes = new RecoveredType[5];
 		localTypeCount = 0;
@@ -243,7 +249,7 @@ public boolean bodyStartsAtHeaderEnd(){
 /* 
  * Answer the associated parsed structure
  */
-public AstNode parseTree(){
+public ASTNode parseTree(){
 	return methodDeclaration;
 }
 /*
@@ -255,7 +261,7 @@ public int sourceEnd(){
 public String toString(int tab) {
 	StringBuffer result = new StringBuffer(tabString(tab));
 	result.append("Recovered method:\n"); //$NON-NLS-1$
-	result.append(this.methodDeclaration.print(tab + 1, result));
+	this.methodDeclaration.print(tab + 1, result);
 	if (this.localTypes != null) {
 		for (int i = 0; i < this.localTypeCount; i++) {
 			result.append("\n"); //$NON-NLS-1$
@@ -302,7 +308,7 @@ public AbstractMethodDeclaration updatedMethodDeclaration(){
 			}
 		}
 	}
-	if (localTypeCount > 0) methodDeclaration.bits |= AstNode.HasLocalTypeMASK;
+	if (localTypeCount > 0) methodDeclaration.bits |= ASTNode.HasLocalTypeMASK;
 	return methodDeclaration;
 }
 /*
@@ -385,7 +391,7 @@ public void updateFromParserState(){
 						}
 					}
 					if(canConsume) {
-						parser.consumeMethodHeaderParameters();
+						parser.consumeMethodHeaderRightParen();
 						/* fix-up positions, given they were updated against rParenPos, which did not get set */
 						if (parser.currentElement == this){ // parameter addition might have added an awaiting (no return type) method - see 1FVXQZ4 */
 							methodDeclaration.sourceEnd = methodDeclaration.arguments[methodDeclaration.arguments.length-1].sourceEnd;

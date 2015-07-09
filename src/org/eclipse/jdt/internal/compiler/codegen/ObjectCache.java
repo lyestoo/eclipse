@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -46,7 +46,7 @@ public void clear() {
 }
 /** Returns true if the collection contains an element for the key.
  *
- * @param char[] key the key that we are looking for
+ * @param key char[] the key that we are looking for
  * @return boolean
  */
 public boolean containsKey(Object key) {

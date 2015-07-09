@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.*;
@@ -110,30 +110,20 @@ public class WhileStatement extends Statement {
 			if (!actionInfo.isReachable() && !loopingContext.initsOnContinue.isReachable()) {
 				continueLabel = null;
 			} else {
-				// TODO: (philippe) should simplify in one Loop context
 				condLoopContext.complainOnFinalAssignmentsInLoop(currentScope, postCondInfo);
+				actionInfo = actionInfo.mergedWith(loopingContext.initsOnContinue.unconditionalInits());
 				loopingContext.complainOnFinalAssignmentsInLoop(currentScope, actionInfo);
 			}
 		}
 
-		// infinite loop
-		FlowInfo mergedInfo;
-		if (isConditionOptimizedTrue) {
-			mergedInitStateIndex =
-				currentScope.methodScope().recordInitializationStates(
-					mergedInfo = loopingContext.initsOnBreak);
-			return mergedInfo;
-		}
-
-		// end of loop: either condition false or break
-		mergedInfo =
-			postCondInfo.initsWhenFalse().unconditionalInits().mergedWith(
-				loopingContext.initsOnBreak);
-		if (isConditionOptimizedTrue && continueLabel == null){
-			mergedInfo.setReachMode(FlowInfo.UNREACHABLE);
-		}
-		mergedInitStateIndex =
-			currentScope.methodScope().recordInitializationStates(mergedInfo);
+		// end of loop
+		FlowInfo mergedInfo = FlowInfo.mergedOptimizedBranches(
+				loopingContext.initsOnBreak, 
+				isConditionOptimizedTrue, 
+				postCondInfo.initsWhenFalse(), 
+				isConditionOptimizedFalse,
+				!isConditionTrue /*while(true); unreachable(); */);
+		mergedInitStateIndex = currentScope.methodScope().recordInitializationStates(mergedInfo);
 		return mergedInfo;
 	}
 
@@ -149,7 +139,7 @@ public class WhileStatement extends Statement {
 			return;
 		}
 		int pc = codeStream.position;
-		breakLabel.codeStream = codeStream;
+		breakLabel.initialize(codeStream);
 
 		// generate condition
 		if (continueLabel == null) {
@@ -163,7 +153,7 @@ public class WhileStatement extends Statement {
 					true);
 			}
 		} else {
-			continueLabel.codeStream = codeStream;
+			continueLabel.initialize(codeStream);
 			if (!(((condition.constant != NotAConstant)
 				&& (condition.constant.booleanValue() == true))
 				|| (action == null)
@@ -187,9 +177,7 @@ public class WhileStatement extends Statement {
 			action.generateCode(currentScope, codeStream);
 			// May loose some local variable initializations : affecting the local variable attributes
 			if (preCondInitStateIndex != -1) {
-				codeStream.removeNotDefinitelyAssignedVariables(
-					currentScope,
-					preCondInitStateIndex);
+				codeStream.removeNotDefinitelyAssignedVariables(currentScope, preCondInitStateIndex);
 			}
 
 		}
@@ -207,26 +195,16 @@ public class WhileStatement extends Statement {
 
 		// May loose some local variable initializations : affecting the local variable attributes
 		if (mergedInitStateIndex != -1) {
-			codeStream.removeNotDefinitelyAssignedVariables(
-				currentScope,
-				mergedInitStateIndex);
+			codeStream.removeNotDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
+			codeStream.addDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
 		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
-	}
-
-	public void resetStateForCodeGeneration() {
-		if (this.breakLabel != null) {
-			this.breakLabel.resetStateForCodeGeneration();
-		}
-		if (this.continueLabel != null) {
-			this.continueLabel.resetStateForCodeGeneration();
-		}
 	}
 
 	public void resolve(BlockScope scope) {
 
 		TypeBinding type = condition.resolveTypeExpecting(scope, BooleanBinding);
-		condition.implicitWidening(type, type);
+		condition.computeConversion(scope, type, type);
 		if (action != null)
 			action.resolve(scope);
 	}
@@ -243,7 +221,7 @@ public class WhileStatement extends Statement {
 	}
 
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		BlockScope blockScope) {
 
 		if (visitor.visit(this, blockScope)) {

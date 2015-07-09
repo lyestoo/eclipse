@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -19,7 +19,7 @@ package org.eclipse.jdt.core.dom;
  * This interface is not intended to be implemented by clients.
  * </p>
  *
- * @see ITypeBinding#getDeclaredFields
+ * @see ITypeBinding#getDeclaredFields()
  * @since 2.0
  */
 public interface IVariableBinding extends IBinding {
@@ -67,9 +67,7 @@ public interface IVariableBinding extends IBinding {
 	 * <b>Local variables inside methods:</b> Local variables (and parameters)
 	 * declared within a single method are assigned ascending ids in normal
 	 * code reading order; var1.getVariableId()&lt;var2.getVariableId() means that var1 is
-	 * declared before var2. Note that the numbering does not include the local
-	 * variables declared within the method's local (or anonymous) types - their
-	 * ids would be relative to the methods of the local type.
+	 * declared before var2.
 	 * </p>
 	 * <p>
 	 * <b>Local variables outside methods:</b> Local variables declared in a
@@ -91,4 +89,19 @@ public interface IVariableBinding extends IBinding {
 	 * @return a small non-negative variable id
 	 */
 	public int getVariableId();
+	
+	/**
+	 * Returns this binding's constant value if it has one.
+	 * Some variables may have a value computed at compile-time. If the type of
+	 * the value is a primitive type, the result is the boxed equivalent (i.e.,
+	 * int returned as an <code>Integer</code>). If the type of the value is
+	 * <code>String</code>, the result is the string itself. If the variable has
+	 * no compile-time computed value, the result is <code>null</code>.
+	 * (Note: compile-time constant expressions cannot denote <code>null</code>;
+	 * JLS2 15.28.)
+	 * 
+	 * @return the constant value, or <code>null</code> if none
+	 * @since 3.0
+	 */
+	public Object getConstantValue();
 }

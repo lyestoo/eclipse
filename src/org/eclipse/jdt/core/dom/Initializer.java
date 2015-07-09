@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,9 +11,11 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Static or instance initializer AST node type.
- *
  * <pre>
  * Initializer:
  *     [ <b>static</b> ] Block
@@ -24,16 +26,85 @@ package org.eclipse.jdt.core.dom;
 public class Initializer extends BodyDeclaration {
 	
 	/**
-	 * Mask containing all legal modifiers for this construct.
+	 * The "javadoc" structural property of this node type.
+	 * @since 3.0
 	 */
-	private static final int LEGAL_MODIFIERS = Modifier.STATIC;
+	public static final ChildPropertyDescriptor JAVADOC_PROPERTY = 
+		internalJavadocPropertyFactory(Initializer.class);
+
+	/**
+	 * The "modifiers" structural property of this node type (JLS2 API only).
+	 * @since 3.0
+	 */
+    // TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated Replaced by {@link #MODIFIERS2_PROPERTY} in the JLS3 API.
+	public static final SimplePropertyDescriptor MODIFIERS_PROPERTY = 
+		internalModifiersPropertyFactory(Initializer.class);
 	
 	/**
-	 * The modifiers; bit-wise or of Modifier flags.
-	 * Defaults to none.
+	 * The "modifiers" structural property of this node type (added in JLS3 API).
+	 * @since 3.0
 	 */
-	private int modifiers = 0;
+	public static final ChildListPropertyDescriptor MODIFIERS2_PROPERTY = 
+		internalModifiers2PropertyFactory(Initializer.class);
+	
+	/**
+	 * The "body" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor BODY_PROPERTY = 
+		new ChildPropertyDescriptor(Initializer.class, "body", Block.class, MANDATORY, CYCLE_RISK); //$NON-NLS-1$
 
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS_2_0;
+	
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS_3_0;
+	
+	static {
+		List properyList = new ArrayList(4);
+		createPropertyList(Initializer.class, properyList);
+		addProperty(JAVADOC_PROPERTY, properyList);
+		addProperty(MODIFIERS_PROPERTY, properyList);
+		addProperty(BODY_PROPERTY, properyList);
+		PROPERTY_DESCRIPTORS_2_0 = reapPropertyList(properyList);
+		
+		properyList = new ArrayList(4);
+		createPropertyList(Initializer.class, properyList);
+		addProperty(JAVADOC_PROPERTY, properyList);
+		addProperty(MODIFIERS2_PROPERTY, properyList);
+		addProperty(BODY_PROPERTY, properyList);
+		PROPERTY_DESCRIPTORS_3_0 = reapPropertyList(properyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		if (apiLevel == AST.JLS2) {
+			return PROPERTY_DESCRIPTORS_2_0;
+		} else {
+			return PROPERTY_DESCRIPTORS_3_0;
+		}
+	}
+			
 	/**
 	 * The initializer body; lazily initialized; defaults to an empty block.
 	 */
@@ -55,18 +126,103 @@ public class Initializer extends BodyDeclaration {
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
+	 * @since 3.0
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int internalGetSetIntProperty(SimplePropertyDescriptor property, boolean get, int value) {
+		if (property == MODIFIERS_PROPERTY) {
+			if (get) {
+				return getModifiers();
+			} else {
+				setModifiers(value);
+				return 0;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetIntProperty(property, get, value);
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == JAVADOC_PROPERTY) {
+			if (get) {
+				return getJavadoc();
+			} else {
+				setJavadoc((Javadoc) child);
+				return null;
+			}
+		}
+		if (property == BODY_PROPERTY) {
+			if (get) {
+				return getBody();
+			} else {
+				setBody((Block) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final List internalGetChildListProperty(ChildListPropertyDescriptor property) {
+		if (property == MODIFIERS2_PROPERTY) {
+			return modifiers();
+		}
+		// allow default implementation to flag the error
+		return super.internalGetChildListProperty(property);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on BodyDeclaration.
+	 */
+	final ChildPropertyDescriptor internalJavadocProperty() {
+		return JAVADOC_PROPERTY;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on BodyDeclaration.
+	 */
+	final ChildListPropertyDescriptor internalModifiers2Property() {
+		return MODIFIERS2_PROPERTY;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on BodyDeclaration.
+	 */
+	final SimplePropertyDescriptor internalModifiersProperty() {
+		return MODIFIERS_PROPERTY;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return INITIALIZER;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		Initializer result = new Initializer(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
-		result.setModifiers(getModifiers());
+		if (this.ast.apiLevel == AST.JLS2) {
+			result.setModifiers(getModifiers());
+		}
+		if (this.ast.apiLevel >= AST.JLS3) {
+			result.modifiers().addAll(ASTNode.copySubtrees(target, modifiers()));
+		}
 		result.setJavadoc(
 			(Javadoc) ASTNode.copySubtree(target, getJavadoc()));
 		result.setBody((Block) getBody().clone(target));
@@ -76,7 +232,7 @@ public class Initializer extends BodyDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -88,55 +244,31 @@ public class Initializer extends BodyDeclaration {
 		boolean visitChildren = visitor.visit(this);
 		if (visitChildren) {
 			acceptChild(visitor, getJavadoc());
+			if (this.ast.apiLevel >= AST.JLS3) {
+				acceptChildren(visitor, this.modifiers);
+			}
 			acceptChild(visitor, getBody());
 		}
 		visitor.endVisit(this);
 	}
 	
 	/**
-	 * Returns the modifiers explicitly specified on this declaration.
-	 * <p>
-	 * Note that static is the only meaningful modifier for an initializer.
-	 * </p>
-	 * 
-	 * @return the bit-wise or of <code>Modifier</code> constants
-	 * @see Modifier
-	 */ 
-	public int getModifiers() {
-		return modifiers;
-	}
-
-	/**
-	 * Sets the modifiers explicitly specified on this declaration.
-	 * <p>
-	 * Note that static is the only meaningful modifier for an initializer.
-	 * </p>
-	 * 
-	 * @return the bit-wise or of <code>Modifier</code> constants
-	 * @see Modifier
-	 * @exception IllegalArgumentException if the modifiers are illegal
-	 */ 
-	public void setModifiers(int modifiers) {
-		if ((modifiers & ~LEGAL_MODIFIERS) != 0) {
-			throw new IllegalArgumentException();
-		}
-		modifying();
-		this.modifiers = modifiers;
-	}
-
-	/**
 	 * Returns the body of this initializer declaration.
 	 * 
 	 * @return the initializer body
 	 */ 
 	public Block getBody() {
-		if (body == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setBody(new Block(getAST()));
-			getAST().setModificationCount(count);
+		if (this.body == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.body == null) {
+					preLazyInit();
+					this.body= new Block(this.ast);
+					postLazyInit(this.body, BODY_PROPERTY);
+				}
+			}
 		}
-		return body;
+		return this.body;
 	}
 	
 	/**
@@ -154,15 +286,17 @@ public class Initializer extends BodyDeclaration {
 		if (body == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.body, body, true);
+		ASTNode oldChild = this.body;
+		preReplaceChild(oldChild, body, BODY_PROPERTY);
 		this.body = body;
+		postReplaceChild(oldChild, body, BODY_PROPERTY);
 	}
 	
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		return super.memSize() + 2 * 4;
+		return super.memSize() + 1 * 4;
 	}
 	
 	/* (omit javadoc for this method)
@@ -171,8 +305,9 @@ public class Initializer extends BodyDeclaration {
 	int treeSize() {
 		return
 			memSize()
-			+ (getJavadoc() == null ? 0 : getJavadoc().treeSize())
-			+ (body == null ? 0 : getBody().treeSize());
+			+ (this.optionalDocComment == null ? 0 : getJavadoc().treeSize())
+			+ (this.modifiers == null ? 0 : this.modifiers.listSize())
+			+ (this.body == null ? 0 : getBody().treeSize());
 	}
 }
 

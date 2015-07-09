@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -107,7 +107,7 @@ protected char[] getClassName() {
 	return CharOperation.concat(CODE_SNIPPET_CLASS_NAME_PREFIX, Integer.toString(EvaluationContext.CODE_SNIPPET_COUNTER + 1).toCharArray());
 }
 /**
- * @see Evaluator.
+ * @see Evaluator
  */
 Compiler getCompiler(ICompilerRequestor compilerRequestor) {
 	Compiler compiler = null;
@@ -125,7 +125,7 @@ Compiler getCompiler(ICompilerRequestor compilerRequestor) {
 				this.problemFactory,
 				this.context,
 				getMapper().startPosOffset,
-				getMapper().startPosOffset + codeSnippet.length - 1);
+				getMapper().startPosOffset + this.codeSnippet.length - 1);
 		// Initialize the compiler's lookup environment with the already compiled super classes
 		IBinaryType binary = this.context.getRootCodeSnippetBinary();
 		if (binary != null) {

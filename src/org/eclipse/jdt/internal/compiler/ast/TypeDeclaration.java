@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,7 +11,7 @@
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
@@ -24,14 +24,17 @@ public class TypeDeclaration
 	extends Statement
 	implements ProblemSeverities, ReferenceContext {
 
-	public int modifiers;
+	public static final char[] ANONYMOUS_EMPTY_NAME = new char[] {};
+
+	public int modifiers = AccDefault;
 	public int modifiersSourceStart;
+	public Annotation[] annotations;
 	public char[] name;
 	public TypeReference superclass;
 	public TypeReference[] superInterfaces;
 	public FieldDeclaration[] fields;
 	public AbstractMethodDeclaration[] methods;
-	public MemberTypeDeclaration[] memberTypes;
+	public TypeDeclaration[] memberTypes;
 	public SourceTypeBinding binding;
 	public ClassScope scope;
 	public MethodScope initializerScope;
@@ -44,8 +47,16 @@ public class TypeDeclaration
 	public int bodyEnd; // doesn't include the trailing comment if any.
 	protected boolean hasBeenGenerated = false;
 	public CompilationResult compilationResult;
-	private MethodDeclaration[] missingAbstractMethods;
+	public MethodDeclaration[] missingAbstractMethods;
+	public Javadoc javadoc;	
 
+	public QualifiedAllocationExpression allocation; // for anonymous only
+	public TypeDeclaration enclosingType; // for member types only
+	
+	// 1.5 support
+	public EnumDeclaration[] enums;
+	public TypeParameter[] typeParameters;
+	
 	public TypeDeclaration(CompilationResult compilationResult){
 		this.compilationResult = compilationResult;
 	}
@@ -53,17 +64,17 @@ public class TypeDeclaration
 	/*
 	 *	We cause the compilation task to abort to a given extent.
 	 */
-	public void abort(int abortLevel) {
+	public void abort(int abortLevel, IProblem problem) {
 
 		switch (abortLevel) {
 			case AbortCompilation :
-				throw new AbortCompilation(this.compilationResult);
+				throw new AbortCompilation(this.compilationResult, problem);
 			case AbortCompilationUnit :
-				throw new AbortCompilationUnit(this.compilationResult);
+				throw new AbortCompilationUnit(this.compilationResult, problem);
 			case AbortMethod :
-				throw new AbortMethod(this.compilationResult);
+				throw new AbortMethod(this.compilationResult, problem);
 			default :
-				throw new AbortType(this.compilationResult);
+				throw new AbortType(this.compilationResult, problem);
 		}
 	}
 	/**
@@ -104,7 +115,7 @@ public class TypeDeclaration
 		}
 	}
 
-	/**
+	/*
 	 * INTERNAL USE ONLY - Creates a fake method declaration for the corresponding binding.
 	 * It is used to report errors for missing abstract methods.
 	 */
@@ -122,7 +133,7 @@ public class TypeDeclaration
 			String baseName = "arg";//$NON-NLS-1$
 			Argument[] arguments = (methodDeclaration.arguments = new Argument[argumentsLength]);
 			for (int i = argumentsLength; --i >= 0;) {
-				arguments[i] = new Argument((baseName + i).toCharArray(), 0L, null /*type ref*/, AccDefault);
+				arguments[i] = new Argument((baseName + i).toCharArray(), 0L, null /*type ref*/, AccDefault, false /*not vararg*/);
 			}
 		}
 
@@ -272,20 +283,7 @@ public class TypeDeclaration
 						// unless an explicit constructor call was supplied
 						ConstructorDeclaration c = (ConstructorDeclaration) am;
 						if (c.constructorCall == null || c.constructorCall.isImplicitSuper()) { //changed to a method
-							MethodDeclaration m = new MethodDeclaration(this.compilationResult);
-							m.sourceStart = c.sourceStart;
-							m.sourceEnd = c.sourceEnd;
-							m.bodyStart = c.bodyStart;
-							m.bodyEnd = c.bodyEnd;
-							m.declarationSourceEnd = c.declarationSourceEnd;
-							m.declarationSourceStart = c.declarationSourceStart;
-							m.selector = c.selector;
-							m.statements = c.statements;
-							m.modifiers = c.modifiers;
-							m.arguments = c.arguments;
-							m.thrownExceptions = c.thrownExceptions;
-							m.explicitDeclarations = c.explicitDeclarations;
-							m.returnType = null;
+							MethodDeclaration m = parser.convertToMethodDeclaration(c, this.compilationResult);
 							methods[i] = m;
 						}
 					} else {
@@ -322,7 +320,7 @@ public class TypeDeclaration
 		constructor.selector = name;
 		if (modifiers != AccDefault) {
 			constructor.modifiers =
-				((this instanceof MemberTypeDeclaration) && (modifiers & AccPrivate) != 0)
+				(((this.bits & ASTNode.IsMemberTypeMASK) != 0) && (modifiers & AccPrivate) != 0)
 					? AccDefault
 					: modifiers & AccVisibilityMASK;
 		}
@@ -359,6 +357,86 @@ public class TypeDeclaration
 		return constructor;
 	}
 	
+	// anonymous type constructor creation
+	public MethodBinding createsInternalConstructorWithBinding(MethodBinding inheritedConstructorBinding) {
+
+		//Add to method'set, the default constuctor that just recall the
+		//super constructor with the same arguments
+		String baseName = "$anonymous"; //$NON-NLS-1$
+		TypeBinding[] argumentTypes = inheritedConstructorBinding.parameters;
+		int argumentsLength = argumentTypes.length;
+		//the constructor
+		ConstructorDeclaration cd = new ConstructorDeclaration(this.compilationResult);
+		cd.selector = new char[] { 'x' }; //no maining
+		cd.sourceStart = sourceStart;
+		cd.sourceEnd = sourceEnd;
+		cd.modifiers = modifiers & AccVisibilityMASK;
+		cd.isDefaultConstructor = true;
+
+		if (argumentsLength > 0) {
+			Argument[] arguments = (cd.arguments = new Argument[argumentsLength]);
+			for (int i = argumentsLength; --i >= 0;) {
+				arguments[i] = new Argument((baseName + i).toCharArray(), 0L, null /*type ref*/, AccDefault, false /*not vararg*/);
+			}
+		}
+
+		//the super call inside the constructor
+		cd.constructorCall = SuperReference.implicitSuperConstructorCall();
+		cd.constructorCall.sourceStart = sourceStart;
+		cd.constructorCall.sourceEnd = sourceEnd;
+
+		if (argumentsLength > 0) {
+			Expression[] args;
+			args = cd.constructorCall.arguments = new Expression[argumentsLength];
+			for (int i = argumentsLength; --i >= 0;) {
+				args[i] = new SingleNameReference((baseName + i).toCharArray(), 0L);
+			}
+		}
+
+		//adding the constructor in the methods list
+		if (methods == null) {
+			methods = new AbstractMethodDeclaration[] { cd };
+		} else {
+			AbstractMethodDeclaration[] newMethods;
+			System.arraycopy(
+				methods,
+				0,
+				newMethods = new AbstractMethodDeclaration[methods.length + 1],
+				1,
+				methods.length);
+			newMethods[0] = cd;
+			methods = newMethods;
+		}
+
+		//============BINDING UPDATE==========================
+		cd.binding = new MethodBinding(
+				cd.modifiers, //methodDeclaration
+				argumentsLength == 0 ? NoParameters : argumentTypes, //arguments bindings
+				inheritedConstructorBinding.thrownExceptions, //exceptions
+				binding); //declaringClass
+				
+		cd.scope = new MethodScope(scope, cd, true);
+		cd.bindArguments();
+		cd.constructorCall.resolve(cd.scope);
+
+		if (binding.methods == null) {
+			binding.methods = new MethodBinding[] { cd.binding };
+		} else {
+			MethodBinding[] newMethods;
+			System.arraycopy(
+				binding.methods,
+				0,
+				newMethods = new MethodBinding[binding.methods.length + 1],
+				1,
+				binding.methods.length);
+			newMethods[0] = cd.binding;
+			binding.methods = newMethods;
+		}
+		//===================================================
+
+		return cd.binding;
+	}
+
 	/*
 	 * Find the matching parse node, answers null if nothing found
 	 */
@@ -477,14 +555,11 @@ public class TypeDeclaration
 					methods[i].generateCode(scope, classFile);
 				}
 			}
-			
-			classFile.generateMissingAbstractMethods(this.missingAbstractMethods, scope.referenceCompilationUnit().compilationResult);
-
-			// generate all methods
+			// generate all synthetic and abstract methods
 			classFile.addSpecialMethods();
 
 			if (ignoreFurtherInvestigation) { // trigger problem type generation for code gen errors
-				throw new AbortType(scope.referenceCompilationUnit().compilationResult);
+				throw new AbortType(scope.referenceCompilationUnit().compilationResult, null);
 			}
 
 			// finalize the compiled type result
@@ -506,6 +581,9 @@ public class TypeDeclaration
 	 */
 	public void generateCode(BlockScope blockScope, CodeStream codeStream) {
 
+		if ((this.bits & IsReachableMASK) == 0) {
+			return;
+		}		
 		if (hasBeenGenerated) return;
 		int pc = codeStream.position;
 		if (binding != null) ((NestedTypeBinding) binding).computeSyntheticArgumentSlotSizes();
@@ -547,7 +625,6 @@ public class TypeDeclaration
 			}
 		}
 
-		ReferenceBinding[] defaultHandledExceptions = new ReferenceBinding[] { scope.getJavaLangThrowable()}; // tolerate any kind of exception
 		InitializationFlowContext initializerContext = new InitializationFlowContext(null, this, initializerScope);
 		InitializationFlowContext staticInitializerContext = new InitializationFlowContext(null, this, staticInitializerScope);
 		FlowInfo nonStaticFieldInfo = flowInfo.copy().unconditionalInits().discardFieldInitializations();
@@ -559,7 +636,7 @@ public class TypeDeclaration
 					/*if (field.isField()){
 						staticInitializerContext.handledExceptions = NoExceptions; // no exception is allowed jls8.3.2
 					} else {*/
-					staticInitializerContext.handledExceptions = defaultHandledExceptions; // tolerate them all, and record them
+					staticInitializerContext.handledExceptions = AnyException; // tolerate them all, and record them
 					/*}*/
 					staticFieldInfo =
 						field.analyseCode(
@@ -576,7 +653,7 @@ public class TypeDeclaration
 					/*if (field.isField()){
 						initializerContext.handledExceptions = NoExceptions; // no exception is allowed jls8.3.2
 					} else {*/
-						initializerContext.handledExceptions = defaultHandledExceptions; // tolerate them all, and record them
+						initializerContext.handledExceptions = AnyException; // tolerate them all, and record them
 					/*}*/
 					nonStaticFieldInfo =
 						field.analyseCode(initializerScope, initializerContext, nonStaticFieldInfo);
@@ -585,14 +662,14 @@ public class TypeDeclaration
 					if (nonStaticFieldInfo == FlowInfo.DEAD_END) {
 						initializerScope.problemReporter().initializerMustCompleteNormally(field);
 						nonStaticFieldInfo = FlowInfo.initial(maxFieldCount).setReachMode(FlowInfo.UNREACHABLE);
-					}
+					} 
 				}
 			}
 		}
 		if (memberTypes != null) {
 			for (int i = 0, count = memberTypes.length; i < count; i++) {
 				if (flowContext != null){ // local type
-					memberTypes[i].analyseCode(scope, flowContext, nonStaticFieldInfo.copy());
+					memberTypes[i].analyseCode(scope, flowContext, nonStaticFieldInfo.copy().setReachMode(flowInfo.reachMode())); // reset reach mode in case initializers did abrupt completely
 				} else {
 					memberTypes[i].analyseCode(scope);
 				}
@@ -609,10 +686,10 @@ public class TypeDeclaration
 					if (method.isStatic()) { // <clinit>
 						method.analyseCode(
 							scope, 
-							staticInitializerContext, 
-							staticFieldInfo.unconditionalInits().discardNonFieldInitializations().addInitializationsFrom(outerInfo));
+							staticInitializerContext,  
+							staticFieldInfo.unconditionalInits().discardNonFieldInitializations().addInitializationsFrom(outerInfo).setReachMode(flowInfo.reachMode()));  // reset reach mode in case initializers did abrupt completely
 					} else { // constructor
-						method.analyseCode(scope, initializerContext, constructorInfo.copy());
+						method.analyseCode(scope, initializerContext, constructorInfo.copy().setReachMode(flowInfo.reachMode())); // reset reach mode in case initializers did abrupt completely
 					}
 				} else { // regular method
 					method.analyseCode(scope, null, flowInfo.copy());
@@ -701,10 +778,6 @@ public class TypeDeclaration
 		if (unit.ignoreMethodBodies)
 			return;
 
-		// no scope were created, so cannot report further errors
-//		if (binding == null)
-//			return;
-
 		//members
 		if (memberTypes != null) {
 			int length = memberTypes.length;
@@ -730,11 +803,13 @@ public class TypeDeclaration
 		}
 	}
 
-	public StringBuffer print(int tab, StringBuffer output) {
+	public StringBuffer print(int indent, StringBuffer output) {
 
-		printIndent(tab, output);
-		printHeader(0, output);
-		return printBody(tab, output);
+		if ((this.bits & IsAnonymousTypeMASK) == 0) {
+			printIndent(indent, output);
+			printHeader(0, output);
+		}
+		return printBody(indent, output);
 	}
 
 	public StringBuffer printBody(int indent, StringBuffer output) {
@@ -773,6 +848,14 @@ public class TypeDeclaration
 		printModifiers(this.modifiers, output);
 		output.append(isInterface() ? "interface " : "class "); //$NON-NLS-1$ //$NON-NLS-2$
 		output.append(name);
+		if (typeParameters != null) {
+			output.append("<");//$NON-NLS-1$
+			for (int i = 0; i < typeParameters.length; i++) {
+				if (i > 0) output.append( ", "); //$NON-NLS-1$
+				typeParameters[i].print(0, output);
+			}
+			output.append(">");//$NON-NLS-1$
+		}
 		if (superclass != null) {
 			output.append(" extends ");  //$NON-NLS-1$
 			superclass.print(0, output);
@@ -793,61 +876,77 @@ public class TypeDeclaration
 
 	public void resolve() {
 
-		if (binding == null) {
-			ignoreFurtherInvestigation = true;
+		SourceTypeBinding sourceType = this.binding;
+		if (sourceType == null) {
+			this.ignoreFurtherInvestigation = true;
 			return;
 		}
 		try {
 			if ((this.bits & UndocumentedEmptyBlockMASK) != 0) {
-				this.scope.problemReporter().undocumentedEmptyBlock(this.bodyStart-1, this.bodyEnd+1);
+				this.scope.problemReporter().undocumentedEmptyBlock(this.bodyStart-1, this.bodyEnd);
 			}
-			// check superclass & interfaces
-			if (binding.superclass != null) // watch out for Object ! (and other roots)	
-				if (isTypeUseDeprecated(binding.superclass, scope))
-					scope.problemReporter().deprecatedType(binding.superclass, superclass);
-			if (superInterfaces != null)
-				for (int i = superInterfaces.length; --i >= 0;)
-					if (superInterfaces[i].resolvedType != null)
-						if (isTypeUseDeprecated(superInterfaces[i].resolvedType, scope))
-							scope.problemReporter().deprecatedType(
-								superInterfaces[i].resolvedType,
-								superInterfaces[i]);
-			maxFieldCount = 0;
-			int lastFieldID = -1;
-			if (fields != null) {
-				for (int i = 0, count = fields.length; i < count; i++) {
-					FieldDeclaration field = fields[i];
+			
+			boolean needSerialVersion = sourceType.isClass() && !sourceType.isAbstract() 
+								&& sourceType.implementsInterface(scope.getJavaIoSerializable(), true);
+			
+			if (this.typeParameters != null && scope.getJavaLangThrowable().isSuperclassOf(sourceType)) {
+				this.scope.problemReporter().genericTypeCannotExtendThrowable(this);
+			}
+			this.maxFieldCount = 0;
+			int lastVisibleFieldID = -1;
+			if (this.fields != null) {
+				for (int i = 0, count = this.fields.length; i < count; i++) {
+					FieldDeclaration field = this.fields[i];
 					if (field.isField()) {
-						if (field.binding == null) {
+						FieldBinding fieldBinding = field.binding;
+						if (fieldBinding == null) {
 							// still discover secondary errors
-							if (field.initialization != null) field.initialization.resolve(field.isStatic() ? staticInitializerScope : initializerScope);
-							ignoreFurtherInvestigation = true;
+							if (field.initialization != null) field.initialization.resolve(field.isStatic() ? this.staticInitializerScope : this.initializerScope);
+							this.ignoreFurtherInvestigation = true;
 							continue;
 						}
-						maxFieldCount++;
-						lastFieldID = field.binding.id;
+						if (needSerialVersion
+								&& ((fieldBinding.modifiers & (AccStatic | AccFinal)) == (AccStatic | AccFinal))
+								&& CharOperation.equals(TypeConstants.SERIALVERSIONUID, fieldBinding.name)
+								&& BaseTypes.LongBinding == fieldBinding.type) {
+							needSerialVersion = false;
+						}
+						this.maxFieldCount++;
+						lastVisibleFieldID = field.binding.id;
 					} else { // initializer
-						 ((Initializer) field).lastFieldID = lastFieldID + 1;
+						 ((Initializer) field).lastVisibleFieldID = lastVisibleFieldID + 1;
 					}
-					field.resolve(field.isStatic() ? staticInitializerScope : initializerScope);
+					field.resolve(field.isStatic() ? this.staticInitializerScope : this.initializerScope);
 				}
 			}
-			if (memberTypes != null) {
-				for (int i = 0, count = memberTypes.length; i < count; i++) {
-					memberTypes[i].resolve(scope);
+			if (needSerialVersion) {
+				this.scope.problemReporter().missingSerialVersion(this);
+			}
+			if (this.memberTypes != null) {
+				for (int i = 0, count = this.memberTypes.length; i < count; i++) {
+					this.memberTypes[i].resolve(this.scope);
 				}
 			}
 			int missingAbstractMethodslength = this.missingAbstractMethods == null ? 0 : this.missingAbstractMethods.length;
-			int methodsLength = this.methods == null ? 0 : methods.length;
+			int methodsLength = this.methods == null ? 0 : this.methods.length;
 			if ((methodsLength + missingAbstractMethodslength) > 0xFFFF) {
-				scope.problemReporter().tooManyMethods(this);
+				this.scope.problemReporter().tooManyMethods(this);
 			}
 			
-			if (methods != null) {
-				for (int i = 0, count = methods.length; i < count; i++) {
-					methods[i].resolve(scope);
+			if (this.methods != null) {
+				for (int i = 0, count = this.methods.length; i < count; i++) {
+					this.methods[i].resolve(this.scope);
 				}
 			}
+			// Resolve javadoc
+			if (this.javadoc != null) {
+				if (this.scope != null) {
+					this.javadoc.resolve(this.scope);
+				}
+			} else if (sourceType != null && !sourceType.isLocalType()) {
+				this.scope.problemReporter().javadocMissing(this.sourceStart, this.sourceEnd, sourceType.modifiers);
+			}
+			
 		} catch (AbortType e) {
 			this.ignoreFurtherInvestigation = true;
 			return;
@@ -858,9 +957,8 @@ public class TypeDeclaration
 		// local type declaration
 
 		// need to build its scope first and proceed with binding's creation
-		blockScope.addLocalType(this);
+		if ((this.bits & IsAnonymousTypeMASK) == 0) blockScope.addLocalType(this);
 
-		// and TC....
 		if (binding != null) {
 			// remember local types binding for innerclass emulation propagation
 			blockScope.referenceCompilationUnit().record((LocalTypeBinding)binding);
@@ -870,7 +968,7 @@ public class TypeDeclaration
 			updateMaxFieldCount();
 		}
 	}
-
+	
 	public void resolve(ClassScope upperScope) {
 		// member scopes are already created
 		// request the construction of a binding if local member type
@@ -900,40 +998,56 @@ public class TypeDeclaration
 	 *
 	 */
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		CompilationUnitScope unitScope) {
 
 		if (ignoreFurtherInvestigation)
 			return;
 		try {
 			if (visitor.visit(this, unitScope)) {
-				if (superclass != null)
-					superclass.traverse(visitor, scope);
-				if (superInterfaces != null) {
-					int superInterfaceLength = superInterfaces.length;
-					for (int i = 0; i < superInterfaceLength; i++)
-						superInterfaces[i].traverse(visitor, scope);
+				if (this.annotations != null) {
+					int annotationsLength = this.annotations.length;
+					for (int i = 0; i < annotationsLength; i++)
+						this.annotations[i].traverse(visitor, scope);
 				}
-				if (memberTypes != null) {
-					int memberTypesLength = memberTypes.length;
-					for (int i = 0; i < memberTypesLength; i++)
-						memberTypes[i].traverse(visitor, scope);
+				if (this.superclass != null)
+					this.superclass.traverse(visitor, scope);
+				if (this.superInterfaces != null) {
+					int length = this.superInterfaces.length;
+					for (int i = 0; i < length; i++)
+						this.superInterfaces[i].traverse(visitor, scope);
 				}
-				if (fields != null) {
-					int fieldsLength = fields.length;
-					for (int i = 0; i < fieldsLength; i++) {
+				if (this.typeParameters != null) {
+					int length = this.typeParameters.length;
+					for (int i = 0; i < length; i++) {
+						this.typeParameters[i].traverse(visitor, scope);
+					}
+				}				
+				if (this.memberTypes != null) {
+					int length = this.memberTypes.length;
+					for (int i = 0; i < length; i++)
+						this.memberTypes[i].traverse(visitor, scope);
+				}
+				if (this.enums != null) {
+					int length = this.enums.length;
+					for (int i = 0; i < length; i++)
+						this.enums[i].traverse(visitor, scope);
+				}
+				if (this.fields != null) {
+					int length = this.fields.length;
+					for (int i = 0; i < length; i++) {
 						FieldDeclaration field;
-						if ((field = fields[i]).isStatic()) {
+						if ((field = this.fields[i]).isStatic()) {
 							field.traverse(visitor, staticInitializerScope);
 						} else {
 							field.traverse(visitor, initializerScope);
 						}
 					}
 				}
-				if (methods != null) {
-					int methodsLength = methods.length;
-					for (int i = 0; i < methodsLength; i++)
-						methods[i].traverse(visitor, scope);
+				if (this.methods != null) {
+					int length = this.methods.length;
+					for (int i = 0; i < length; i++)
+						this.methods[i].traverse(visitor, scope);
 				}
 			}
 			visitor.endVisit(this, unitScope);
@@ -941,6 +1055,126 @@ public class TypeDeclaration
 			// silent abort
 		}
 	}
+
+	/**
+	 *	Iteration for a local innertype
+	 *
+	 */
+	public void traverse(ASTVisitor visitor, BlockScope blockScope) {
+		if (ignoreFurtherInvestigation)
+			return;
+		try {
+			if (visitor.visit(this, blockScope)) {
+				if (this.annotations != null) {
+					int annotationsLength = this.annotations.length;
+					for (int i = 0; i < annotationsLength; i++)
+						this.annotations[i].traverse(visitor, scope);
+				}
+				if (this.superclass != null)
+					this.superclass.traverse(visitor, scope);
+				if (this.superInterfaces != null) {
+					int length = this.superInterfaces.length;
+					for (int i = 0; i < length; i++)
+						this.superInterfaces[i].traverse(visitor, scope);
+				}
+				if (this.typeParameters != null) {
+					int length = this.typeParameters.length;
+					for (int i = 0; i < length; i++) {
+						this.typeParameters[i].traverse(visitor, scope);
+					}
+				}				
+				if (this.memberTypes != null) {
+					int length = this.memberTypes.length;
+					for (int i = 0; i < length; i++)
+						this.memberTypes[i].traverse(visitor, scope);
+				}
+				if (this.enums != null) {
+					int length = this.enums.length;
+					for (int i = 0; i < length; i++)
+						this.enums[i].traverse(visitor, scope);
+				}				
+				if (this.fields != null) {
+					int length = this.fields.length;
+					for (int i = 0; i < length; i++) {
+						FieldDeclaration field;
+						if ((field = this.fields[i]).isStatic()) {
+							// local type cannot have static fields
+						} else {
+							field.traverse(visitor, initializerScope);
+						}
+					}
+				}
+				if (this.methods != null) {
+					int length = this.methods.length;
+					for (int i = 0; i < length; i++)
+						this.methods[i].traverse(visitor, scope);
+				}
+			}
+			visitor.endVisit(this, blockScope);
+		} catch (AbortType e) {
+			// silent abort
+		}
+	}
+
+	/**
+	 *	Iteration for a member innertype
+	 *
+	 */
+	public void traverse(ASTVisitor visitor, ClassScope classScope) {
+		if (ignoreFurtherInvestigation)
+			return;
+		try {
+			if (visitor.visit(this, classScope)) {
+				if (this.annotations != null) {
+					int annotationsLength = this.annotations.length;
+					for (int i = 0; i < annotationsLength; i++)
+						this.annotations[i].traverse(visitor, scope);
+				}
+				if (this.superclass != null)
+					this.superclass.traverse(visitor, scope);
+				if (this.superInterfaces != null) {
+					int length = this.superInterfaces.length;
+					for (int i = 0; i < length; i++)
+						this.superInterfaces[i].traverse(visitor, scope);
+				}
+				if (this.typeParameters != null) {
+					int length = this.typeParameters.length;
+					for (int i = 0; i < length; i++) {
+						this.typeParameters[i].traverse(visitor, scope);
+					}
+				}				
+				if (this.memberTypes != null) {
+					int length = this.memberTypes.length;
+					for (int i = 0; i < length; i++)
+						this.memberTypes[i].traverse(visitor, scope);
+				}
+				if (this.enums != null) {
+					int length = this.enums.length;
+					for (int i = 0; i < length; i++)
+						this.enums[i].traverse(visitor, scope);
+				}					
+				if (this.fields != null) {
+					int length = this.fields.length;
+					for (int i = 0; i < length; i++) {
+						FieldDeclaration field;
+						if ((field = this.fields[i]).isStatic()) {
+							field.traverse(visitor, staticInitializerScope);
+						} else {
+							field.traverse(visitor, initializerScope);
+						}
+					}
+				}
+				if (this.methods != null) {
+					int length = this.methods.length;
+					for (int i = 0; i < length; i++)
+						this.methods[i].traverse(visitor, scope);
+				}
+			}
+			visitor.endVisit(this, classScope);
+		} catch (AbortType e) {
+			// silent abort
+		}
+	}	
 
 	/**
 	 * MaxFieldCount's computation is necessary so as to reserve space for
@@ -962,5 +1196,5 @@ public class TypeDeclaration
 		} else {
 			maxFieldCount = outerMostType.maxFieldCount; // down
 		}
-	}
+	}	
 }

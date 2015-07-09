@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
@@ -32,34 +32,26 @@ public class IfStatement extends Statement {
 	int elseInitStateIndex = -1;
 	int mergedInitStateIndex = -1;
 
-	public IfStatement(
-		Expression condition,
-		Statement thenStatement,
-		int s,
-		int e) {
+	public IfStatement(Expression condition, Statement thenStatement, 	int sourceStart, int sourceEnd) {
 
 		this.condition = condition;
 		this.thenStatement = thenStatement;
 		// remember useful empty statement
 		if (thenStatement instanceof EmptyStatement) thenStatement.bits |= IsUsefulEmptyStatementMASK;
-		sourceStart = s;
-		sourceEnd = e;
+		this.sourceStart = sourceStart;
+		this.sourceEnd = sourceEnd;
 	}
 
-	public IfStatement(
-		Expression condition,
-		Statement thenStatement,
-		Statement elseStatement,
-		int s,
-		int e) {
+	public IfStatement(Expression condition, Statement thenStatement, Statement elseStatement, int sourceStart, int sourceEnd) {
 
 		this.condition = condition;
 		this.thenStatement = thenStatement;
 		// remember useful empty statement
 		if (thenStatement instanceof EmptyStatement) thenStatement.bits |= IsUsefulEmptyStatementMASK;
 		this.elseStatement = elseStatement;
-		sourceEnd = e;
-		sourceStart = s;
+		if (elseStatement instanceof IfStatement) elseStatement.bits |= IsElseIfStatement;
+		this.sourceStart = sourceStart;
+		this.sourceEnd = sourceEnd;
 	}
 
 	public FlowInfo analyseCode(
@@ -97,6 +89,12 @@ public class IfStatement extends Statement {
 			elseFlowInfo.setReachMode(FlowInfo.UNREACHABLE); 
 		}
 		if (this.elseStatement != null) {
+		    // signal else clause unnecessarily nested, tolerate else-if code pattern
+		    if (thenFlowInfo == FlowInfo.DEAD_END 
+		            && (this.bits & IsElseIfStatement) == 0 	// else of an else-if
+		            && !(this.elseStatement instanceof IfStatement)) {
+		        currentScope.problemReporter().unnecessaryElse(this.elseStatement);
+		    }
 			// Save info for code gen
 			elseInitStateIndex =
 				currentScope.methodScope().recordInitializationStates(elseFlowInfo);
@@ -107,27 +105,13 @@ public class IfStatement extends Statement {
 		}
 
 		// merge THEN & ELSE initializations
-		FlowInfo mergedInfo;
-		if (isConditionOptimizedTrue){
-			if (thenFlowInfo != FlowInfo.DEAD_END) {
-				mergedInfo = thenFlowInfo.addPotentialInitializationsFrom(elseFlowInfo);
-			} else {
-				mergedInfo = elseFlowInfo.setReachMode(FlowInfo.UNREACHABLE);
-			}
-
-		} else if (isConditionOptimizedFalse) {
-			if (elseFlowInfo != FlowInfo.DEAD_END) {
-				mergedInfo = elseFlowInfo.addPotentialInitializationsFrom(thenFlowInfo);
-			} else {
-				mergedInfo = thenFlowInfo.setReachMode(FlowInfo.UNREACHABLE);
-			}
-
-		} else {
-			mergedInfo = thenFlowInfo.mergedWith(elseFlowInfo.unconditionalInits());
-		}
-
-		mergedInitStateIndex =
-			currentScope.methodScope().recordInitializationStates(mergedInfo);
+		FlowInfo mergedInfo = FlowInfo.mergedOptimizedBranches(
+				thenFlowInfo, 
+				isConditionOptimizedTrue, 
+				elseFlowInfo, 
+				isConditionOptimizedFalse,
+				true /*if(true){ return; }  fake-reachable(); */);
+		mergedInitStateIndex = currentScope.methodScope().recordInitializationStates(mergedInfo);
 		return mergedInfo;
 	}
 
@@ -168,9 +152,7 @@ public class IfStatement extends Statement {
 				true);
 			// May loose some local variable initializations : affecting the local variable attributes
 			if (thenInitStateIndex != -1) {
-				codeStream.removeNotDefinitelyAssignedVariables(
-					currentScope,
-					thenInitStateIndex);
+				codeStream.removeNotDefinitelyAssignedVariables(currentScope, thenInitStateIndex);
 				codeStream.addDefinitelyAssignedVariables(currentScope, thenInitStateIndex);
 			}
 			// generate then statement
@@ -237,7 +219,7 @@ public class IfStatement extends Statement {
 	public void resolve(BlockScope scope) {
 
 		TypeBinding type = condition.resolveTypeExpecting(scope, BooleanBinding);
-		condition.implicitWidening(type, type);
+		condition.computeConversion(scope, type, type);
 		if (thenStatement != null)
 			thenStatement.resolve(scope);
 		if (elseStatement != null)
@@ -245,7 +227,7 @@ public class IfStatement extends Statement {
 	}
 
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		BlockScope blockScope) {
 
 		if (visitor.visit(this, blockScope)) {

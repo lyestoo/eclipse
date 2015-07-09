@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -27,6 +27,15 @@ public interface ISelectionRequestor {
 	 * @param needQualification boolean
 	 * 		Flag indicating if the type name 
 	 *    	must be qualified by its package name (depending on imports).
+	 * 
+	 * @param isDeclaration boolean
+	 *  	Answer if the selected method is a declaration
+	 * 
+	 * @param start
+	 *  	Start of the selection
+	 * 
+	 * @param end
+	 *  	End of the selection
 	 *
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
@@ -36,7 +45,10 @@ public interface ISelectionRequestor {
 	void acceptClass(
 		char[] packageName,
 		char[] className,
-		boolean needQualification);
+		boolean needQualification,
+		boolean isDeclaration,
+		int start,
+		int end);
 
 	/**
 	 * Code assist notification of a compilation error detected during selection.
@@ -62,6 +74,15 @@ public interface ISelectionRequestor {
 	 * 
 	 * @param name char[]
 	 * 		Name of the field.
+	 * 
+	 * @param isDeclaration boolean
+	 *  	Answer if the selected field is a declaration
+	 * 
+	 * @param start
+	 *  	Start of the selection
+	 * 
+	 * @param end
+	 *  	End of the selection
 	 *
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
@@ -71,7 +92,10 @@ public interface ISelectionRequestor {
 	void acceptField(
 		char[] declaringTypePackageName,
 		char[] declaringTypeName,
-		char[] name);
+		char[] name,
+		boolean isDeclaration,
+		int start,
+		int end);
 
 	/**
 	 * Code assist notification of an interface selection.
@@ -84,6 +108,15 @@ public interface ISelectionRequestor {
 	 * @param needQualification boolean
 	 * 		Flag indicating if the type name 
 	 *    	must be qualified by its package name (depending on imports).
+	 * 
+	 * @param isDeclaration boolean
+	 *  	Answer if the selected method is a declaration
+	 * 
+	 * @param start
+	 *  	Start of the selection
+	 * 
+	 * @param end
+	 *  	End of the selection
 	 *
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
@@ -93,7 +126,10 @@ public interface ISelectionRequestor {
 	void acceptInterface(
 		char[] packageName,
 		char[] interfaceName,
-		boolean needQualification);
+		boolean needQualification,
+		boolean isDeclaration,
+		int start,
+		int end);
 
 	/**
 	 * Code assist notification of a method selection.
@@ -116,6 +152,15 @@ public interface ISelectionRequestor {
 	 * 
 	 *  @param isConstructor boolean
 	 * 		Answer if the method is a constructor.
+	 * 
+	 * @param isDeclaration boolean
+	 *  	Answer if the selected method is a declaration
+	 * 
+	 * @param start
+	 *  	Start of the selection
+	 * 
+	 * @param end
+	 *  	End of the selection
 	 *
 	 * NOTE - All package and type names are presented in their readable form:
 	 *    Package names are in the form "a.b.c".
@@ -124,14 +169,18 @@ public interface ISelectionRequestor {
 	 *    Nested type names are in the qualified form "A.M".
 	 *    The default package is represented by an empty array.
 	 */
+	// parameters 'isDeclaration', 'start' and 'end' are use to distinguish duplicate methods declarations
 	void acceptMethod(
 		char[] declaringTypePackageName,
 		char[] declaringTypeName,
 		char[] selector,
 		char[][] parameterPackageNames,
 		char[][] parameterTypeNames,
-		boolean isConstructor);
-
+		boolean isConstructor,
+		boolean isDeclaration,
+		int start,
+		int end);
+	
 	/**
 	 * Code assist notification of a package selection.
 	 * @param packageName char[]
@@ -142,4 +191,83 @@ public interface ISelectionRequestor {
 	 *    The default package is represented by an empty array.
 	 */
 	void acceptPackage(char[] packageName);
+	/**
+	 * Code assist notification of a type parameter selection.
+	 * 
+	 * @param declaringTypePackageName char[]
+	 * 		Name of the package in which the type that contains this new method is declared.
+	 * 
+	 * @param declaringTypeName char[]
+	 * 		Name of the type declaring this new method.
+	 * 
+	 * @param typeParameterName char[]
+	 * 		Name of the type parameter.
+	 * 
+	 * @param isDeclaration boolean
+	 *  	Answer if the selected type parameter is a declaration
+	 * 
+	 * @param start
+	 *  	Start of the selection
+	 * 
+	 * @param end
+	 *  	End of the selection
+	 *
+	 * NOTE - All package and type names are presented in their readable form:
+	 *    Package names are in the form "a.b.c".
+	 *    Nested type names are in the qualified form "A.M".
+	 *    The default package is represented by an empty array.
+	 */
+	void acceptTypeParameter(
+		char[] declaringTypePackageName,
+		char[] declaringTypeName,
+		char[] typeParameterName,
+		boolean isDeclaration,
+		int start,
+		int end);
+	
+	/**
+	 * Code assist notification of a type parameter selection.
+	 * 
+	 * @param declaringTypePackageName char[]
+	 * 		Name of the package in which the type that contains this new method is declared.
+	 * 
+	 * @param declaringTypeName char[]
+	 * 		Name of the type declaring this new method.
+	 * 
+	 * @param selector char[]
+	 * 		Name of the declaring method.
+	 * 
+	 * @param selectorStart int
+	 * 		Start of the selector.
+	 * 
+	 * @param selectorEnd int
+	 * 		End of the selector.
+	 * 
+	 * @param typeParameterName char[]
+	 * 		Name of the type parameter.
+	 * 
+	 * @param isDeclaration boolean
+	 *  	Answer if the selected type parameter is a declaration
+	 * 
+	 * @param start
+	 *  	Start of the selection
+	 * 
+	 * @param end
+	 *  	End of the selection
+	 *
+	 * NOTE - All package and type names are presented in their readable form:
+	 *    Package names are in the form "a.b.c".
+	 *    Nested type names are in the qualified form "A.M".
+	 *    The default package is represented by an empty array.
+	 */
+	void acceptMethodTypeParameter(
+		char[] declaringTypePackageName,
+		char[] declaringTypeName,
+		char[] selector,
+		int selectorStart,
+		int selectorEnd,
+		char[] typeParameterName,
+		boolean isDeclaration,
+		int start,
+		int end);
 }

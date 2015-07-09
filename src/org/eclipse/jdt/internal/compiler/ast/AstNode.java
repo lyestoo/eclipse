@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,9 +12,9 @@ package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 
-public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConstants, TypeIds {
+public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConstants, TypeIds {
 	
 	public int sourceStart, sourceEnd;
 
@@ -22,23 +22,23 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 	public final static Constant NotAConstant = Constant.NotAConstant;
 
 	// storage for internal flags (32 bits)						BIT USAGE
-	public final static int Bit1 = 0x1; 						// return type (operator) | name reference kind (name ref) | add assertion (type decl) | useful empty statement (empty statement)
-	public final static int Bit2 = 0x2; 						// return type (operator) | name reference kind (name ref) | has local type (type, method, field decl)
-	public final static int Bit3 = 0x4; 						// return type (operator) | name reference kind (name ref) | implicit this (this ref)
-	public final static int Bit4 = 0x8; 						// return type (operator) | first assignment to local (local decl) | undocumented empty block (block, type and method decl)
-	public final static int Bit5 = 0x10; 					// value for return (expression) | has all method bodies (unit)
-	public final static int Bit6 = 0x20; 					// depth (name ref, msg) | only value required (binary expression) | ignore need cast check (cast expression)
-	public final static int Bit7 = 0x40; 					// depth (name ref, msg) | operator (operator) | need runtime checkcast (cast expression)
-	public final static int Bit8 = 0x80; 					// depth (name ref, msg) | operator (operator) 
-	public final static int Bit9 = 0x100; 				// depth (name ref, msg) | operator (operator)
-	public final static int Bit10= 0x200; 				// depth (name ref, msg) | operator (operator)
-	public final static int Bit11 = 0x400; 				// depth (name ref, msg) | operator (operator)
-	public final static int Bit12 = 0x800; 				// depth (name ref, msg) | operator (operator)
-	public final static int Bit13 = 0x1000; 			// depth (name ref, msg) 
-	public final static int Bit14 = 0x2000; 			// assigned (reference lhs)
-	public final static int Bit15 = 0x4000; 			// is unnecessary cast (expression)
-	public final static int Bit16 = 0x8000; 			
-	public final static int Bit17 = 0x10000; 
+	public final static int Bit1 = 0x1; 							// return type (operator) | name reference kind (name ref) | add assertion (type decl) | useful empty statement (empty statement)
+	public final static int Bit2 = 0x2; 							// return type (operator) | name reference kind (name ref) | has local type (type, method, field decl)
+	public final static int Bit3 = 0x4; 							// return type (operator) | name reference kind (name ref) | implicit this (this ref)
+	public final static int Bit4 = 0x8; 							// return type (operator) | first assignment to local (local decl) | undocumented empty block (block, type and method decl)
+	public final static int Bit5 = 0x10; 						// value for return (expression) | has all method bodies (unit) | supertype ref (type ref)
+	public final static int Bit6 = 0x20; 						// depth (name ref, msg) | only value required (binary expression) | ignore need cast check (cast expression)
+	public final static int Bit7 = 0x40; 						// depth (name ref, msg) | operator (operator) | need runtime checkcast (cast expression)
+	public final static int Bit8 = 0x80; 						// depth (name ref, msg) | operator (operator) 
+	public final static int Bit9 = 0x100; 						// depth (name ref, msg) | operator (operator) | is local type (type decl)
+	public final static int Bit10= 0x200; 					// depth (name ref, msg) | operator (operator) | is anonymous type (type decl)
+	public final static int Bit11 = 0x400; 					// depth (name ref, msg) | operator (operator) | is member type (type decl)
+	public final static int Bit12 = 0x800; 					// depth (name ref, msg) | operator (operator)
+	public final static int Bit13 = 0x1000; 				// depth (name ref, msg) 
+	public final static int Bit14 = 0x2000; 				// strictly assigned (reference lhs)
+	public final static int Bit15 = 0x4000; 				// is unnecessary cast (expression)
+	public final static int Bit16 = 0x8000; 				// in javadoc comment (name ref, type ref, msg)
+	public final static int Bit17 = 0x10000; 				// compound assigned (reference lhs)
 	public final static int Bit18 = 0x20000; 
 	public final static int Bit19 = 0x40000; 
 	public final static int Bit20 = 0x80000; 
@@ -46,14 +46,24 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 	public final static int Bit22 = 0x200000; 			// parenthesis count (expression)
 	public final static int Bit23 = 0x400000; 			// parenthesis count (expression)
 	public final static int Bit24 = 0x800000; 			// parenthesis count (expression)
-	public final static int Bit25 = 0x1000000; 		// parenthesis count (expression)
-	public final static int Bit26 = 0x2000000; 		// parenthesis count (expression)
-	public final static int Bit27 = 0x4000000; 		// parenthesis count (expression)
-	public final static int Bit28 = 0x8000000; 		// parenthesis count (expression)
+	public final static int Bit25 = 0x1000000; 			// parenthesis count (expression)
+	public final static int Bit26 = 0x2000000; 			// parenthesis count (expression)
+	public final static int Bit27 = 0x4000000; 			// parenthesis count (expression)
+	public final static int Bit28 = 0x8000000; 			// parenthesis count (expression)
 	public final static int Bit29 = 0x10000000; 		// parenthesis count (expression)
-	public final static int Bit30 = 0x20000000; 		// assignment with no effect (assignment)
+	public final static int Bit30 = 0x20000000; 		// assignment with no effect (assignment) | elseif (if statement)
 	public final static int Bit31 = 0x40000000; 		// local declaration reachable (local decl)
 	public final static int Bit32 = 0x80000000; 		// reachable (statement)
+
+	public final static long Bit32L = 0x80000000L; 		
+	public final static long Bit33L = 0x100000000L;
+	public final static long Bit34L = 0x200000000L;
+	public final static long Bit35L = 0x400000000L;
+	public final static long Bit36L = 0x800000000L;
+	public final static long Bit37L = 0x1000000000L;
+	public final static long Bit38L = 0x2000000000L;
+	public final static long Bit39L = 0x4000000000L;
+	public final static long Bit40L = 0x8000000000L;
 
 	public int bits = IsReachableMASK; 				// reachable by default
 
@@ -88,7 +98,11 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 
 	// for type declaration
 	public static final int AddAssertionMASK = Bit1;
-
+	public static final int IsLocalTypeMASK = Bit9;
+	public static final int IsAnonymousTypeMASK = Bit10; // used to test for anonymous 
+	public static final int AnonymousAndLocalMask = IsAnonymousTypeMASK | IsLocalTypeMASK; // used to set anonymous marker
+	public static final int IsMemberTypeMASK = Bit11; // local member do not know it is local at parse time (need to look at binding)
+	
 	// for type, method and field declarations 
 	public static final int HasLocalTypeMASK = Bit2; // cannot conflict with AddAssertionMASK
 
@@ -99,8 +113,9 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 	// for assignment
 	public static final int IsAssignmentWithNoEffectMASK = Bit30;	
 	
-	// for references on lhs of assignment (set only for true assignments, as opposed to compound ones)
-	public static final int IsStrictlyAssignedMASK = Bit14;
+	// for references on lhs of assignment
+	public static final int IsStrictlyAssignedMASK = Bit14; // set only for true assignments, as opposed to compound ones
+	public static final int IsCompoundAssignedMASK = Bit17; // set only for compound assignments, as opposed to other ones
 
 	// for empty statement
 	public static final int IsUsefulEmptyStatementMASK = Bit1;
@@ -111,12 +126,44 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 	// for compilation unit
 	public static final int HasAllMethodBodies = Bit5;
 	
-	public AstNode() {
+	// for references in Javadoc comments
+	public static final int InsideJavadoc = Bit16;
+	
+	// for if statement
+	public static final int IsElseIfStatement = Bit30;
+	
+	// for type reference
+	public static final int IsSuperType = Bit5;
+	
+	
+	public ASTNode() {
 
 		super();
 	}
-
-	public AstNode concreteStatement() {
+	public static void checkInvocationArguments(BlockScope scope, Expression receiver, TypeBinding receiverType, MethodBinding method, Expression[] arguments, TypeBinding[] argumentTypes, boolean argsContainCast, InvocationSite invocationSite) {
+		boolean unsafeWildcardInvocation = false;
+		for (int i = 0; i < arguments.length; i++) {
+		    TypeBinding parameterType = method.parameters[i];
+		    TypeBinding argumentType = argumentTypes[i];
+			arguments[i].computeConversion(scope, parameterType, argumentType);
+			if (argumentType != NullBinding && parameterType.isWildcard() && ((WildcardBinding)parameterType).kind != Wildcard.SUPER) {
+			    unsafeWildcardInvocation = true;
+			} else if (argumentType != parameterType 
+			        && argumentType.isRawType() 
+			        && (parameterType.isBoundParameterizedType() || parameterType.isGenericType())) {
+			    scope.problemReporter().unsafeRawConversion(arguments[i], argumentType, parameterType);
+			}
+		}
+		if (argsContainCast) {
+			CastExpression.checkNeedForArgumentCasts(scope, receiver, receiverType, method, arguments, argumentTypes, invocationSite);
+		}
+		if (unsafeWildcardInvocation) {
+		    scope.problemReporter().wildcardInvocation((ASTNode)invocationSite, receiverType, method, argumentTypes);
+		} else if (receiverType.isRawType() && method.hasSubstitutedParameters()) {
+		    scope.problemReporter().unsafeRawInvocation((ASTNode)invocationSite, receiverType, method);
+		}
+	}
+	public ASTNode concreteStatement() {
 		return this;
 	}
 
@@ -234,13 +281,18 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 			output.append("abstract "); //$NON-NLS-1$
 		return output;
 	}
-
+	public int sourceStart() {
+		return this.sourceStart;
+	}
+	public int sourceEnd() {
+		return this.sourceEnd;
+	}
 	public String toString() {
 
 		return print(0, new StringBuffer(30)).toString();
 	}
 
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+	public void traverse(ASTVisitor visitor, BlockScope scope) {
 		// do nothing by default
 	}
 }

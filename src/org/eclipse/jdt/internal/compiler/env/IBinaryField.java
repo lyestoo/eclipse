@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -30,4 +30,10 @@ Constant getConstant();
  */
 
 char[] getTypeName();
+
+/**
+ * Answer the receiver's signature which describes the parameter &
+ * return types as specified in section 4.4.4 of the Java 2 VM spec.
+ */
+char[] getGenericSignature();
 }

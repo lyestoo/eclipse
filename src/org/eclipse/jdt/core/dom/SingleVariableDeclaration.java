@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,15 +11,26 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 /**
  * Single variable declaration AST node type. Single variable
  * declaration nodes are used in a limited number of places, including formal
  * parameter lists and catch clauses. They are not used for field declarations
  * and regular variable declaration statements.
- *
+ * For JLS2:
  * <pre>
  * SingleVariableDeclaration:
  *    { Modifier } Type Identifier { <b>[</b><b>]</b> } [ <b>=</b> Expression ]
+ * </pre>
+ * For JLS3, the modifier flags were replaced by
+ * a list of modifier nodes (intermixed with annotations), and the variable arity
+ * indicator was added:
+ * <pre>
+ * SingleVariableDeclaration:
+ *    { ExtendedModifier } Type [ <b>...</b> ] Identifier { <b>[</b><b>]</b> } [ <b>=</b> Expression ]
  * </pre>
  * 
  * @since 2.0
@@ -27,18 +38,124 @@ package org.eclipse.jdt.core.dom;
 public class SingleVariableDeclaration extends VariableDeclaration {
 	
 	/**
-	 * Mask containing all legal modifiers for this construct.
+	 * The "modifiers" structural property of this node type (JLS2 API only).
+	 * @since 3.0
 	 */
-	private static final int LEGAL_MODIFIERS = 
-		Modifier.PUBLIC | Modifier.PRIVATE | Modifier.PROTECTED
-		| Modifier.STATIC | Modifier.FINAL | Modifier.VOLATILE
-		| Modifier.TRANSIENT;
+    // TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated Replaced by {@link #MODIFIERS2_PROPERTY} in the JLS3 API.
+	public static final SimplePropertyDescriptor MODIFIERS_PROPERTY = 
+		new SimplePropertyDescriptor(SingleVariableDeclaration.class, "modifiers", int.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * The "modifiers" structural property of this node type (added in JLS3 API).
+	 * @since 3.0
+	 */
+	public static final ChildListPropertyDescriptor MODIFIERS2_PROPERTY = 
+		new ChildListPropertyDescriptor(SingleVariableDeclaration.class, "modifiers", IExtendedModifier.class, CYCLE_RISK); //$NON-NLS-1$
+	
+	/**
+	 * The "name" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor NAME_PROPERTY = 
+		new ChildPropertyDescriptor(SingleVariableDeclaration.class, "name", SimpleName.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
 
 	/**
-	 * The modifiers; bit-wise or of Modifier flags.
-	 * Defaults to none.
+	 * The "type" structural property of this node type.
+	 * @since 3.0
 	 */
-	private int modifiers = Modifier.NONE;
+	public static final ChildPropertyDescriptor TYPE_PROPERTY = 
+		new ChildPropertyDescriptor(SingleVariableDeclaration.class, "type", Type.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "varargs" structural property of this node type (added in JLS3 API).
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor VARARGS_PROPERTY = 
+		new SimplePropertyDescriptor(SingleVariableDeclaration.class, "varargs", boolean.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * The "extraDimensions" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor EXTRA_DIMENSIONS_PROPERTY = 
+		new SimplePropertyDescriptor(SingleVariableDeclaration.class, "extraDimensions", int.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * The "initializer" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor INITIALIZER_PROPERTY = 
+		new ChildPropertyDescriptor(SingleVariableDeclaration.class, "initializer", Expression.class, OPTIONAL, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS_2_0;
+	
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS_3_0;
+	
+	static {
+		List propertyList = new ArrayList(6);
+		createPropertyList(SingleVariableDeclaration.class, propertyList);
+		addProperty(MODIFIERS_PROPERTY, propertyList);
+		addProperty(TYPE_PROPERTY, propertyList);
+		addProperty(NAME_PROPERTY, propertyList);
+		addProperty(EXTRA_DIMENSIONS_PROPERTY, propertyList);
+		addProperty(INITIALIZER_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS_2_0 = reapPropertyList(propertyList);
+		
+		propertyList = new ArrayList(7);
+		createPropertyList(SingleVariableDeclaration.class, propertyList);
+		addProperty(MODIFIERS2_PROPERTY, propertyList);
+		addProperty(TYPE_PROPERTY, propertyList);
+		addProperty(VARARGS_PROPERTY, propertyList);
+		addProperty(NAME_PROPERTY, propertyList);
+		addProperty(EXTRA_DIMENSIONS_PROPERTY, propertyList);
+		addProperty(INITIALIZER_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS_3_0 = reapPropertyList(propertyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		if (apiLevel == AST.JLS2) {
+			return PROPERTY_DESCRIPTORS_2_0;
+		} else {
+			return PROPERTY_DESCRIPTORS_3_0;
+		}
+	}
+			
+	/**
+	 * The extended modifiers (element type: <code>IExtendedModifier</code>). 
+	 * Null in JLS2. Added in JLS3; defaults to an empty list
+	 * (see constructor).
+	 * 
+	 * @since 3.0
+	 */
+	private ASTNode.NodeList modifiers = null;
+	
+	/**
+	 * The modifiers; bit-wise or of Modifier flags.
+	 * Defaults to none. Not used in 3.0.
+	 */
+	private int modifierFlags = Modifier.NONE;
 	
 	/**
 	 * The variable name; lazily initialized; defaults to a unspecified,
@@ -51,6 +168,14 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 * legal type.
 	 */
 	private Type type = null;
+
+	/**
+	 * Indicates the last parameter of a variable arity method;
+	 * defaults to false.
+	 * 
+	 * @since 3.0
+	 */
+	private boolean variableArity = false;
 
 	/**
 	 * The number of extra array dimensions that appear after the variable;
@@ -70,7 +195,7 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 * Creates a new AST node for a variable declaration owned by the given 
 	 * AST. By default, the variable declaration has: no modifiers, an 
 	 * unspecified (but legal) type, an unspecified (but legal) variable name, 
-	 * 0 dimensions after the variable; no initializer.
+	 * 0 dimensions after the variable; no initializer; not variable arity.
 	 * <p>
 	 * N.B. This constructor is package-private.
 	 * </p>
@@ -79,22 +204,120 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 */
 	SingleVariableDeclaration(AST ast) {
 		super(ast);
+		if (ast.apiLevel >= AST.JLS3) {
+			this.modifiers = new ASTNode.NodeList(MODIFIERS2_PROPERTY);
+		}
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int internalGetSetIntProperty(SimplePropertyDescriptor property, boolean get, int value) {
+		if (property == MODIFIERS_PROPERTY) {
+			if (get) {
+				return getModifiers();
+			} else {
+				setModifiers(value);
+				return 0;
+			}
+		}
+		if (property == EXTRA_DIMENSIONS_PROPERTY) {
+			if (get) {
+				return getExtraDimensions();
+			} else {
+				setExtraDimensions(value);
+				return 0;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetIntProperty(property, get, value);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final boolean internalGetSetBooleanProperty(SimplePropertyDescriptor property, boolean get, boolean value) {
+		if (property == VARARGS_PROPERTY) {
+			if (get) {
+				return isVarargs();
+			} else {
+				setVarargs(value);
+				return false;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetBooleanProperty(property, get, value);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == NAME_PROPERTY) {
+			if (get) {
+				return getName();
+			} else {
+				setName((SimpleName) child);
+				return null;
+			}
+		}
+		if (property == TYPE_PROPERTY) {
+			if (get) {
+				return getType();
+			} else {
+				setType((Type) child);
+				return null;
+			}
+		}
+		if (property == INITIALIZER_PROPERTY) {
+			if (get) {
+				return getInitializer();
+			} else {
+				setInitializer((Expression) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final List internalGetChildListProperty(ChildListPropertyDescriptor property) {
+		if (property == MODIFIERS2_PROPERTY) {
+			return modifiers();
+		}
+		// allow default implementation to flag the error
+		return super.internalGetChildListProperty(property);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return SINGLE_VARIABLE_DECLARATION;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		SingleVariableDeclaration result = new SingleVariableDeclaration(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
-		result.setModifiers(getModifiers());
+		if (this.ast.apiLevel == AST.JLS2) {
+			result.setModifiers(getModifiers());
+		} else {
+			result.modifiers().addAll(ASTNode.copySubtrees(target, modifiers()));
+			result.setVarargs(isVarargs());
+		}
 		result.setType((Type) getType().clone(target));
 		result.setExtraDimensions(getExtraDimensions());
 		result.setName((SimpleName) getName().clone(target));
@@ -106,7 +329,7 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -118,6 +341,9 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 		boolean visitChildren = visitor.visit(this);
 		if (visitChildren) {
 			// visit children in normal left to right reading order
+			if (this.ast.apiLevel >= AST.JLS3) {
+				acceptChildren(visitor, this.modifiers);
+			}
 			acceptChild(visitor, getType());
 			acceptChild(visitor, getName());
 			acceptChild(visitor, getInitializer());
@@ -126,50 +352,93 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	}
 	
 	/**
-	 * Returns the modifiers explicitly specified on this declaration.
+	 * Returns the live ordered list of modifiers and annotations
+	 * of this declaration (added in JLS3 API).
 	 * <p>
 	 * Note that the final modifier is the only meaningful modifier for local
 	 * variable and formal parameter declarations.
+	 * </p>
+	 * 
+	 * @return the live list of modifiers and annotations
+	 *    (element type: <code>IExtendedModifier</code>)
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */ 
+	public List modifiers() {
+		// more efficient than just calling unsupportedIn2() to check
+		if (this.modifiers == null) {
+			unsupportedIn2();
+		}
+		return this.modifiers;
+	}
+	
+	/**
+	 * Returns the modifiers explicitly specified on this declaration.
+	 * <p>
+	 * In the JLS3 API, this method is a convenience method that
+	 * computes these flags from <code>modifiers()</code>.
 	 * </p>
 	 * 
 	 * @return the bit-wise or of <code>Modifier</code> constants
 	 * @see Modifier
 	 */ 
 	public int getModifiers() {
-		return modifiers;
+		// more efficient than checking getAST().API_LEVEL
+		if (this.modifiers == null) {
+			// JLS2 behavior - bona fide property
+			return this.modifierFlags;
+		} else {
+			// JLS3 behavior - convenient method
+			// performance could be improved by caching computed flags
+			// but this would require tracking changes to this.modifiers
+			int computedModifierFlags = Modifier.NONE;
+			for (Iterator it = modifiers().iterator(); it.hasNext(); ) {
+				Object x = it.next();
+				if (x instanceof Modifier) {
+					computedModifierFlags |= ((Modifier) x).getKeyword().toFlagValue();
+				}
+			}
+			return computedModifierFlags;
+		}
 	}
 
 	/**
-	 * Sets the modifiers explicitly specified on this declaration.
+	 * Sets the modifiers explicitly specified on this declaration (JLS2 API only).
 	 * <p>
-	 * The following modifiers are valid for fields: public, private, protected,
+	 * The following modifiers are meaningful for fields: public, private, protected,
 	 * static, final, volatile, and transient. For local variable and formal
 	 * parameter declarations, the only meaningful modifier is final.
 	 * </p>
 	 * 
-	 * @return the bit-wise or of <code>Modifier</code> constants
+	 * @param modifiers the given modifiers (bit-wise or of <code>Modifier</code> constants)
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * an AST later than JLS2
 	 * @see Modifier
-	 * @exception IllegalArgumentException if the modifiers are illegal
 	 */ 
+	// TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated In the JLS3 API, this method is replaced by <code>modifiers()</code> which contains a list of  a <code>Modifier</code> nodes.
 	public void setModifiers(int modifiers) {
-		if ((modifiers & ~LEGAL_MODIFIERS) != 0) {
-			throw new IllegalArgumentException();
-		}
-		modifying();
-		this.modifiers = modifiers;
+	    supportedOnlyIn2();
+		preValueChange(MODIFIERS_PROPERTY);
+		this.modifierFlags = modifiers;
+		postValueChange(MODIFIERS_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on VariableDeclaration.
 	 */ 
 	public SimpleName getName() {
-		if (variableName == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setName(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.variableName == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.variableName == null) {
+					preLazyInit();
+					this.variableName = new SimpleName(this.ast);
+					postLazyInit(this.variableName, NAME_PROPERTY);
+				}
+			}
 		}
-		return variableName;
+		return this.variableName;
 	}
 		
 	/* (omit javadoc for this method)
@@ -179,8 +448,10 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 		if (variableName == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.variableName, variableName, false);
+		ASTNode oldChild = this.variableName;
+		preReplaceChild(oldChild, variableName, NAME_PROPERTY);
 		this.variableName = variableName;
+		postReplaceChild(oldChild, variableName, NAME_PROPERTY);
 	}
 
 	/**
@@ -190,13 +461,17 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 * @return the type
 	 */ 
 	public Type getType() {
-		if (type == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setType(getAST().newPrimitiveType(PrimitiveType.INT));
-			getAST().setModificationCount(count);
+		if (this.type == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.type == null) {
+					preLazyInit();
+					this.type = this.ast.newPrimitiveType(PrimitiveType.INT);
+					postLazyInit(this.type, TYPE_PROPERTY);
+				}
+			}
 		}
-		return type;
+		return this.type;
 	}
 
 	/**
@@ -214,8 +489,58 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 		if (type == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.type, type, false);
+		ASTNode oldChild = this.type;
+		preReplaceChild(oldChild, type, TYPE_PROPERTY);
 		this.type = type;
+		postReplaceChild(oldChild, type, TYPE_PROPERTY);
+	}
+
+	/**
+	 * Returns whether this declaration declares the last parameter of
+	 * a variable arity method (added in JLS3 API).
+	 * <p>
+	 * Note: This API element is only needed for dealing with Java code that uses
+	 * new language features of J2SE 1.5. It is included in anticipation of J2SE
+	 * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
+	 * may change slightly before reaching its final form.
+	 * </p>
+	 * 
+	 * @return <code>true</code> if this is a variable arity parameter declaration,
+	 *    and <code>false</code> otherwise
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */ 
+	public boolean isVarargs() {
+		// more efficient than just calling unsupportedIn2() to check
+		if (this.modifiers == null) {
+			unsupportedIn2();
+		}
+		return this.variableArity;
+	}
+	
+	/**
+	 * Sets whether this declaration declares the last parameter of
+	 * a variable arity method (added in JLS3 API).
+	 * <p>
+	 * Note: This API element is only needed for dealing with Java code that uses
+	 * new language features of J2SE 1.5. It is included in anticipation of J2SE
+	 * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
+	 * may change slightly before reaching its final form.
+	 * </p>
+	 * 
+	 * @param variableArity <code>true</code> if this is a variable arity
+	 *    parameter declaration, and <code>false</code> otherwise
+	 * @since 3.0
+	 */ 
+	public void setVarargs(boolean variableArity) {
+		// more efficient than just calling unsupportedIn2() to check
+		if (this.modifiers == null) {
+			unsupportedIn2();
+		}
+		preValueChange(VARARGS_PROPERTY);
+		this.variableArity = variableArity;
+		postValueChange(VARARGS_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)
@@ -223,7 +548,7 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 * @since 2.1
 	 */ 
 	public int getExtraDimensions() {
-		return extraArrayDimensions;
+		return this.extraArrayDimensions;
 	}
 
 	/* (omit javadoc for this method)
@@ -234,15 +559,16 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 		if (dimensions < 0) {
 			throw new IllegalArgumentException();
 		}
-		modifying();
+		preValueChange(EXTRA_DIMENSIONS_PROPERTY);
 		this.extraArrayDimensions = dimensions;
+		postValueChange(EXTRA_DIMENSIONS_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on VariableDeclaration.
 	 */ 
 	public Expression getInitializer() {
-		return optionalInitializer;
+		return this.optionalInitializer;
 	}
 	
 	/* (omit javadoc for this method)
@@ -251,8 +577,10 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	public void setInitializer(Expression initializer) {
 		// a SingleVariableDeclaration may occur inside an Expression 
 		// must check cycles
-		replaceChild(this.optionalInitializer, initializer, true);
+		ASTNode oldChild = this.optionalInitializer;
+		preReplaceChild(oldChild, initializer,INITIALIZER_PROPERTY);
 		this.optionalInitializer = initializer;
+		postReplaceChild(oldChild, initializer,INITIALIZER_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)
@@ -260,7 +588,7 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 */
 	int memSize() {
 		// treat Operator as free
-		return BASE_NODE_SIZE + 5 * 4;
+		return BASE_NODE_SIZE + 7 * 4;
 	}
 	
 	/* (omit javadoc for this method)
@@ -269,8 +597,9 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	int treeSize() {
 		return 
 			memSize()
-			+ (type == null ? 0 : getType().treeSize())
-			+ (variableName == null ? 0 : getName().treeSize())
-			+ (optionalInitializer == null ? 0 : getInitializer().treeSize());
+			+ (this.modifiers == null ? 0 : this.modifiers.listSize())
+			+ (this.type == null ? 0 : getType().treeSize())
+			+ (this.variableName == null ? 0 : getName().treeSize())
+			+ (this.optionalInitializer == null ? 0 : getInitializer().treeSize());
 	}
 }

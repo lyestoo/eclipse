@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -33,7 +33,7 @@ public interface IBinding {
 	 * Kind constant (value 1) indicating a package binding.
 	 * Bindings of this kind can be safely cast to <code>IPackageBinding</code>.
 	 * 
-	 * @see #getKind
+	 * @see #getKind()
 	 * @see IPackageBinding
 	 */
 	public static final int PACKAGE = 1;
@@ -42,7 +42,7 @@ public interface IBinding {
 	 * Kind constant (value 2) indicating a type binding.
 	 * Bindings of this kind can be safely cast to <code>ITypeBinding</code>.
 	 * 
-	 * @see #getKind
+	 * @see #getKind()
 	 * @see ITypeBinding
 	 */
 	public static final int TYPE = 2;
@@ -51,7 +51,7 @@ public interface IBinding {
 	 * Kind constant (value 3) indicating a field or local variable binding.
 	 * Bindings of this kind can be safely cast to <code>IVariableBinding</code>.
 	 * 
-	 * @see #getKind
+	 * @see #getKind()
 	 * @see IVariableBinding
 	 */
 	public static final int VARIABLE = 3;
@@ -60,7 +60,7 @@ public interface IBinding {
 	 * Kind constant (value 4) indicating a method or constructor binding.
 	 * Bindings of this kind can be safely cast to <code>IMethodBinding</code>.
 	 * 
-	 * @see #getKind
+	 * @see #getKind()
 	 * @see IMethodBinding
 	 */
 	public static final int METHOD = 4;
@@ -109,10 +109,17 @@ public interface IBinding {
 	/**
 	 * Returns whether this binding is synthetic. A synthetic binding is one that
 	 * was made up by the compiler, rather than something declared in the 
-	 * source code.
+	 * source code. Note that default constructors (the 0-argument constructor that
+	 * the compiler generates for class declarations with no explicit constructors
+	 * declarations) are not generally considered synthetic (although they
+	 * may be if the class itself is synthetic). 
+	 * But see {@link IMethodBinding#isDefaultConstructor IMethodBinding.isDefaultConstructor}
+	 * for cases where the compiled-generated default constructor can be recognized
+	 * instead.
 	 * 
 	 * @return <code>true</code> if this binding is synthetic, and 
 	 *    <code>false</code> otherwise
+	 * @see IMethodBinding#isDefaultConstructor()
 	 */
 	public boolean isSynthetic();
 	
@@ -144,12 +151,30 @@ public interface IBinding {
 	 *   type, and the keys of the parameter types</li>
 	 * <li>constructors - the key of its declaring class, and the 
 	 *   keys of the parameter types</li>
+	 * <li>local variables - the name of the local variable, the index of the 
+	 *   declaring block relative to its parent, the key of its method</li>
+	 * <li>local types - the name of the type, the index of the declaring
+	 *   block relative to its parent, the key of its method</li>
+	 * <li>anonymous types - the occurence count of the anonymous 
+	 *   type relative to its declaring type, the key of its declaring type</li>
+	 * <li>enum types - treated like classes</li>
+	 * <li>annotation types - treated like interfaces</li>
+	 * <li>type variables - the name of the type variable and 
+	 * the key of the generic type or generic method that declares that
+	 * type variable</li>
+	 * <li>wildcard types - the key of the optional wildcard type bound</li>
+	 * <li>generic type instances - the key of the generic type and the keys
+	 * of the type arguments used to instantiate it, and whether the
+	 * instance is explicit (a parameterized type reference) or
+	 * implicit (a raw type reference)</li>
+	 * <li>generic method instances - the key of the generic method and the keys
+	 * of the type arguments used to instantiate it, and whether the
+	 * instance is explicit (a parameterized method reference) or
+	 * implicit (a raw method reference)</li>
+	 * <li>members of generic type instances - the key of the generic type
+	 * instance and the key of the corresponding member in the generic
+	 * type</li>
 	 * </ul>
-	 * Some bindings, like ones that correspond to declarations occurring
-	 * within the body of a method, are problematic because of the lack of
-	 * any universally acceptable way of assigning keys that are both
-	 * predictable and stable. The keys for bindings to local variables, 
-	 * local types, etc. is unspecified, and may be <code>null</code>.
 	 * </p>
 	 * 
 	 * @return the key for this binding, or <code>null</code> if none
@@ -164,7 +189,9 @@ public interface IBinding {
 	 * not be different; in these cases, the client should compare bindings
 	 * via their binding keys (<code>getKey</code>) if available.
 	 * 
-	 * @see #getKey
+	 * @param obj {@inheritDoc}
+	 * @return {@inheritDoc}
+	 * @see #getKey()
 	 */
 	public boolean equals(Object obj);
 	

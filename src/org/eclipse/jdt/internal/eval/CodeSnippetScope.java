@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -280,12 +280,12 @@ public FieldBinding findFieldForCodeSnippet(TypeBinding receiverType, char[] fie
 	if (!currentType.canBeSeenBy(this))
 		return new ProblemFieldBinding(currentType, fieldName, ReceiverTypeNotVisible);
 
-	FieldBinding field = currentType.getField(fieldName);
+	FieldBinding field = currentType.getField(fieldName, true /*resolve*/);
 	if (field != null) {
 		if (canBeSeenByForCodeSnippet(field, currentType, invocationSite, this))
 			return field;
 		else
-			return new ProblemFieldBinding(field.declaringClass, fieldName, NotVisible);
+			return new ProblemFieldBinding(field /* closest match*/, field.declaringClass, fieldName, NotVisible);
 	}
 
 	// collect all superinterfaces of receiverType until the field is found in a supertype
@@ -306,7 +306,7 @@ public FieldBinding findFieldForCodeSnippet(TypeBinding receiverType, char[] fie
 		if ((currentType = currentType.superclass()) == null)
 			break;
 
-		if ((field = currentType.getField(fieldName)) != null) {
+		if ((field = currentType.getField(fieldName, true /*resolve*/)) != null) {
 			keepLooking = false;
 			if (canBeSeenByForCodeSnippet(field, receiverType, invocationSite, this)) {
 				if (visibleField == null)
@@ -328,7 +328,7 @@ public FieldBinding findFieldForCodeSnippet(TypeBinding receiverType, char[] fie
 				ReferenceBinding anInterface = interfaces[j];
 				if ((anInterface.tagBits & InterfaceVisited) == 0) { // if interface as not already been visited
 					anInterface.tagBits |= InterfaceVisited;
-					if ((field = anInterface.getField(fieldName)) != null) {
+					if ((field = anInterface.getField(fieldName, true /*resolve*/)) != null) {
 						if (visibleField == null) {
 							visibleField = field;
 						} else {
@@ -420,8 +420,9 @@ public MethodBinding findMethod(
 		// argument type compatibility check
 		for (int i = 0; i < foundSize; i++) {
 			MethodBinding methodBinding = (MethodBinding) found.elementAt(i);
-			if (areParametersAssignable(methodBinding.parameters, argumentTypes))
-				candidates[candidatesCount++] = methodBinding;
+			MethodBinding compatibleMethod = computeCompatibleMethod(methodBinding, argumentTypes, invocationSite);
+			if (compatibleMethod != null)
+				candidates[candidatesCount++] = compatibleMethod;
 		}
 		if (candidatesCount == 1) {
 			//compilationUnitScope().recordTypeReferences(candidates[0].thrownExceptions);
@@ -475,9 +476,9 @@ public MethodBinding findMethod(
 				NotVisible);
 		}	
 		if (candidates[0].declaringClass.isClass()) {
-			return mostSpecificClassMethodBinding(candidates, visiblesCount);
+			return mostSpecificClassMethodBinding(candidates, visiblesCount, invocationSite);
 		} else {
-			return mostSpecificInterfaceMethodBinding(candidates, visiblesCount);
+			return mostSpecificInterfaceMethodBinding(candidates, visiblesCount, invocationSite);
 		}
 	}
 
@@ -498,10 +499,12 @@ public MethodBinding findMethodForArray(ArrayBinding receiverType, char[] select
 	if (methodBinding == null)
 		return new ProblemMethodBinding(selector, argumentTypes, NotFound);
 	if (methodBinding.isValidBinding()) {
-		if (!areParametersAssignable(methodBinding.parameters, argumentTypes))
+	    MethodBinding compatibleMethod = computeCompatibleMethod(methodBinding, argumentTypes, invocationSite);
+	    if (compatibleMethod == null)
 			return new ProblemMethodBinding(methodBinding, selector, argumentTypes, NotFound);
+	    methodBinding = compatibleMethod;
 		if (!canBeSeenByForCodeSnippet(methodBinding, receiverType, invocationSite, this))
-			return new ProblemMethodBinding(selector, methodBinding.parameters, methodBinding.declaringClass, NotVisible);
+			return new ProblemMethodBinding(methodBinding, selector, methodBinding.parameters, NotVisible);
 	}
 	return methodBinding;
 }
@@ -538,7 +541,7 @@ public MethodBinding findMethodForArray(ArrayBinding receiverType, char[] select
 */
 
 public Binding getBinding(char[][] compoundName, int mask, InvocationSite invocationSite, ReferenceBinding receiverType) {
-	Binding binding = getBinding(compoundName[0], mask | TYPE | PACKAGE, invocationSite);
+	Binding binding = getBinding(compoundName[0], mask | TYPE | PACKAGE, invocationSite, true /*resolve*/);
 	invocationSite.setFieldIndex(1);
 	if (!binding.isValidBinding() || binding instanceof VariableBinding)
 		return binding;
@@ -623,9 +626,11 @@ public MethodBinding getConstructor(ReferenceBinding receiverType, TypeBinding[]
 	}
 	MethodBinding[] compatible = new MethodBinding[methods.length];
 	int compatibleIndex = 0;
-	for (int i = 0, length = methods.length; i < length; i++)
-		if (areParametersAssignable(methods[i].parameters, argumentTypes))
-			compatible[compatibleIndex++] = methods[i];
+	for (int i = 0, length = methods.length; i < length; i++) {
+	    MethodBinding compatibleMethod = computeCompatibleMethod(methods[i], argumentTypes, invocationSite);
+		if (compatibleMethod != null)
+			compatible[compatibleIndex++] = compatibleMethod;
+	}
 	if (compatibleIndex == 0)
 		return new ProblemMethodBinding(ConstructorDeclaration.ConstantPoolName, argumentTypes, NotFound); // need a more descriptive error... cannot convert from X to Y
 
@@ -641,9 +646,9 @@ public MethodBinding getConstructor(ReferenceBinding receiverType, TypeBinding[]
 		return visible[0];
 	}
 	if (visibleIndex == 0) {
-		return new ProblemMethodBinding(ConstructorDeclaration.ConstantPoolName, compatible[0].parameters, NotVisible);
+		return new ProblemMethodBinding(compatible[0], ConstructorDeclaration.ConstantPoolName, compatible[0].parameters, NotVisible);
 	}
-	return mostSpecificClassMethodBinding(visible, visibleIndex);
+	return mostSpecificClassMethodBinding(visible, visibleIndex, invocationSite);
 }
 /* API
 
@@ -713,18 +718,22 @@ public MethodBinding getImplicitMethod(ReferenceBinding receiverType, char[] sel
 		ProblemMethodBinding insideProblem = null;
 		if (methodBinding.isValidBinding()) {
 			if (!isExactMatch) {
-				if (!areParametersAssignable(methodBinding.parameters, argumentTypes)) {
+	    	    MethodBinding compatibleMethod = computeCompatibleMethod(methodBinding, argumentTypes, invocationSite);
+				if (compatibleMethod == null) {
 					fuzzyProblem = new ProblemMethodBinding(methodBinding, selector, argumentTypes, NotFound);
-				} else if (!canBeSeenByForCodeSnippet(methodBinding, receiverType, invocationSite, this)) {	
-					// using <classScope> instead of <this> for visibility check does grant all access to innerclass
-					fuzzyProblem = new ProblemMethodBinding(selector, argumentTypes, methodBinding.declaringClass, NotVisible);
+				} else {
+				    methodBinding = compatibleMethod;
+				    if (!canBeSeenByForCodeSnippet(methodBinding, receiverType, invocationSite, this)) {	
+						// using <classScope> instead of <this> for visibility check does grant all access to innerclass
+						fuzzyProblem = new ProblemMethodBinding(methodBinding, selector, argumentTypes, NotVisible);
+				    }
 				}
 			}
 			if (fuzzyProblem == null && !methodBinding.isStatic()) {
 				if (insideConstructorCall) {
-					insideProblem = new ProblemMethodBinding(methodBinding.selector, methodBinding.parameters, NonStaticReferenceInConstructorInvocation);
+					insideProblem = new ProblemMethodBinding(methodBinding, methodBinding.selector, methodBinding.parameters, NonStaticReferenceInConstructorInvocation);
 				} else if (insideStaticContext) {
-					insideProblem = new ProblemMethodBinding(methodBinding.selector, methodBinding.parameters, NonStaticReferenceInStaticContext);
+					insideProblem = new ProblemMethodBinding(methodBinding, methodBinding.selector, methodBinding.parameters, NonStaticReferenceInStaticContext);
 				}
 			}
 			if (receiverType == methodBinding.declaringClass || (receiverType.getMethods(selector)) != NoMethods) {
@@ -741,7 +750,7 @@ public MethodBinding getImplicitMethod(ReferenceBinding receiverType, char[] sel
 				// if a method was found, complain when another is found in an 'immediate' enclosing type (ie. not inherited)
 				// NOTE: Unlike fields, a non visible method hides a visible method
 				if (foundMethod.declaringClass != methodBinding.declaringClass) // ie. have we found the same method - do not trust field identity yet
-					return new ProblemMethodBinding(methodBinding.selector, methodBinding.parameters, InheritedNameHidesEnclosingName);
+					return new ProblemMethodBinding(methodBinding, methodBinding.selector, methodBinding.parameters, InheritedNameHidesEnclosingName);
 			}
 		}
 

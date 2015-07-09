@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -13,10 +13,11 @@ package org.eclipse.jdt.internal.compiler.flow;
 import java.util.ArrayList;
 
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.TryStatement;
 import org.eclipse.jdt.internal.compiler.codegen.ObjectCache;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
+import org.eclipse.jdt.internal.compiler.lookup.CompilerModifiers;
 import org.eclipse.jdt.internal.compiler.lookup.MethodScope;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Scope;
@@ -44,7 +45,7 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 	
 	public ExceptionHandlingFlowContext(
 		FlowContext parent,
-		AstNode associatedNode,
+		ASTNode associatedNode,
 		ReferenceBinding[] handledExceptions,
 		BlockScope scope,
 		UnconditionalFlowInfo flowInfo) {
@@ -74,6 +75,12 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 
 	public void complainIfUnusedExceptionHandlers(AbstractMethodDeclaration method) {
 		MethodScope scope = method.scope;
+		// can optionally skip overriding methods
+		if ((method.binding.modifiers & (CompilerModifiers.AccOverriding | CompilerModifiers.AccImplementing)) != 0
+		        && !scope.environment().options.reportUnusedDeclaredThrownExceptionWhenOverriding) {
+		    return;
+		}
+		    
 		// report errors for unreachable exception handlers
 		for (int i = 0, count = handledExceptions.length; i < count; i++) {
 			int index = indexes.get(handledExceptions[i]);
@@ -150,7 +157,7 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 		ReferenceBinding exceptionType,
 		UnconditionalFlowInfo flowInfo,
 		TypeBinding raisedException,
-		AstNode invocationSite,
+		ASTNode invocationSite,
 		boolean wasAlreadyDefinitelyCaught) {
 			
 		int index = indexes.get(exceptionType);
@@ -165,7 +172,7 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 		initsOnExceptions[index] =
 			initsOnExceptions[index] == FlowInfo.DEAD_END
 				? flowInfo.copy().unconditionalInits()
-				: initsOnExceptions[index].mergedWith(flowInfo);
+				: initsOnExceptions[index].mergedWith(flowInfo.copy().unconditionalInits());
 	}
 	
 	public void recordReturnFrom(FlowInfo flowInfo) {
@@ -174,7 +181,7 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 		if (initsOnReturn == FlowInfo.DEAD_END) {
 			initsOnReturn = flowInfo.copy().unconditionalInits();
 		} else {
-			initsOnReturn = initsOnReturn.mergedWith(flowInfo.unconditionalInits());
+			initsOnReturn = initsOnReturn.mergedWith(flowInfo.copy().unconditionalInits());
 		}
 	}
 	

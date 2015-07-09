@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,9 +11,10 @@
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.internal.compiler.ast.AllocationExpression;
+import org.eclipse.jdt.internal.compiler.ast.CastExpression;
+import org.eclipse.jdt.internal.compiler.ast.Expression;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
-import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
@@ -38,15 +39,15 @@ public void generateCode(
 	boolean valueRequired) {
 
 	int pc = codeStream.position;
-	ReferenceBinding allocatedType = binding.declaringClass;
+	ReferenceBinding allocatedType = this.codegenBinding.declaringClass;
 
-	if (binding.canBeSeenBy(allocatedType, this, currentScope)) {
+	if (this.codegenBinding.canBeSeenBy(allocatedType, this, currentScope)) {
 		codeStream.new_(allocatedType);
 		if (valueRequired) {
 			codeStream.dup();
 		}
 		// better highlight for allocation: display the type individually
-		codeStream.recordPositionsFrom(pc, type.sourceStart);
+		codeStream.recordPositionsFrom(pc, this.type.sourceStart);
 
 		// handling innerclass instance allocation - enclosing instance arguments
 		if (allocatedType.isNestedType()) {
@@ -57,9 +58,9 @@ public void generateCode(
 				this);
 		}
 		// generate the arguments for constructor
-		if (arguments != null) {
-			for (int i = 0, count = arguments.length; i < count; i++) {
-				arguments[i].generateCode(currentScope, codeStream, true);
+		if (this.arguments != null) {
+			for (int i = 0, count = this.arguments.length; i < count; i++) {
+				this.arguments[i].generateCode(currentScope, codeStream, true);
 			}
 		}
 		// handling innerclass instance allocation - outer local arguments
@@ -70,22 +71,22 @@ public void generateCode(
 				this);
 		}
 		// invoke constructor
-		codeStream.invokespecial(binding);
+		codeStream.invokespecial(this.codegenBinding);
 	} else {
 		// private emulation using reflect
-		((CodeSnippetCodeStream) codeStream).generateEmulationForConstructor(currentScope, binding);
+		((CodeSnippetCodeStream) codeStream).generateEmulationForConstructor(currentScope, this.codegenBinding);
 		// generate arguments
-		if (arguments != null) {
-			int argsLength = arguments.length;
+		if (this.arguments != null) {
+			int argsLength = this.arguments.length;
 			codeStream.generateInlinedValue(argsLength);
-			codeStream.newArray(currentScope, new ArrayBinding(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT), 1));
+			codeStream.newArray(currentScope, currentScope.createArrayType(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT, 3), 1));
 			codeStream.dup();
 			for (int i = 0; i < argsLength; i++) {
 				codeStream.generateInlinedValue(i);
-				arguments[i].generateCode(currentScope, codeStream, true);
-				TypeBinding parameterBinding = binding.parameters[i];
+				this.arguments[i].generateCode(currentScope, codeStream, true);
+				TypeBinding parameterBinding = this.codegenBinding.parameters[i];
 				if (parameterBinding.isBaseType() && parameterBinding != NullBinding) {
-					((CodeSnippetCodeStream)codeStream).generateObjectWrapperForType(binding.parameters[i]);
+					((CodeSnippetCodeStream)codeStream).generateObjectWrapperForType(this.codegenBinding.parameters[i]);
 				}
 				codeStream.aastore();
 				if (i < argsLength - 1) {
@@ -94,7 +95,7 @@ public void generateCode(
 			}
 		} else {
 			codeStream.generateInlinedValue(0);
-			codeStream.newArray(currentScope, new ArrayBinding(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT), 1));			
+			codeStream.newArray(currentScope, currentScope.createArrayType(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT, 3), 1));			
 		}
 		((CodeSnippetCodeStream) codeStream).invokeJavaLangReflectConstructorNewInstance();
 		codeStream.checkcast(allocatedType);
@@ -112,21 +113,30 @@ public void manageEnclosingInstanceAccessIfNecessary(BlockScope currentScope, Fl
 	// not supported yet
 }
 public void manageSyntheticAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
-	// do nothing
+		if (!flowInfo.isReachable()) return;
+
+		// if constructor from parameterized type got found, use the original constructor at codegen time
+		this.codegenBinding = this.binding.original();
 }
 public TypeBinding resolveType(BlockScope scope) {
 	// Propagate the type checking to the arguments, and check if the constructor is defined.
-	constant = NotAConstant;
-	this.resolvedType = type.resolveType(scope); // will check for null after args are resolved
+	this.constant = NotAConstant;
+	this.resolvedType = this.type.resolveType(scope); // will check for null after args are resolved
 
 	// buffering the arguments' types
+	boolean argsContainCast = false;
 	TypeBinding[] argumentTypes = NoParameters;
-	if (arguments != null) {
+	if (this.arguments != null) {
 		boolean argHasError = false;
-		int length = arguments.length;
+		int length = this.arguments.length;
 		argumentTypes = new TypeBinding[length];
 		for (int i = 0; i < length; i++) {
-			if ((argumentTypes[i] = arguments[i].resolveType(scope)) == null) {
+			Expression argument = this.arguments[i];
+			if (argument instanceof CastExpression) {
+				argument.bits |= IgnoreNeedForCastCheckMASK; // will check later on
+				argsContainCast = true;
+			}
+			if ((argumentTypes[i] = argument.resolveType(scope)) == null) {
 				argHasError = true;
 			}
 		}
@@ -138,55 +148,66 @@ public TypeBinding resolveType(BlockScope scope) {
 		return null;
 	}
 	if (!this.resolvedType.canBeInstantiated()) {
-		scope.problemReporter().cannotInstantiate(type, this.resolvedType);
+		scope.problemReporter().cannotInstantiate(this.type, this.resolvedType);
 		return this.resolvedType;
 	}
 	ReferenceBinding allocatedType = (ReferenceBinding) this.resolvedType;
-	if (!(binding = scope.getConstructor(allocatedType, argumentTypes, this)).isValidBinding()) {
-		if (binding instanceof ProblemMethodBinding
-			&& ((ProblemMethodBinding) binding).problemId() == NotVisible) {
+	if (!(this.binding = scope.getConstructor(allocatedType, argumentTypes, this)).isValidBinding()) {
+		if (this.binding instanceof ProblemMethodBinding
+			&& ((ProblemMethodBinding) this.binding).problemId() == NotVisible) {
 			if (this.evaluationContext.declaringTypeName != null) {
-				delegateThis = scope.getField(scope.enclosingSourceType(), DELEGATE_THIS, this);
-				if (delegateThis == null) {
-					if (binding.declaringClass == null) {
-						binding.declaringClass = allocatedType;
+				this.delegateThis = scope.getField(scope.enclosingSourceType(), DELEGATE_THIS, this);
+				if (this.delegateThis == null) {
+					if (this.binding.declaringClass == null) {
+						this.binding.declaringClass = allocatedType;
 					}
-					scope.problemReporter().invalidConstructor(this, binding);
+					scope.problemReporter().invalidConstructor(this, this.binding);
 					return this.resolvedType;
 				}
 			} else {
-				if (binding.declaringClass == null) {
-					binding.declaringClass = allocatedType;
+				if (this.binding.declaringClass == null) {
+					this.binding.declaringClass = allocatedType;
 				}
-				scope.problemReporter().invalidConstructor(this, binding);
+				scope.problemReporter().invalidConstructor(this, this.binding);
 				return this.resolvedType;
 			}
 			CodeSnippetScope localScope = new CodeSnippetScope(scope);			
-			MethodBinding privateBinding = localScope.getConstructor((ReferenceBinding)delegateThis.type, argumentTypes, this);
+			MethodBinding privateBinding = localScope.getConstructor((ReferenceBinding)this.delegateThis.type, argumentTypes, this);
 			if (!privateBinding.isValidBinding()) {
-				if (binding.declaringClass == null) {
-					binding.declaringClass = allocatedType;
+				if (this.binding.declaringClass == null) {
+					this.binding.declaringClass = allocatedType;
 				}
-				scope.problemReporter().invalidConstructor(this, binding);
+				scope.problemReporter().invalidConstructor(this, this.binding);
 				return this.resolvedType;
 			} else {
-				binding = privateBinding;
+				this.binding = privateBinding;
 			}				
 		} else {
-			if (binding.declaringClass == null) {
-				binding.declaringClass = allocatedType;
+			if (this.binding.declaringClass == null) {
+				this.binding.declaringClass = allocatedType;
 			}
-			scope.problemReporter().invalidConstructor(this, binding);
+			scope.problemReporter().invalidConstructor(this, this.binding);
 			return this.resolvedType;
 		}
 	}
-	if (isMethodUseDeprecated(binding, scope)) {
-		scope.problemReporter().deprecatedMethod(binding, this);
+	if (isMethodUseDeprecated(this.binding, scope)) {
+		scope.problemReporter().deprecatedMethod(this.binding, this);
 	}
 	if (arguments != null) {
 		for (int i = 0; i < arguments.length; i++) {
-			arguments[i].implicitWidening(binding.parameters[i], argumentTypes[i]);
+		    TypeBinding parameterType = binding.parameters[i];
+		    TypeBinding argumentType = argumentTypes[i];
+			arguments[i].computeConversion(scope, parameterType, argumentType);
+			if (argumentType != parameterType && argumentType.isRawType() && parameterType.isBoundParameterizedType()) {
+				scope.problemReporter().unsafeRawConversion(arguments[i], argumentType, parameterType);
+			}
 		}
+		if (argsContainCast) {
+			CastExpression.checkNeedForArgumentCasts(scope, null, allocatedType, binding, this.arguments, argumentTypes, this);
+		}
+	}
+	if (allocatedType.isRawType() && this.binding.hasSubstitutedParameters()) {
+	    scope.problemReporter().unsafeRawInvocation(this, allocatedType, this.binding);
 	}
 	return allocatedType;
 }

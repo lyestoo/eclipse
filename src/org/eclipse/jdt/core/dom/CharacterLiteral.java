@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
@@ -22,6 +25,42 @@ import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
  */
 public class CharacterLiteral extends Expression {
 
+	/**
+	 * The "escapedValue" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor ESCAPED_VALUE_PROPERTY = 
+		new SimplePropertyDescriptor(CharacterLiteral.class, "escapedValue", String.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List properyList = new ArrayList(2);
+		createPropertyList(CharacterLiteral.class, properyList);
+		addProperty(ESCAPED_VALUE_PROPERTY, properyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(properyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/**
 	 * The literal string, including quotes and escapes; defaults to the 
 	 * literal for the character 'X'.
@@ -44,14 +83,37 @@ public class CharacterLiteral extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final Object internalGetSetObjectProperty(SimplePropertyDescriptor property, boolean get, Object value) {
+		if (property == ESCAPED_VALUE_PROPERTY) {
+			if (get) {
+				return getEscapedValue();
+			} else {
+				setEscapedValue((String) value);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetObjectProperty(property, get, value);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return CHARACTER_LITERAL;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		CharacterLiteral result = new CharacterLiteral(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setEscapedValue(getEscapedValue());
@@ -61,7 +123,7 @@ public class CharacterLiteral extends Expression {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -83,7 +145,7 @@ public class CharacterLiteral extends Expression {
 	 *    and embedded escapes
 	 */ 
 	public String getEscapedValue() {
-		return escapedValue;
+		return this.escapedValue;
 	}
 		
 	/**
@@ -103,7 +165,7 @@ public class CharacterLiteral extends Expression {
 		if (value == null) {
 			throw new IllegalArgumentException();
 		}
-		Scanner scanner = getAST().scanner;
+		Scanner scanner = this.ast.scanner;
 		char[] source = value.toCharArray();
 		scanner.setSource(source);
 		scanner.resetTo(0, source.length);
@@ -118,15 +180,15 @@ public class CharacterLiteral extends Expression {
 		} catch(InvalidInputException e) {
 			throw new IllegalArgumentException();
 		}
-		modifying();
+		preValueChange(ESCAPED_VALUE_PROPERTY);
 		this.escapedValue = value;
+		postValueChange(ESCAPED_VALUE_PROPERTY);
 	}
 
 	/**
 	 * Returns the value of this literal node. 
 	 * <p>
 	 * For example,
-	 * <code>
 	 * <pre>
 	 * CharacterLiteral s;
 	 * s.setEscapedValue("\'x\'");
@@ -218,7 +280,6 @@ public class CharacterLiteral extends Expression {
 	 * Sets the value of this character literal node to the given character. 
 	 * <p>
 	 * For example,
-	 * <code>
 	 * <pre>
 	 * CharacterLiteral s;
 	 * s.setCharValue('x');
@@ -293,10 +354,7 @@ public class CharacterLiteral extends Expression {
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		int size = BASE_NODE_SIZE + 1 * 4;
-		if (escapedValue != null) {
-			size += HEADERS + 2 * 4 + HEADERS + 2 * escapedValue.length();
-		}
+		int size = BASE_NODE_SIZE + 1 * 4 + stringSize(escapedValue);
 		return size;
 	}
 	

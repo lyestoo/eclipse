@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,9 +18,9 @@ import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
 public class SelectionOnArgumentName extends Argument {
 	
-	public SelectionOnArgumentName(char[] name , long posNom , TypeReference tr , int modifiers){
+	public SelectionOnArgumentName(char[] name , long posNom , TypeReference tr , int modifiers, boolean isVarArgs){
 
-		super(name, posNom, tr, modifiers);
+		super(name, posNom, tr, modifiers, isVarArgs);
 	}
 	
 	public void bind(MethodScope scope, TypeBinding typeBinding, boolean used) {

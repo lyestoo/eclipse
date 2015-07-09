@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -30,14 +30,11 @@ public class LocalVariableBinding extends VariableBinding {
 	public int initializationCount = 0;
 
 	// for synthetic local variables	
+	// if declaration slot is not positionned, the variable will not be listed in attribute
+	// note that the name of a variable should be chosen so as not to conflict with user ones (usually starting with a space char is all needed)
 	public LocalVariableBinding(char[] name, TypeBinding type, int modifiers, boolean isArgument) {
-
-		this.name = name;
-		this.type = type;
-		this.modifiers = modifiers;
+		super(name, type, modifiers, isArgument ? Constant.NotAConstant : null);
 		this.isArgument = isArgument;
-		if (isArgument)
-			this.constant = Constant.NotAConstant;
 	}
 	
 	// regular local variable or argument

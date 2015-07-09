@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
@@ -85,22 +85,14 @@ public class DoStatement extends Statement {
 			loopingContext.complainOnFinalAssignmentsInLoop(currentScope, flowInfo);
 		}
 
-		// infinite loop
-		FlowInfo mergedInfo;
-		if (isConditionTrue) {
-			mergedInfo = loopingContext.initsOnBreak;
-			if (!mergedInfo.isReachable()) mergedInfo.addPotentialInitializationsFrom(flowInfo.initsWhenFalse());
-		} else {
-			// end of loop: either condition false or break
-			mergedInfo =
-				flowInfo.initsWhenFalse().unconditionalInits().mergedWith(
-					loopingContext.initsOnBreak);
-			if (isConditionOptimizedTrue && !loopingContext.initsOnBreak.isReachable()) {
-				mergedInfo.setReachMode(FlowInfo.UNREACHABLE);
-			}
-		}
-		mergedInitStateIndex =
-			currentScope.methodScope().recordInitializationStates(mergedInfo);
+		// end of loop
+		FlowInfo mergedInfo = FlowInfo.mergedOptimizedBranches(
+				loopingContext.initsOnBreak, 
+				isConditionOptimizedTrue, 
+				flowInfo.initsWhenFalse(), 
+				false, // never consider opt false case for DO loop, since break can always occur (47776)
+				!isConditionTrue /*do{}while(true); unreachable(); */);
+		mergedInitStateIndex = currentScope.methodScope().recordInitializationStates(mergedInfo);
 		return mergedInfo;
 	}
 
@@ -118,9 +110,9 @@ public class DoStatement extends Statement {
 		// labels management
 		Label actionLabel = new Label(codeStream);
 		actionLabel.place();
-		breakLabel.codeStream = codeStream;
+		breakLabel.initialize(codeStream);
 		if (continueLabel != null) {
-			continueLabel.codeStream = codeStream;
+			continueLabel.initialize(codeStream);
 		}
 
 		// generate action
@@ -141,9 +133,8 @@ public class DoStatement extends Statement {
 
 		// May loose some local variable initializations : affecting the local variable attributes
 		if (mergedInitStateIndex != -1) {
-			codeStream.removeNotDefinitelyAssignedVariables(
-				currentScope,
-				mergedInitStateIndex);
+			codeStream.removeNotDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
+			codeStream.addDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
 		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 
@@ -161,25 +152,15 @@ public class DoStatement extends Statement {
 		output.append("while ("); //$NON-NLS-1$
 		return condition.printExpression(0, output).append(");"); //$NON-NLS-1$
 	}
-
-	public void resetStateForCodeGeneration() {
-		if (this.breakLabel != null) {
-			this.breakLabel.resetStateForCodeGeneration();
-		}
-		if (this.continueLabel != null) {
-			this.continueLabel.resetStateForCodeGeneration();
-		}
-	}
-
 	public void resolve(BlockScope scope) {
 
 		TypeBinding type = condition.resolveTypeExpecting(scope, BooleanBinding);
-		condition.implicitWidening(type, type);
+		condition.computeConversion(scope, type, type);
 		if (action != null)
 			action.resolve(scope);
 	}
 
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+	public void traverse(ASTVisitor visitor, BlockScope scope) {
 
 		if (visitor.visit(this, scope)) {
 			if (action != null) {

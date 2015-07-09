@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -73,7 +73,7 @@ public abstract class Expression extends ASTNode {
 	 *    <code>null</code> if the type cannot be resolved
 	 */	
 	public ITypeBinding resolveTypeBinding() {
-		return getAST().getBindingResolver().resolveExpressionType(this);
+		return this.ast.getBindingResolver().resolveExpressionType(this);
 	}
 }
 

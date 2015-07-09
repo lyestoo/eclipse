@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,7 +12,7 @@ package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.CompilationResult;
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.flow.ExceptionHandlingFlowContext;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
 import org.eclipse.jdt.internal.compiler.flow.InitializationFlowContext;
@@ -23,7 +23,8 @@ import org.eclipse.jdt.internal.compiler.problem.AbortMethod;
 public class MethodDeclaration extends AbstractMethodDeclaration {
 	
 	public TypeReference returnType;
-
+	public TypeParameter[] typeParameters;
+	
 	/**
 	 * MethodDeclaration constructor comment.
 	 */
@@ -89,6 +90,11 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 		}
 	}
 
+	public boolean isMethod() {
+
+		return true;
+	}
+
 	public void parseStatements(Parser parser, CompilationUnitDeclaration unit) {
 
 		//fill up the method body with statement
@@ -110,10 +116,6 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 			this.returnType.resolvedType = this.binding.returnType;
 			// record the return type binding
 		}
-		// look if the name of the method is correct
-		if (binding != null && isTypeUseDeprecated(binding.returnType, scope))
-			scope.problemReporter().deprecatedType(binding.returnType, returnType);
-
 		// check if method with constructor name
 		if (CharOperation.equals(scope.enclosingSourceType().sourceName, selector)) {
 			scope.problemReporter().methodWithConstructorName(this);
@@ -127,7 +129,7 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 			if ((modifiers & AccSemicolonBody) != 0) {
 				if ((modifiers & AccNative) == 0)
 					if ((modifiers & AccAbstract) == 0)
-						scope.problemReporter().methodNeedingAbstractModifier(this);
+						scope.problemReporter().methodNeedBody(this);
 			} else {
 				// the method HAS a body --> abstract native modifiers are forbiden
 				if (((modifiers & AccNative) != 0) || ((modifiers & AccAbstract) != 0))
@@ -138,10 +140,21 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 	}
 
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		ClassScope classScope) {
 
 		if (visitor.visit(this, classScope)) {
+			if (this.annotations != null) {
+				int annotationsLength = this.annotations.length;
+				for (int i = 0; i < annotationsLength; i++)
+					this.annotations[i].traverse(visitor, scope);
+			}
+			if (this.typeParameters != null) {
+				int typeParametersLength = this.typeParameters.length;
+				for (int i = 0; i < typeParametersLength; i++) {
+					this.typeParameters[i].traverse(visitor, scope);
+				}
+			}			
 			if (returnType != null)
 				returnType.traverse(visitor, scope);
 			if (arguments != null) {
@@ -162,4 +175,7 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 		}
 		visitor.endVisit(this, classScope);
 	}
+	public TypeParameter[] typeParameters() {
+	    return this.typeParameters;
+	}		
 }

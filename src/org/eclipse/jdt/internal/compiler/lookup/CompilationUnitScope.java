@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,16 +11,10 @@
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.ImportReference;
-import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
-import org.eclipse.jdt.internal.compiler.util.CompoundNameVector;
-import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
-import org.eclipse.jdt.internal.compiler.util.HashtableOfType;
-import org.eclipse.jdt.internal.compiler.util.ObjectVector;
-import org.eclipse.jdt.internal.compiler.util.SimpleNameVector;
+import org.eclipse.jdt.internal.compiler.util.*;
 
 public class CompilationUnitScope extends Scope {
 	
@@ -36,6 +30,7 @@ public class CompilationUnitScope extends Scope {
 	private CompoundNameVector qualifiedReferences;
 	private SimpleNameVector simpleNameReferences;
 	private ObjectVector referencedTypes;
+	private ObjectVector referencedSuperTypes;
 	
 	HashtableOfType constantPoolNameUsage;
 
@@ -50,10 +45,12 @@ public CompilationUnitScope(CompilationUnitDeclaration unit, LookupEnvironment e
 		this.qualifiedReferences = new CompoundNameVector();
 		this.simpleNameReferences = new SimpleNameVector();
 		this.referencedTypes = new ObjectVector();
+		this.referencedSuperTypes = new ObjectVector();
 	} else {
 		this.qualifiedReferences = null; // used to test if dependencies should be recorded
 		this.simpleNameReferences = null;
 		this.referencedTypes = null;
+		this.referencedSuperTypes = null;
 	}
 }
 void buildFieldsAndMethods() {
@@ -131,20 +128,8 @@ void buildTypeBindings() {
 		System.arraycopy(topLevelTypes, 0, topLevelTypes = new SourceTypeBinding[count], 0, count);
 }
 void checkAndSetImports() {
-	// initialize the default imports if necessary... share the default java.lang.* import
-	if (environment.defaultImports == null) {
-		Binding importBinding = environment.getTopLevelPackage(JAVA);
-		if (importBinding != null)
-			importBinding = ((PackageBinding) importBinding).getTypeOrPackage(JAVA_LANG[1]);
-
-		// abort if java.lang cannot be found...
-		if (importBinding == null || !importBinding.isValidBinding())
-			problemReporter().isClassPathCorrect(JAVA_LANG_OBJECT, referenceCompilationUnit());
-
-		environment.defaultImports = new ImportBinding[] {new ImportBinding(JAVA_LANG, true, importBinding, null)};
-	}
 	if (referenceContext.imports == null) {
-		imports = environment.defaultImports;
+		imports = getDefaultImports();
 		return;
 	}
 
@@ -159,7 +144,7 @@ void checkAndSetImports() {
 		}
 	}
 	ImportBinding[] resolvedImports = new ImportBinding[numberOfImports];
-	resolvedImports[0] = environment.defaultImports[0];
+	resolvedImports[0] = getDefaultImports()[0];
 	int index = 1;
 
 	nextImport : for (int i = 0; i < numberOfStatements; i++) {
@@ -279,7 +264,7 @@ void faultInImports() {
 		}
 	}
 	ImportBinding[] resolvedImports = new ImportBinding[numberOfImports];
-	resolvedImports[0] = environment.defaultImports[0];
+	resolvedImports[0] = getDefaultImports()[0];
 	int index = 1;
 
 	nextImport : for (int i = 0; i < numberOfStatements; i++) {
@@ -426,10 +411,23 @@ private Binding findSingleTypeImport(char[][] compoundName) {
 		ReferenceBinding typeBinding = findType(compoundName[0], environment.defaultPackage, fPackage);
 		if (typeBinding == null)
 			return new ProblemReferenceBinding(compoundName, NotFound);
-		else
-			return typeBinding;
+		return typeBinding;
 	}
 	return findOnDemandImport(compoundName);
+}
+ImportBinding[] getDefaultImports() {
+	// initialize the default imports if necessary... share the default java.lang.* import
+	if (environment.defaultImports != null) return environment.defaultImports;
+
+	Binding importBinding = environment.getTopLevelPackage(JAVA);
+	if (importBinding != null)
+		importBinding = ((PackageBinding) importBinding).getTypeOrPackage(JAVA_LANG[1]);
+
+	// abort if java.lang cannot be found...
+	if (importBinding == null || !importBinding.isValidBinding())
+		problemReporter().isClassPathCorrect(JAVA_LANG_OBJECT, referenceCompilationUnit());
+
+	return environment.defaultImports = new ImportBinding[] {new ImportBinding(JAVA_LANG, true, importBinding, null)};
 }
 /* Answer the problem reporter to use for raising new problems.
 *
@@ -504,19 +502,30 @@ void recordReference(char[][] qualifiedEnclosingName, char[] simpleName) {
 	recordQualifiedReference(qualifiedEnclosingName);
 	recordSimpleReference(simpleName);
 }
+void recordReference(ReferenceBinding type, char[] simpleName) {
+	ReferenceBinding actualType = typeToRecord(type);
+	if (actualType != null)
+		recordReference(actualType.compoundName, simpleName);
+}
 void recordSimpleReference(char[] simpleName) {
 	if (simpleNameReferences == null) return; // not recording dependencies
 
 	if (!simpleNameReferences.contains(simpleName))
 		simpleNameReferences.add(simpleName);
 }
+void recordSuperTypeReference(TypeBinding type) {
+	if (referencedSuperTypes == null) return; // not recording dependencies
+
+	ReferenceBinding actualType = typeToRecord(type);
+	if (actualType != null && !referencedSuperTypes.containsIdentical(actualType))
+		referencedSuperTypes.add(actualType);
+}
 void recordTypeReference(TypeBinding type) {
 	if (referencedTypes == null) return; // not recording dependencies
 
-	if (type.isArrayType())
-		type = ((ArrayBinding) type).leafComponentType;
-	if (!type.isBaseType() && !referencedTypes.containsIdentical(type))
-		referencedTypes.add(type);
+	ReferenceBinding actualType = typeToRecord(type);
+	if (actualType != null && !referencedTypes.containsIdentical(actualType))
+		referencedTypes.add(actualType);
 }
 void recordTypeReferences(TypeBinding[] types) {
 	if (qualifiedReferences == null) return; // not recording dependencies
@@ -525,16 +534,11 @@ void recordTypeReferences(TypeBinding[] types) {
 	for (int i = 0, max = types.length; i < max; i++) {
 		// No need to record supertypes of method arguments & thrown exceptions, just the compoundName
 		// If a field/method is retrieved from such a type then a separate call does the job
-		TypeBinding type = types[i];
-		if (type.isArrayType())
-			type = ((ArrayBinding) type).leafComponentType;
-		if (!type.isBaseType()) {
-			ReferenceBinding actualType = (ReferenceBinding) type;
-			if (!actualType.isLocalType())
-				recordQualifiedReference(actualType.isMemberType()
-					? CharOperation.splitOn('.', actualType.readableName())
-					: actualType.compoundName);
-		}
+		ReferenceBinding actualType = typeToRecord(types[i]);
+		if (actualType != null)
+			recordQualifiedReference(actualType.isMemberType()
+				? CharOperation.splitOn('.', actualType.readableName())
+				: actualType.compoundName);
 	}
 }
 Binding resolveSingleTypeImport(ImportBinding importBinding) {
@@ -555,26 +559,33 @@ Binding resolveSingleTypeImport(ImportBinding importBinding) {
 	return importBinding.resolvedImport;
 }
 public void storeDependencyInfo() {
-	// add the type hierarchy of each referenced type
+	// add the type hierarchy of each referenced supertype
 	// cannot do early since the hierarchy may not be fully resolved
-	for (int i = 0; i < referencedTypes.size; i++) { // grows as more types are added
-		ReferenceBinding type = (ReferenceBinding) referencedTypes.elementAt(i);
+	for (int i = 0; i < referencedSuperTypes.size; i++) { // grows as more types are added
+		ReferenceBinding type = (ReferenceBinding) referencedSuperTypes.elementAt(i);
+		if (!referencedTypes.containsIdentical(type))
+			referencedTypes.add(type);
+
 		if (!type.isLocalType()) {
+			ReferenceBinding enclosing = type.enclosingType();
+			if (enclosing != null)
+				recordSuperTypeReference(enclosing);
+		}
+		ReferenceBinding superclass = type.superclass();
+		if (superclass != null)
+			recordSuperTypeReference(superclass);
+		ReferenceBinding[] interfaces = type.superInterfaces();
+		if (interfaces != null)
+			for (int j = 0, length = interfaces.length; j < length; j++)
+				recordSuperTypeReference(interfaces[j]);
+	}
+
+	for (int i = 0, l = referencedTypes.size; i < l; i++) {
+		ReferenceBinding type = (ReferenceBinding) referencedTypes.elementAt(i);
+		if (!type.isLocalType())
 			recordQualifiedReference(type.isMemberType()
 				? CharOperation.splitOn('.', type.readableName())
 				: type.compoundName);
-			ReferenceBinding enclosing = type.enclosingType();
-			if (enclosing != null && !referencedTypes.containsIdentical(enclosing))
-				referencedTypes.add(enclosing); // to record its supertypes
-		}
-		ReferenceBinding superclass = type.superclass();
-		if (superclass != null && !referencedTypes.containsIdentical(superclass))
-				referencedTypes.add(superclass); // to record its supertypes
-		ReferenceBinding[] interfaces = type.superInterfaces();
-		if (interfaces != null && interfaces.length > 0)
-			for (int j = 0, length = interfaces.length; j < length; j++)
-				if (!referencedTypes.containsIdentical(interfaces[j]))
-					referencedTypes.add(interfaces[j]); // to record its supertypes
 	}
 
 	int size = qualifiedReferences.size;
@@ -591,6 +602,23 @@ public void storeDependencyInfo() {
 }
 public String toString() {
 	return "--- CompilationUnit Scope : " + new String(referenceContext.getFileName()); //$NON-NLS-1$
+}
+private ReferenceBinding typeToRecord(TypeBinding type) {
+	if (type.isArrayType())
+		type = ((ArrayBinding) type).leafComponentType;
+
+	if (type.isParameterizedType())
+		type = type.erasure();
+	else if (type.isRawType())
+		type = type.erasure();
+	else if (type.isWildcard()) 
+	    return null;
+
+	if (type.isBaseType()) return null;
+	if (type.isTypeVariable()) return null;
+	if (((ReferenceBinding) type).isLocalType()) return null;
+
+	return (ReferenceBinding) type;
 }
 public void verifyMethods(MethodVerifier verifier) {
 	for (int i = 0, length = topLevelTypes.length; i < length; i++)

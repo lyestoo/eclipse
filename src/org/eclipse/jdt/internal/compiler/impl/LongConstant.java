@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -40,10 +40,8 @@ public String stringValue() {
 	//spec 15.17.11
 	
 	String s = new Long(value).toString() ;
-	if (s == null)
-		return "null"; //$NON-NLS-1$
-	else
-		return s;
+	if (s == null) return "null"; //$NON-NLS-1$
+	return s;
 }
 public String toString(){
 

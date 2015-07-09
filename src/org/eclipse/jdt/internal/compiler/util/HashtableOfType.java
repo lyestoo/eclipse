@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -18,7 +18,7 @@ public final class HashtableOfType {
 	public char[] keyTable[];
 	public ReferenceBinding valueTable[];
 
-	int elementSize; // number of elements in the table
+	public int elementSize; // number of elements in the table
 	int threshold;
 public HashtableOfType() {
 	this(3);
@@ -37,7 +37,7 @@ public boolean containsKey(char[] key) {
 	int keyLength = key.length;
 	char[] currentKey;
 	while ((currentKey = keyTable[index]) != null) {
-		if (currentKey.length == keyLength && CharOperation.prefixEquals(currentKey, key))
+		if (currentKey.length == keyLength && CharOperation.equals(currentKey, key))
 			return true;
 		index = (index + 1) % keyTable.length;
 	}
@@ -48,7 +48,7 @@ public ReferenceBinding get(char[] key) {
 	int keyLength = key.length;
 	char[] currentKey;
 	while ((currentKey = keyTable[index]) != null) {
-		if (currentKey.length == keyLength && CharOperation.prefixEquals(currentKey, key))
+		if (currentKey.length == keyLength && CharOperation.equals(currentKey, key))
 			return valueTable[index];
 		index = (index + 1) % keyTable.length;
 	}
@@ -59,7 +59,7 @@ public ReferenceBinding put(char[] key, ReferenceBinding value) {
 	int keyLength = key.length;
 	char[] currentKey;
 	while ((currentKey = keyTable[index]) != null) {
-		if (currentKey.length == keyLength && CharOperation.prefixEquals(currentKey, key))
+		if (currentKey.length == keyLength && CharOperation.equals(currentKey, key))
 			return valueTable[index] = value;
 		index = (index + 1) % keyTable.length;
 	}

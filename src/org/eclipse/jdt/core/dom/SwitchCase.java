@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Switch case AST node type. A switch case is a special kind of node used only
@@ -26,6 +29,41 @@ package org.eclipse.jdt.core.dom;
  */
 public class SwitchCase extends Statement {
 	
+	/**
+	 * The "expression" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor EXPRESSION_PROPERTY = 
+		new ChildPropertyDescriptor(SwitchCase.class, "expression", Expression.class, OPTIONAL, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List propertyList = new ArrayList(2);
+		createPropertyList(SwitchCase.class, propertyList);
+		addProperty(EXPRESSION_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(propertyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/**
 	 * The expression; <code>null</code> for none; lazily initialized (but
 	 * does <b>not</b> default to none).
@@ -51,14 +89,37 @@ public class SwitchCase extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == EXPRESSION_PROPERTY) {
+			if (get) {
+				return getExpression();
+			} else {
+				setExpression((Expression) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return SWITCH_CASE;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		SwitchCase result = new SwitchCase(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.copyLeadingComment(this);
@@ -70,7 +131,7 @@ public class SwitchCase extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -93,13 +154,18 @@ public class SwitchCase extends Statement {
 	 * @return the expression node, or <code>null</code> if there is none
 	 */ 
 	public Expression getExpression() {
-		if (!expressionInitialized) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setExpression(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (!this.expressionInitialized) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (!this.expressionInitialized) {
+					preLazyInit();
+					this.optionalExpression = new SimpleName(this.ast);
+					this.expressionInitialized = true;
+					postLazyInit(this.optionalExpression, EXPRESSION_PROPERTY);
+				}
+			}
 		}
-		return optionalExpression;
+		return this.optionalExpression;
 	}
 	
 	/**
@@ -116,10 +182,11 @@ public class SwitchCase extends Statement {
 	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
-		// a ReturnStatement may occur inside an Expression - must check cycles
-		replaceChild(this.optionalExpression, expression, true);
+		ASTNode oldChild = this.optionalExpression;
+		preReplaceChild(oldChild, expression, EXPRESSION_PROPERTY);
 		this.optionalExpression = expression;
-		expressionInitialized = true;
+		this.expressionInitialized = true;
+		postReplaceChild(oldChild, expression, EXPRESSION_PROPERTY);
 	}
 
 	/**
@@ -149,6 +216,6 @@ public class SwitchCase extends Statement {
 	int treeSize() {
 		return
 			memSize()
-			+ (optionalExpression == null ? 0 : optionalExpression.treeSize());
+			+ (this.optionalExpression == null ? 0 : optionalExpression.treeSize());
 	}
 }

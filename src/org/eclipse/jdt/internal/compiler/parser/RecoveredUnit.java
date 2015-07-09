@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -14,12 +14,10 @@ package org.eclipse.jdt.internal.compiler.parser;
  * Internal field structure for parsing recovery 
  */
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.AnonymousLocalTypeDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ImportReference;
-import org.eclipse.jdt.internal.compiler.ast.LocalTypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 
 public class RecoveredUnit extends RecoveredElement {
@@ -87,7 +85,7 @@ public RecoveredElement add(ImportReference importReference, int bracketBalanceV
 }
 public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalanceValue) {
 	
-	if (typeDeclaration instanceof AnonymousLocalTypeDeclaration){
+	if ((typeDeclaration.bits & ASTNode.IsAnonymousTypeMASK) != 0){
 		if (this.typeCount > 0) {
 			// add it to the last type
 			RecoveredType lastType = this.types[this.typeCount-1];
@@ -121,7 +119,7 @@ public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalanceV
 /* 
  * Answer the associated parsed structure
  */
-public AstNode parseTree(){
+public ASTNode parseTree(){
 	return this.unitDeclaration;
 }
 /*
@@ -133,7 +131,7 @@ public int sourceEnd(){
 public String toString(int tab) {
 	StringBuffer result = new StringBuffer(tabString(tab));
 	result.append("Recovered unit: [\n"); //$NON-NLS-1$
-	result.append(this.unitDeclaration.print(tab + 1, result));
+	this.unitDeclaration.print(tab + 1, result);
 	result.append(tabString(tab + 1));
 	result.append("]"); //$NON-NLS-1$
 	if (this.imports != null) {
@@ -176,7 +174,7 @@ public CompilationUnitDeclaration updatedCompilationUnitDeclaration(){
 		for (int i = 0; i < this.typeCount; i++){
 			TypeDeclaration typeDecl = this.types[i].updatedTypeDeclaration();
 			// filter out local types (12454)
-			if (!(typeDecl instanceof LocalTypeDeclaration)){
+			if ((typeDecl.bits & ASTNode.IsLocalTypeMASK) == 0){
 				typeDeclarations[actualCount++] = typeDecl;
 			}
 		}

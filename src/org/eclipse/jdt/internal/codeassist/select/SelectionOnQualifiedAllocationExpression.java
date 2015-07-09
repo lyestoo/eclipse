@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -31,9 +31,9 @@ package org.eclipse.jdt.internal.codeassist.select;
  *
  */
 
-import org.eclipse.jdt.internal.compiler.ast.AnonymousLocalTypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.QualifiedAllocationExpression;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
@@ -44,7 +44,7 @@ public class SelectionOnQualifiedAllocationExpression extends QualifiedAllocatio
 		// constructor without argument
 	}
 	
-	public SelectionOnQualifiedAllocationExpression(AnonymousLocalTypeDeclaration anonymous) {
+	public SelectionOnQualifiedAllocationExpression(TypeDeclaration anonymous) {
 		anonymousType = anonymous ;
 	}
 	
@@ -73,7 +73,7 @@ public class SelectionOnQualifiedAllocationExpression extends QualifiedAllocatio
 		// super interface (if extending an interface)
 		if (anonymousType.binding.superInterfaces == NoSuperInterfaces) {
 			// find the constructor binding inside the super constructor call
-			ConstructorDeclaration constructor = (ConstructorDeclaration) anonymousType.declarationOf(binding);
+			ConstructorDeclaration constructor = (ConstructorDeclaration) anonymousType.declarationOf(binding.original());
 			throw new SelectionNodeFound(constructor.constructorCall.binding);
 		} else {
 			// open on the only superinterface

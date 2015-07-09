@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,19 +11,22 @@
 
 package org.eclipse.jdt.core.dom;
 
+import org.eclipse.jdt.internal.compiler.lookup.CompilerModifiers;
+
 /**
  * Internal implementation of method bindings.
  */
 class MethodBinding implements IMethodBinding {
 
-	private static final ITypeBinding[] NO_PARAMETERS = new ITypeBinding[0];
+	private static final ITypeBinding[] NO_TYPE_BINDINGS = new ITypeBinding[0];
 	private org.eclipse.jdt.internal.compiler.lookup.MethodBinding binding;
 	private BindingResolver resolver;
 	private ITypeBinding[] parameterTypes;
 	private ITypeBinding[] exceptionTypes;
 	private String name;
 	private ITypeBinding declaringClass;
-	private ITypeBinding returnType; 
+	private ITypeBinding returnType;
+	private String key;
 	
 	MethodBinding(BindingResolver resolver, org.eclipse.jdt.internal.compiler.lookup.MethodBinding binding) {
 		this.resolver = resolver;
@@ -36,6 +39,17 @@ class MethodBinding implements IMethodBinding {
 	public boolean isConstructor() {
 		return this.binding.isConstructor();
 	}
+	
+	/*
+	 * @see IMethodBinding#isDefaultConstructor()
+	 * @since 3.0
+	 */
+	public boolean isDefaultConstructor() {
+		if (this.binding.declaringClass.isBinaryBinding()) {
+			return false;
+		}
+		return (this.binding.modifiers & CompilerModifiers.AccIsDefaultConstructor) != 0;
+	}	
 
 	/*
 	 * @see IBinding#getName()
@@ -71,7 +85,7 @@ class MethodBinding implements IMethodBinding {
 		org.eclipse.jdt.internal.compiler.lookup.TypeBinding[] parameters = this.binding.parameters;
 		int length = parameters.length;
 		if (length == 0) {
-			return NO_PARAMETERS;
+			return NO_TYPE_BINDINGS;
 		}
 		this.parameterTypes = new ITypeBinding[length];
 		for (int i = 0; i < length; i++) {
@@ -100,7 +114,7 @@ class MethodBinding implements IMethodBinding {
 		org.eclipse.jdt.internal.compiler.lookup.TypeBinding[] exceptions = this.binding.thrownExceptions;
 		int length = exceptions.length;
 		if (length == 0) {
-			return NO_PARAMETERS;
+			return NO_TYPE_BINDINGS;
 		}
 		this.exceptionTypes = new ITypeBinding[length];
 		for (int i = 0; i < length; i++) {
@@ -141,29 +155,90 @@ class MethodBinding implements IMethodBinding {
 	 * @see IBinding#getKey()
 	 */
 	public String getKey() {
-		StringBuffer buffer = new StringBuffer();
-		ITypeBinding _returnType = getReturnType();
-		if (_returnType != null) {
-			buffer.append(_returnType.getKey());
-		}
-		if (!isConstructor()) {
-			buffer.append(this.getName());
+		if (this.key == null) {
+			StringBuffer buffer = new StringBuffer();
+			buffer.append(this.getDeclaringClass().getKey());
 			buffer.append('/');
+			ITypeBinding _returnType = getReturnType();
+			if (_returnType != null) {
+				if (_returnType.isTypeVariable()) {
+					buffer.append(_returnType.getQualifiedName());
+				} else {
+					buffer.append(_returnType.getKey());
+				}
+			}
+			if (!isConstructor()) {
+				buffer.append(this.getName());
+			}
+			ITypeBinding[] parameters = getParameterTypes();
+			buffer.append('(');
+			for (int i = 0, max = parameters.length; i < max; i++) {
+				final ITypeBinding parameter = parameters[i];
+				if (parameter != null) {
+					if (parameter.isTypeVariable()) {
+						buffer.append(parameter.getQualifiedName());
+					} else {
+						buffer.append(parameter.getKey());
+					}
+				}
+			}
+			buffer.append(')');
+			ITypeBinding[] thrownExceptions = getExceptionTypes();
+			for (int i = 0, max = thrownExceptions.length; i < max; i++) {
+				final ITypeBinding thrownException = thrownExceptions[i];
+				if (thrownException != null) {
+					if (thrownException.isTypeVariable()) {
+						buffer.append(thrownException.getQualifiedName());					
+					} else {
+						buffer.append(thrownException.getKey());
+					}
+				}
+			}
+			this.key = String.valueOf(buffer);
 		}
-		buffer.append(this.getDeclaringClass().getKey());
-		ITypeBinding[] parameters = getParameterTypes();
-		buffer.append('(');
-		for (int i = 0, max = parameters.length; i < max; i++) {
-			buffer.append(parameters[i].getKey());
-		}
-		buffer.append(')');
-		ITypeBinding[] thrownExceptions = getExceptionTypes();
-		for (int i = 0, max = thrownExceptions.length; i < max; i++) {
-			buffer.append(thrownExceptions[i].getKey());
-		}
-		return buffer.toString();
+		return this.key;
 	}
 	
+	/* (non-Javadoc)
+	 * @see org.eclipse.jdt.core.dom.IMethodBinding#getTypeParameters()
+	 */
+	public ITypeBinding[] getTypeParameters() {
+		// TODO (olivier) missing implementation of J2SE 1.5 language feature
+		return NO_TYPE_BINDINGS;
+	}
+
+	/* (non-Javadoc)
+	 * @see org.eclipse.jdt.core.dom.IMethodBinding#getTypeArguments()
+	 */
+	public ITypeBinding[] getTypeArguments() {
+		// TODO (olivier) missing implementation of J2SE 1.5 language feature
+		return NO_TYPE_BINDINGS;
+	}
+
+	/* (non-Javadoc)
+	 * @see org.eclipse.jdt.core.dom.IMethodBinding#isParameterizedMethod()
+	 */
+	public boolean isParameterizedMethod() {
+		// TODO (olivier) missing implementation of J2SE 1.5 language feature
+		return false;
+	}
+
+	/* (non-Javadoc)
+	 * @see org.eclipse.jdt.core.dom.IMethodBinding#isRawMethod()
+	 */
+	public boolean isRawMethod() {
+		// TODO (olivier) missing implementation of J2SE 1.5 language feature
+		return false;
+	}
+
+	/* (non-Javadoc)
+	 * @see org.eclipse.jdt.core.dom.IMethodBinding#getErasure()
+	 */
+	public IMethodBinding getErasure() {
+		// TODO (olivier) missing implementation of J2SE 1.5 language feature
+		return this;
+	}
+
 	/* 
 	 * For debugging purpose only.
 	 * @see java.lang.Object#toString()

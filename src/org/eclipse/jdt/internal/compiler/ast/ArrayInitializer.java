@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -138,7 +138,7 @@ public class ArrayInitializer extends Expression {
 			binding = (ArrayBinding) expectedTb;
 			if (expressions == null)
 				return binding;
-			TypeBinding expectedElementsTb = binding.elementsType(scope);
+			TypeBinding expectedElementsTb = binding.elementsType();
 			if (expectedElementsTb.isBaseType()) {
 				for (int i = 0, length = expressions.length; i < length; i++) {
 					Expression expression = expressions[i];
@@ -151,11 +151,11 @@ public class ArrayInitializer extends Expression {
 	
 					// Compile-time conversion required?
 					if (expression.isConstantValueOfTypeAssignableToType(expressionTb, expectedElementsTb)) {
-						expression.implicitWidening(expectedElementsTb, expressionTb);
+						expression.computeConversion(scope, expectedElementsTb, expressionTb);
 					} else if (BaseTypeBinding.isWidening(expectedElementsTb.id, expressionTb.id)) {
-						expression.implicitWidening(expectedElementsTb, expressionTb);
+						expression.computeConversion(scope, expectedElementsTb, expressionTb);
 					} else {
-						scope.problemReporter().typeMismatchErrorActualTypeExpectedType(expression, expressionTb, expectedElementsTb);
+						scope.problemReporter().typeMismatchError(expressionTb, expectedElementsTb, expression);
 						return null;
 					}
 				}
@@ -189,13 +189,13 @@ public class ArrayInitializer extends Expression {
 			}
 		}
 		if (leafElementType != null) {
-			TypeBinding probableTb = scope.createArray(leafElementType, dim);
-			scope.problemReporter().typeMismatchErrorActualTypeExpectedType(this, probableTb, expectedTb);
+			TypeBinding probableTb = scope.createArrayType(leafElementType, dim);
+			scope.problemReporter().typeMismatchError(probableTb, expectedTb, this);
 		}
 		return null;
 	}
 	
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+	public void traverse(ASTVisitor visitor, BlockScope scope) {
 
 		if (visitor.visit(this, scope)) {
 			if (expressions != null) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -204,7 +204,7 @@ public void evaluate(
 			public void acceptProblem(IProblem problem, char[] fragmentSource, int fragmentKind) {
 				requestor.acceptProblem(problem, fragmentSource, fragmentKind);
 				if (problem.isError()) {
-					hasErrors = true;
+					this.hasErrors = true;
 				}
 			}
 		}
@@ -452,7 +452,7 @@ public char[] getPackageName() {
  * Return the binary for the root code snippet class (ie. org.eclipse.jdt.internal.eval.target.CodeSnippet).
  */
 IBinaryType getRootCodeSnippetBinary() {
-	if (codeSnippetBinary == null) {
+	if (this.codeSnippetBinary == null) {
 		this.codeSnippetBinary = new CodeSnippetSkeleton();
 	}
 	return this.codeSnippetBinary;
@@ -466,16 +466,9 @@ IBinaryType getRootCodeSnippetBinary() {
  */
 public GlobalVariable newVariable(char[] typeName, char[] name, char[] initializer) {
 	GlobalVariable var = new GlobalVariable(typeName, name, initializer);
-	try {
-		this.variables[this.variableCount++] = var;
-	} catch (ArrayIndexOutOfBoundsException e) {
-		int index = this.variableCount - 1;
-		GlobalVariable[] oldVars = this.variables;
-		GlobalVariable[] newVars = new GlobalVariable[index * 2];
-		System.arraycopy(oldVars, 0, newVars, 0, index);
-		newVars[index] = var;
-		this.variables = newVars;
-	}
+	if (this.variableCount >= this.variables.length) // assume variables is never empty
+		System.arraycopy(this.variables, 0, this.variables = new GlobalVariable[this.variableCount * 2], 0, this.variableCount);
+	this.variables[this.variableCount++] = var;
 	this.varsChanged = true;
 	return var;
 }

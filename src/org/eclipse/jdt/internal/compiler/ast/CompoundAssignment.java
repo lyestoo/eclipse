@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -28,6 +28,7 @@ public class CompoundAssignment extends Assignment implements OperatorIds {
 	
 		super(lhs, expression, sourceEnd);
 		lhs.bits &= ~IsStrictlyAssignedMASK; // tag lhs as NON assigned - it is also a read access
+		lhs.bits |= IsCompoundAssignedMASK; // tag lhs as assigned by compound
 		this.operator = operator ;
 	}
 	
@@ -136,6 +137,7 @@ public class CompoundAssignment extends Assignment implements OperatorIds {
 				}
 			}
 		}
+		// TODO (philippe) should retrofit in using #computeConversion
 		lhs.implicitConversion = result >>> 12;
 		expression.implicitConversion = (result >>> 4) & 0x000FF;
 		assignmentImplicitConversion = (lhsId << 4) + (result & 0x0000F);
@@ -146,7 +148,7 @@ public class CompoundAssignment extends Assignment implements OperatorIds {
 		return false ;
 	}
 	
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+	public void traverse(ASTVisitor visitor, BlockScope scope) {
 		if (visitor.visit(this, scope)) {
 			lhs.traverse(visitor, scope);
 			expression.traverse(visitor, scope);

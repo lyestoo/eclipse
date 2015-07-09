@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
@@ -97,7 +97,7 @@ public class BinaryExpression extends OperatorExpression {
 			case PLUS :
 				switch (bits & ReturnTypeIDMASK) {
 					case T_String :
-						codeStream.generateStringAppend(currentScope, left, right);
+						codeStream.generateStringConcatenationAppend(currentScope, left, right);
 						if (!valueRequired)
 							codeStream.pop();
 						break;
@@ -1525,7 +1525,7 @@ public class BinaryExpression extends OperatorExpression {
 		codeStream.updateLastRecordedEndPC(codeStream.position);					
 	}
 	
-	public void generateOptimizedStringBuffer(
+	public void generateOptimizedStringConcatenation(
 		BlockScope blockScope,
 		CodeStream codeStream,
 		int typeID) {
@@ -1539,27 +1539,27 @@ public class BinaryExpression extends OperatorExpression {
 			&& ((bits & ReturnTypeIDMASK) == T_String)) {
 			if (constant != NotAConstant) {
 				codeStream.generateConstant(constant, implicitConversion);
-				codeStream.invokeStringBufferAppendForType(implicitConversion & 0xF);
+				codeStream.invokeStringConcatenationAppendForType(implicitConversion & 0xF);
 			} else {
 				int pc = codeStream.position;
-				left.generateOptimizedStringBuffer(
+				left.generateOptimizedStringConcatenation(
 					blockScope,
 					codeStream,
 					left.implicitConversion & 0xF);
 				codeStream.recordPositionsFrom(pc, left.sourceStart);
 				pc = codeStream.position;
-				right.generateOptimizedStringBuffer(
+				right.generateOptimizedStringConcatenation(
 					blockScope,
 					codeStream,
 					right.implicitConversion & 0xF);
 				codeStream.recordPositionsFrom(pc, right.sourceStart);
 			}
 		} else {
-			super.generateOptimizedStringBuffer(blockScope, codeStream, typeID);
+			super.generateOptimizedStringConcatenation(blockScope, codeStream, typeID);
 		}
 	}
 	
-	public void generateOptimizedStringBufferCreation(
+	public void generateOptimizedStringConcatenationCreation(
 		BlockScope blockScope,
 		CodeStream codeStream,
 		int typeID) {
@@ -1572,27 +1572,27 @@ public class BinaryExpression extends OperatorExpression {
 		if ((((bits & OperatorMASK) >> OperatorSHIFT) == PLUS)
 			&& ((bits & ReturnTypeIDMASK) == T_String)) {
 			if (constant != NotAConstant) {
-				codeStream.newStringBuffer(); // new: java.lang.StringBuffer
+				codeStream.newStringContatenation(); // new: java.lang.StringBuffer
 				codeStream.dup();
 				codeStream.ldc(constant.stringValue());
-				codeStream.invokeStringBufferStringConstructor();
+				codeStream.invokeStringConcatenationStringConstructor();
 				// invokespecial: java.lang.StringBuffer.<init>(Ljava.lang.String;)V
 			} else {
 				int pc = codeStream.position;
-				left.generateOptimizedStringBufferCreation(
+				left.generateOptimizedStringConcatenationCreation(
 					blockScope,
 					codeStream,
 					left.implicitConversion & 0xF);
 				codeStream.recordPositionsFrom(pc, left.sourceStart);
 				pc = codeStream.position;
-				right.generateOptimizedStringBuffer(
+				right.generateOptimizedStringConcatenation(
 					blockScope,
 					codeStream,
 					right.implicitConversion & 0xF);
 				codeStream.recordPositionsFrom(pc, right.sourceStart);
 			}
 		} else {
-			super.generateOptimizedStringBufferCreation(blockScope, codeStream, typeID);
+			super.generateOptimizedStringConcatenationCreation(blockScope, codeStream, typeID);
 		}
 	}
 	
@@ -1685,14 +1685,17 @@ public class BinaryExpression extends OperatorExpression {
 			}
 		}
 		if (((bits & OperatorMASK) >> OperatorSHIFT) == PLUS) {
-			if (leftTypeId == T_String
-					&& rightType.isArrayType()
-					&& ((ArrayBinding) rightType).elementsType(scope) == CharBinding) {
-				scope.problemReporter().signalNoImplicitStringConversionForCharArrayExpression(right);
-					} else if (rightTypeId == T_String
-							&& leftType.isArrayType()
-							&& ((ArrayBinding) leftType).elementsType(scope) == CharBinding) {
-				scope.problemReporter().signalNoImplicitStringConversionForCharArrayExpression(left);
+			if (leftTypeId == T_String) {
+				this.left.computeConversion(scope, leftType, leftType);
+				if (rightType.isArrayType() && ((ArrayBinding) rightType).elementsType() == CharBinding) {
+					scope.problemReporter().signalNoImplicitStringConversionForCharArrayExpression(right);
+				}
+			}
+			if (rightTypeId == T_String) {
+				this.right.computeConversion(scope, rightType, rightType);
+				if (leftType.isArrayType() && ((ArrayBinding) leftType).elementsType() == CharBinding) {
+					scope.problemReporter().signalNoImplicitStringConversionForCharArrayExpression(left);
+				}
 			}
 		}
 
@@ -1750,7 +1753,7 @@ public class BinaryExpression extends OperatorExpression {
 		return this.resolvedType;
 	}
 
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+	public void traverse(ASTVisitor visitor, BlockScope scope) {
 		
 		if (visitor.visit(this, scope)) {
 			left.traverse(visitor, scope);

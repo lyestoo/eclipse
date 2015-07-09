@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,6 +11,7 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -18,15 +19,66 @@ import java.util.List;
  *
  * <pre>
  * TryStatement:
- *    <b>try</b> Block 
- * 			{ CatchClause }
- * 			[ <b>finally</b> Block ]
+ *     <b>try</b> Block 
+ *         { CatchClause }
+ *         [ <b>finally</b> Block ]
  * </pre>
  * 
  * @since 2.0
  */
 public class TryStatement extends Statement {
 	
+	/**
+	 * The "body" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor BODY_PROPERTY = 
+		new ChildPropertyDescriptor(TryStatement.class, "body", Block.class, MANDATORY, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "catchClauses" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildListPropertyDescriptor CATCH_CLAUSES_PROPERTY = 
+		new ChildListPropertyDescriptor(TryStatement.class, "catchClauses", CatchClause.class, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "finally" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor FINALLY_PROPERTY = 
+		new ChildPropertyDescriptor(TryStatement.class, "finally", Block.class, OPTIONAL, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List propertyList = new ArrayList(4);
+		createPropertyList(TryStatement.class, propertyList);
+		addProperty(BODY_PROPERTY, propertyList);
+		addProperty(CATCH_CLAUSES_PROPERTY, propertyList);
+		addProperty(FINALLY_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(propertyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/**
 	 * The body; lazily initialized; defaults to an empty block.
 	 */
@@ -37,7 +89,7 @@ public class TryStatement extends Statement {
 	 * Defaults to an empty list.
 	 */
 	private ASTNode.NodeList catchClauses =
-		new ASTNode.NodeList(true, CatchClause.class);
+		new ASTNode.NodeList(CATCH_CLAUSES_PROPERTY);
 	
 	/**
 	 * The finally block, or <code>null</code> if none.
@@ -63,14 +115,56 @@ public class TryStatement extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == BODY_PROPERTY) {
+			if (get) {
+				return getBody();
+			} else {
+				setBody((Block) child);
+				return null;
+			}
+		}
+		if (property == FINALLY_PROPERTY) {
+			if (get) {
+				return getFinally();
+			} else {
+				setFinally((Block) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final List internalGetChildListProperty(ChildListPropertyDescriptor property) {
+		if (property == CATCH_CLAUSES_PROPERTY) {
+			return catchClauses();
+		}
+		// allow default implementation to flag the error
+		return super.internalGetChildListProperty(property);
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return TRY_STATEMENT;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		TryStatement result = new TryStatement(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.copyLeadingComment(this);
@@ -85,7 +179,7 @@ public class TryStatement extends Statement {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -98,7 +192,7 @@ public class TryStatement extends Statement {
 		if (visitChildren) {
 			// visit children in normal left to right reading order
 			acceptChild(visitor, getBody());
-			acceptChildren(visitor, catchClauses);
+			acceptChildren(visitor, this.catchClauses);
 			acceptChild(visitor, getFinally());
 		}
 		visitor.endVisit(this);
@@ -110,13 +204,17 @@ public class TryStatement extends Statement {
 	 * @return the try body
 	 */ 
 	public Block getBody() {
-		if (body == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setBody(new Block(getAST()));
-			getAST().setModificationCount(count);
+		if (this.body == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.body == null) {
+					preLazyInit();
+					this.body = new Block(this.ast);
+					postLazyInit(this.body, BODY_PROPERTY);
+				}
+			}
 		}
-		return body;
+		return this.body;
 	}
 	
 	/**
@@ -134,9 +232,10 @@ public class TryStatement extends Statement {
 		if (body == null) {
 			throw new IllegalArgumentException();
 		}
-		// a TryStatement may occur in a Block - must check cycles
-		replaceChild(this.body, body, true);
+		ASTNode oldChild = this.body;
+		preReplaceChild(oldChild, body, BODY_PROPERTY);
 		this.body = body;
+		postReplaceChild(oldChild, body, BODY_PROPERTY);
 	}
 
 	/**
@@ -146,7 +245,7 @@ public class TryStatement extends Statement {
 	 *    (element type: <code>CatchClause</code>)
 	 */ 
 	public List catchClauses() {
-		return catchClauses;
+		return this.catchClauses;
 	}
 		
 	/**
@@ -157,7 +256,7 @@ public class TryStatement extends Statement {
 	 *    has none
 	 */ 
 	public Block getFinally() {
-		return optionalFinallyBody;
+		return this.optionalFinallyBody;
 	}
 
 	/**
@@ -173,9 +272,10 @@ public class TryStatement extends Statement {
 	 * </ul>
 	 */ 
 	public void setFinally(Block block) {
-		// a TryStatement may occur in a Block - must check cycles
-		replaceChild(this.optionalFinallyBody, block, true);
+		ASTNode oldChild = this.optionalFinallyBody;
+		preReplaceChild(oldChild, block, FINALLY_PROPERTY);
 		this.optionalFinallyBody = block;
+		postReplaceChild(oldChild, block, FINALLY_PROPERTY);
 	}
 	
 	/* (omit javadoc for this method)
@@ -191,8 +291,8 @@ public class TryStatement extends Statement {
 	int treeSize() {
 		return
 			memSize()
-			+ (body == null ? 0 : getBody().treeSize())
-			+ catchClauses.listSize()
-			+ (optionalFinallyBody == null ? 0 : getFinally().treeSize());
+			+ (this.body == null ? 0 : getBody().treeSize())
+			+ this.catchClauses.listSize()
+			+ (this.optionalFinallyBody == null ? 0 : getFinally().treeSize());
 	}
 }

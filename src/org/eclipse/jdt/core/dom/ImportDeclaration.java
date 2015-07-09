@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,17 +11,97 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Import declaration AST node type.
  *
+ * For JLS2:
  * <pre>
  * ImportDeclaration:
  *    <b>import</b> Name [ <b>.</b> <b>*</b> ] <b>;</b>
  * </pre>
- * 
+ * For JLS3, static was added:
+ * <pre>
+ * ImportDeclaration:
+ *    <b>import</b> [ <b>static</b> ] Name [ <b>.</b> <b>*</b> ] <b>;</b>
+ * </pre>
  * @since 2.0
  */
 public class ImportDeclaration extends ASTNode {
+	
+	/**
+	 * The "name" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor NAME_PROPERTY = 
+		new ChildPropertyDescriptor(ImportDeclaration.class, "name", Name.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "onDemand" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor ON_DEMAND_PROPERTY = 
+		new SimplePropertyDescriptor(ImportDeclaration.class, "onDemand", boolean.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * The "static" structural property of this node type (added in JLS3 API).
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor STATIC_PROPERTY = 
+		new SimplePropertyDescriptor(ImportDeclaration.class, "static", boolean.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS_2_0;
+	
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS_3_0;
+	
+	static {
+		List properyList = new ArrayList(3);
+		createPropertyList(ImportDeclaration.class, properyList);
+		addProperty(NAME_PROPERTY, properyList);
+		addProperty(ON_DEMAND_PROPERTY, properyList);
+		PROPERTY_DESCRIPTORS_2_0 = reapPropertyList(properyList);
+		
+		properyList = new ArrayList(4);
+		createPropertyList(ImportDeclaration.class, properyList);
+		addProperty(STATIC_PROPERTY, properyList);
+		addProperty(NAME_PROPERTY, properyList);
+		addProperty(ON_DEMAND_PROPERTY, properyList);
+		PROPERTY_DESCRIPTORS_3_0 = reapPropertyList(properyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		if (apiLevel == AST.JLS2) {
+			return PROPERTY_DESCRIPTORS_2_0;
+		} else {
+			return PROPERTY_DESCRIPTORS_3_0;
+		}
+	}
+			
 	/**
 	 * The import name; lazily initialized; defaults to a unspecified,
 	 * legal Java identifier.
@@ -34,9 +114,16 @@ public class ImportDeclaration extends ASTNode {
 	private boolean onDemand = false;
 
 	/**
+	 * Static versus regular; defaults to regular import.
+	 * Added in JLS3; not used in JLS2.
+	 * @since 3.0
+	 */
+	private boolean isStatic = false;
+
+	/**
 	 * Creates a new AST node for an import declaration owned by the
-	 * given AST. The import declaration initially is a single type
-	 * import for an unspecified, but legal, Java type name.
+	 * given AST. The import declaration initially is a regular (non-static)
+	 * single type import for an unspecified, but legal, Java type name.
 	 * <p>
 	 * N.B. This constructor is package-private; all subclasses must be 
 	 * declared in the same package; clients are unable to declare 
@@ -52,17 +139,67 @@ public class ImportDeclaration extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final boolean internalGetSetBooleanProperty(SimplePropertyDescriptor property, boolean get, boolean value) {
+		if (property == ON_DEMAND_PROPERTY) {
+			if (get) {
+				return isOnDemand();
+			} else {
+				setOnDemand(value);
+				return false;
+			}
+		}
+		if (property == STATIC_PROPERTY) {
+			if (get) {
+				return isStatic();
+			} else {
+				setStatic(value);
+				return false;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetBooleanProperty(property, get, value);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == NAME_PROPERTY) {
+			if (get) {
+				return getName();
+			} else {
+				setName((Name) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return IMPORT_DECLARATION;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		ImportDeclaration result = new ImportDeclaration(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setOnDemand(isOnDemand());
+		if (this.ast.apiLevel >= AST.JLS3) {
+			result.setStatic(isStatic());
+		}
 		result.setName((Name) getName().clone(target));
 		return result;
 	}
@@ -70,7 +207,7 @@ public class ImportDeclaration extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -89,19 +226,26 @@ public class ImportDeclaration extends ASTNode {
 	/**
 	 * Returns the name imported by this declaration.
 	 * <p>
-	 * For an on-demand import, this is the name of a package. For a 
-	 * single-type import, this is the qualified name of a type.
+	 * For a regular on-demand import, this is the name of a package. 
+	 * For a static on-demand import, this is the qualified name of
+	 * a type. For a regular single-type import, this is the qualified name
+	 * of a type. For a static single-type import, this is the qualified name
+	 * of a static member of a type.
 	 * </p>
 	 * 
 	 * @return the imported name node
 	 */ 
 	public Name getName()  {
-		if (importName == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setName(getAST().newQualifiedName(
-				new SimpleName(getAST()), new SimpleName(getAST())));
-			getAST().setModificationCount(count);
+		if (this.importName == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.importName == null) {
+					preLazyInit();
+					this.importName =this.ast.newQualifiedName(
+							new SimpleName(this.ast), new SimpleName(this.ast));
+					postLazyInit(this.importName, NAME_PROPERTY);
+				}
+			}
 		}
 		return importName;
 	}
@@ -109,8 +253,11 @@ public class ImportDeclaration extends ASTNode {
 	/**
 	 * Sets the name of this import declaration to the given name.
 	 * <p>
-	 * For an on-demand import, this is the name of a package. For a 
-	 * single-type import, this is the qualified name of a type.
+	 * For a regular on-demand import, this is the name of a package. 
+	 * For a static on-demand import, this is the qualified name of
+	 * a type. For a regular single-type import, this is the qualified name
+	 * of a type. For a static single-type import, this is the qualified name
+	 * of a static member of a type.
 	 * </p>
 	 * 
 	 * @param name the new import name
@@ -124,8 +271,10 @@ public class ImportDeclaration extends ASTNode {
 		if (name == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.importName, name, false);
+		ASTNode oldChild = this.importName;
+		preReplaceChild(oldChild, name, NAME_PROPERTY);
 		this.importName = name;
+		postReplaceChild(oldChild, name, NAME_PROPERTY);
 	}
 		
 	/**
@@ -147,8 +296,51 @@ public class ImportDeclaration extends ASTNode {
 	 *    and <code>false</code> if this is a single type import
 	 */ 
 	public void setOnDemand(boolean onDemand) {
-		modifying();
+		preValueChange(ON_DEMAND_PROPERTY);
 		this.onDemand = onDemand;
+		postValueChange(ON_DEMAND_PROPERTY);
+	}
+	
+	/**
+	 * Returns whether this import declaration is a static import (added in JLS3 API).
+	 * <p>
+	 * Note: This API element is only needed for dealing with Java code that uses
+	 * new language features of J2SE 1.5. It is included in anticipation of J2SE
+	 * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
+	 * may change slightly before reaching its final form.
+	 * </p>
+	 * 
+	 * @return <code>true</code> if this is a static import,
+	 *    and <code>false</code> if this is a regular import
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */ 
+	public boolean isStatic() {
+		unsupportedIn2();
+		return isStatic;
+	}
+		
+	/**
+	 * Sets whether this import declaration is a static import (added in JLS3 API).
+	 * <p>
+	 * Note: This API element is only needed for dealing with Java code that uses
+	 * new language features of J2SE 1.5. It is included in anticipation of J2SE
+	 * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
+	 * may change slightly before reaching its final form.
+	 * </p>
+	 * 
+	 * @param isStatic <code>true</code> if this is a static import,
+	 *    and <code>false</code> if this is a regular import
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */ 
+	public void setStatic(boolean isStatic) {
+		unsupportedIn2();
+		preValueChange(STATIC_PROPERTY);
+		this.isStatic = isStatic;
+		postValueChange(STATIC_PROPERTY);
 	}
 	
 	/**
@@ -164,14 +356,14 @@ public class ImportDeclaration extends ASTNode {
 	 *    be resolved
 	 */	
 	public IBinding resolveBinding() {
-		return getAST().getBindingResolver().resolveImport(this);
+		return this.ast.getBindingResolver().resolveImport(this);
 	}
 	
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		return BASE_NODE_SIZE + 2 * 4;
+		return BASE_NODE_SIZE + 3 * 4;
 	}
 	
 	/* (omit javadoc for this method)

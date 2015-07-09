@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -61,11 +61,9 @@ public IProblem createProblem(
 	int severity, 
 	int problemStartPosition, 
 	int problemEndPosition, 
-	int lineNumber,
-	ReferenceContext referenceContext,
-	CompilationResult unitResult) {
+	int lineNumber) {
 
-	return problemFactory.createProblem(
+	return this.problemFactory.createProblem(
 		fileName, 
 		problemId, 
 		problemArguments, 
@@ -91,7 +89,8 @@ public void handle(
 	// if no reference context, we need to abort from the current compilation process
 	if (referenceContext == null) {
 		if ((severity & Error) != 0) { // non reportable error is fatal
-			throw new AbortCompilation(problemId, problemArguments, messageArguments);
+			IProblem problem = this.createProblem(null, 	problemId, 	problemArguments, messageArguments, severity, 0, 0, 0);			
+			throw new AbortCompilation(null, problem);
 		} else {
 			return; // ignore non reportable warning
 		}
@@ -108,9 +107,7 @@ public void handle(
 			problemEndPosition, 
 			problemStartPosition >= 0
 				? searchLineNumber(unitResult.lineSeparatorPositions, problemStartPosition)
-				: 0,
-			referenceContext,
-			unitResult); 
+				: 0);
 	if (problem == null) return; // problem couldn't be created, ignore
 	
 	switch (severity & Error) {
@@ -121,9 +118,9 @@ public void handle(
 			// should abort ?
 			int abortLevel;
 			if ((abortLevel = 
-				(policy.stopOnFirstError() ? AbortCompilation : severity & Abort)) != 0) {
+				(this.policy.stopOnFirstError() ? AbortCompilation : severity & Abort)) != 0) {
 
-				referenceContext.abort(abortLevel);
+				referenceContext.abort(abortLevel, problem);
 			}
 			break;
 		case Warning :
@@ -159,8 +156,6 @@ public void record(IProblem problem, CompilationResult unitResult, ReferenceCont
 }
 /**
  * Search the line number corresponding to a specific position
- *
- * @param methodBinding org.eclipse.jdt.internal.compiler.nameloopkup.SyntheticAccessMethodBinding
  */
 public static final int searchLineNumber(int[] startLineIndexes, int position) {
 	if (startLineIndexes == null)

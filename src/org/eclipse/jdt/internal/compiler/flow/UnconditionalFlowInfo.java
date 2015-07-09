@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,6 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
-import org.eclipse.jdt.internal.compiler.impl.Constant;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
@@ -280,7 +279,7 @@ public class UnconditionalFlowInfo extends FlowInfo {
 			return true;
 		}
 		// final constants are inlined, and thus considered as always initialized
-		if (local.constant != Constant.NotAConstant) {
+		if (local.isConstantValue()) {
 			return true;
 		}
 		return isDefinitelyAssigned(local.id + maxFieldCount);
@@ -329,7 +328,7 @@ public class UnconditionalFlowInfo extends FlowInfo {
 			return true;
 		}
 		// final constants are inlined, and thus considered as always initialized
-		if (local.constant != Constant.NotAConstant) {
+		if (local.isConstantValue()) {
 			return true;
 		}
 		return isPotentiallyAssigned(local.id + maxFieldCount);
@@ -406,11 +405,10 @@ public class UnconditionalFlowInfo extends FlowInfo {
 				int vectorIndex = (position / BitCacheSize) - 1;
 				if (extraDefiniteInits == null) {
 					return; // nothing to do, it was not yet set 
-				} else {
-					// might need to grow the arrays
-					if (vectorIndex >= extraDefiniteInits.length) {
-						return; // nothing to do, it was not yet set 
-					}
+				}
+				// might need to grow the arrays
+				if (vectorIndex >= extraDefiniteInits.length) {
+					return; // nothing to do, it was not yet set 
 				}
 				long mask;
 				extraDefiniteInits[vectorIndex] &= ~(mask = 1L << (position % BitCacheSize));
@@ -452,9 +450,8 @@ public class UnconditionalFlowInfo extends FlowInfo {
 		if ((this.reachMode & UNREACHABLE) != (otherInits.reachMode & UNREACHABLE)){
 			if ((this.reachMode & UNREACHABLE) != 0){
 				return otherInits;
-			} else {
-				return this;
-			}
+			} 
+			return this;
 		}
 		
 		// if one branch is not fake reachable, then the merged one is reachable

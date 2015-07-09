@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,49 +10,29 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/**
- * Node representing a structured Javadoc annotation comment
- */
-public class Annotation extends AstNode {
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
+import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
+import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
+import org.eclipse.jdt.internal.compiler.lookup.CompilationUnitScope;
 
-	public Argument[] parameters; 						// @param
-	public TypeReference[] thrownExceptions; 	// @throws, @exception
-	public TypeReference returnType;					// @return
-	public Reference[] references; 						// @see
+/**
+ * Annotation
+ */
+public abstract class Annotation extends Expression {
 	
-	public Annotation(int sourceStart, int sourceEnd) {
-		this.sourceStart = sourceStart;
-		this.sourceEnd = sourceEnd;
-	}
-		
-	/* 
-	 * @see org.eclipse.jdt.internal.compiler.ast.AstNode#print(int, java.lang.StringBuffer)
-	 */
-	public StringBuffer print(int indent, StringBuffer output) {
-		printIndent(indent, output).append("/**\n"); //$NON-NLS-1$
-		if (this.parameters != null) {
-			for (int i = 0, length = this.parameters.length; i < length; i++) {
-				printIndent(indent+1, output).append(" * @param "); //$NON-NLS-1$		
-				this.parameters[i].print(indent, output).append('\n');
-			}
+	public char[][] tokens;
+	public long[] sourcePositions;
+	public int declarationSourceEnd;
+	
+	public StringBuffer printExpression(int indent, StringBuffer output) {
+		output.append('@');
+		for (int i = 0; i < tokens.length; i++) {
+			if (i > 0) output.append('.');
+			output.append(tokens[i]);
 		}
-		if (this.returnType != null) {
-			printIndent(indent+1, output).append(" * @return "); //$NON-NLS-1$		
-			this.returnType.print(indent, output).append('\n');
-		}
-		if (this.thrownExceptions != null) {
-			for (int i = 0, length = this.thrownExceptions.length; i < length; i++) {
-				printIndent(indent+1, output).append(" * @throws "); //$NON-NLS-1$		
-				this.thrownExceptions[i].print(indent, output).append('\n');
-			}
-		}
-		if (this.references != null) {
-			for (int i = 0, length = this.references.length; i < length; i++) {
-				printIndent(indent+1, output).append(" * @see"); //$NON-NLS-1$		
-				this.references[i].print(indent, output).append('\n');
-			}
-		}
-		printIndent(indent, output).append(" */\n"); //$NON-NLS-1$
 		return output;
 	}
+	public abstract void traverse(ASTVisitor visitor, BlockScope scope);
+	public abstract void traverse(ASTVisitor visitor, ClassScope scope);
+	public abstract void traverse(ASTVisitor visitor, CompilationUnitScope scope);
 }

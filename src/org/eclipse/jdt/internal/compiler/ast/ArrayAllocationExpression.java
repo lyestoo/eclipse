@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
@@ -44,9 +44,8 @@ public class ArrayAllocationExpression extends Expression {
 		}
 		if (initializer != null) {
 			return initializer.analyseCode(currentScope, flowContext, flowInfo);
-		} else {
-			return flowInfo;
 		}
+		return flowInfo;
 	}
 
 	/**
@@ -149,7 +148,7 @@ public class ArrayAllocationExpression extends Expression {
 			if (dimensions[i] != null) {
 				TypeBinding dimensionType = dimensions[i].resolveTypeExpecting(scope, IntBinding);
 				if (dimensionType != null) {
-					dimensions[i].implicitWidening(IntBinding, dimensionType);
+					dimensions[i].computeConversion(scope, IntBinding, dimensionType);
 				}
 			}
 		}
@@ -159,7 +158,11 @@ public class ArrayAllocationExpression extends Expression {
 			if (dimensions.length > 255) {
 				scope.problemReporter().tooManyDimensions(this);
 			}
-			this.resolvedType = scope.createArray(referenceType, dimensions.length);
+			// allow new List<?>[5]
+			if (referenceType.isBoundParameterizedType() || referenceType.isGenericType() || referenceType.isTypeVariable()) {
+			    scope.problemReporter().illegalGenericArray(referenceType, this);
+			}
+			this.resolvedType = scope.createArrayType(referenceType, dimensions.length);
 
 			// check the initializer
 			if (initializer != null) {
@@ -171,7 +174,7 @@ public class ArrayAllocationExpression extends Expression {
 	}
 
 
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+	public void traverse(ASTVisitor visitor, BlockScope scope) {
 
 		if (visitor.visit(this, scope)) {
 			int dimensionsLength = dimensions.length;

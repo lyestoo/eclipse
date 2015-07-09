@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -75,24 +75,21 @@ public long u4At(int relativeOffset) {
 	return (((reference[position++] & 0xFFL) << 24) + ((reference[position++] & 0xFF) << 16) + ((reference[position++] & 0xFF) << 8) + (reference[position] & 0xFF));
 }
 public char[] utf8At(int relativeOffset, int bytesAvailable) {
-	int x, y, z;
 	int length = bytesAvailable;
 	char outputBuf[] = new char[bytesAvailable];
 	int outputPos = 0;
-	int readOffset = structOffset + relativeOffset;
+	int readOffset = this.structOffset + relativeOffset;
 	
 	while (length != 0) {
-		x = reference[readOffset++] & 0xFF;
+		int x = this.reference[readOffset++] & 0xFF;
 		length--;
 		if ((0x80 & x) != 0) {
-			y = this.reference[readOffset++] & 0xFF;
-			length--;
 			if ((x & 0x20) != 0) {
-				z = this.reference[readOffset++] & 0xFF;
-				length--;
-				x = ((x & 0x1F) << 12) + ((y & 0x3F) << 6) + (z & 0x3F);
+				length-=2;
+				x = ((x & 0xF) << 12) | ((this.reference[readOffset++] & 0x3F) << 6) | (this.reference[readOffset++] & 0x3F);
 			} else {
-				x = ((x & 0x1F) << 6) + (y & 0x3F);
+				length--;
+				x = ((x & 0x1F) << 6) | (this.reference[readOffset++] & 0x3F);
 			}
 		}
 		outputBuf[outputPos++] = (char) x;

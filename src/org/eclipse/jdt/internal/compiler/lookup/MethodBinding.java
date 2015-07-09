@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,20 +21,21 @@ public class MethodBinding extends Binding implements BaseTypes, TypeConstants {
 	public TypeBinding[] parameters;
 	public ReferenceBinding[] thrownExceptions;
 	public ReferenceBinding declaringClass;
+	public TypeVariableBinding[] typeVariables = NoTypeVariables;
 
 	char[] signature;
 
 protected MethodBinding() {
 	// for creating problem or synthetic method
 }
-public MethodBinding(int modifiers, char[] selector, TypeBinding returnType, TypeBinding[] args, ReferenceBinding[] exceptions, ReferenceBinding declaringClass) {
+public MethodBinding(int modifiers, char[] selector, TypeBinding returnType, TypeBinding[] parameters, ReferenceBinding[] thrownExceptions, ReferenceBinding declaringClass) {
 	this.modifiers = modifiers;
 	this.selector = selector;
 	this.returnType = returnType;
-	this.parameters = (args == null || args.length == 0) ? NoParameters : args;
-	this.thrownExceptions = (exceptions == null || exceptions.length == 0) ? NoExceptions : exceptions;
+	this.parameters = (parameters == null || parameters.length == 0) ? NoParameters : parameters;
+	this.thrownExceptions = (thrownExceptions == null || thrownExceptions.length == 0) ? NoExceptions : thrownExceptions;
 	this.declaringClass = declaringClass;
-
+	
 	// propagate the strictfp & deprecated modifiers
 	if (this.declaringClass != null) {
 		if (this.declaringClass.isStrictfp())
@@ -44,8 +45,8 @@ public MethodBinding(int modifiers, char[] selector, TypeBinding returnType, Typ
 			this.modifiers |= AccDeprecatedImplicitly;
 	}
 }
-public MethodBinding(int modifiers, TypeBinding[] args, ReferenceBinding[] exceptions, ReferenceBinding declaringClass) {
-	this(modifiers, ConstructorDeclaration.ConstantPoolName, VoidBinding, args, exceptions, declaringClass);
+public MethodBinding(int modifiers, TypeBinding[] parameters, ReferenceBinding[] thrownExceptions, ReferenceBinding declaringClass) {
+	this(modifiers, ConstructorDeclaration.ConstantPoolName, VoidBinding, parameters, thrownExceptions, declaringClass);
 }
 // special API used to change method declaring class for runtime visibility check
 public MethodBinding(MethodBinding initialMethodBinding, ReferenceBinding declaringClass) {
@@ -58,7 +59,6 @@ public MethodBinding(MethodBinding initialMethodBinding, ReferenceBinding declar
 }
 /* Answer true if the argument types & the receiver's parameters are equal
 */
-
 public final boolean areParametersEqual(MethodBinding method) {
 	TypeBinding[] args = method.parameters;
 	if (parameters == args)
@@ -71,6 +71,22 @@ public final boolean areParametersEqual(MethodBinding method) {
 	for (int i = 0; i < length; i++)
 		if (parameters[i] != args[i])
 			return false;
+	return true;
+}
+/* Answer true if the argument types & the receiver's parameters have the same erasure
+*/
+public final boolean areParameterErasuresEqual(MethodBinding method) {
+	TypeBinding[] args = method.parameters;
+	if (parameters == args)
+		return true;
+
+	int length = parameters.length;
+	if (length != args.length)
+		return false;
+
+	for (int i = 0; i < length; i++) {
+		if (parameters[i].erasure() != args[i].erasure()) return false;
+	}
 	return true;
 }
 /* API
@@ -111,7 +127,7 @@ public final boolean canBeSeenBy(InvocationSite invocationSite, Scope scope) {
 			temp = temp.enclosingType();
 		}
 
-		ReferenceBinding outerDeclaringClass = declaringClass;
+		ReferenceBinding outerDeclaringClass = (ReferenceBinding)declaringClass.erasure();
 		temp = outerDeclaringClass.enclosingType();
 		while (temp != null) {
 			outerDeclaringClass = temp;
@@ -156,6 +172,7 @@ public final boolean canBeSeenBy(TypeBinding receiverType, InvocationSite invoca
 					return false;
 				}
 				if (isStatic()){
+					if (depth > 0) invocationSite.setDepth(depth);
 					return true; // see 1FMEPDL - return invocationSite.isTypeAccess();
 				}
 				if (currentType == receiverType || currentType.isSuperclassOf((ReferenceBinding) receiverType)){
@@ -182,7 +199,7 @@ public final boolean canBeSeenBy(TypeBinding receiverType, InvocationSite invoca
 				temp = temp.enclosingType();
 			}
 
-			ReferenceBinding outerDeclaringClass = declaringClass;
+			ReferenceBinding outerDeclaringClass = (ReferenceBinding)declaringClass.erasure();
 			temp = outerDeclaringClass.enclosingType();
 			while (temp != null) {
 				outerDeclaringClass = temp;
@@ -207,6 +224,7 @@ public final boolean canBeSeenBy(TypeBinding receiverType, InvocationSite invoca
 	} while ((type = type.superclass()) != null);
 	return false;
 }
+
 /* 
  * Answer the declaring class to use in the constant pool
  * may not be a reference binding (see subtypes)
@@ -223,14 +241,74 @@ public TypeBinding constantPoolDeclaringClass() {
 public final char[] constantPoolName() {
 	return selector;
 }
+/**
+ *<typeParam1 ... typeParamM>(param1 ... paramN)returnType thrownException1 ... thrownExceptionP
+ * T foo(T t) throws X<T>   --->   (TT;)TT;LX<TT;>;
+ * void bar(X<T> t)   -->   (LX<TT;>;)V
+ * <T> void bar(X<T> t)   -->  <T:Ljava.lang.Object;>(LX<TT;>;)V
+ */
+public char[] genericSignature() {
+	if ((this.modifiers & AccGenericSignature) == 0) return null;
+	StringBuffer sig = new StringBuffer(10);
+	if (this.typeVariables != NoTypeVariables) {
+		sig.append('<');
+		for (int i = 0, length = this.typeVariables.length; i < length; i++) {
+			sig.append(this.typeVariables[i].genericSignature());
+		}
+		sig.append('>');
+	}
+	sig.append('(');
+	for (int i = 0, length = this.parameters.length; i < length; i++) {
+		sig.append(this.parameters[i].genericTypeSignature());
+	}
+	sig.append(')').append(this.returnType.genericTypeSignature());
+	// only append thrown exception if any is generic/parameterized
+	for (int i = 0, length = this.thrownExceptions.length; i < length; i++) {
+		if((this.thrownExceptions[i].modifiers & AccGenericSignature) != 0) {
+			for (int j = 0; j < length; j++) {
+				sig.append(this.thrownExceptions[j].genericTypeSignature());
+			}
+			break;
+		}
+	}
+	int sigLength = sig.length();
+	char[] genericSignature = new char[sigLength];
+	sig.getChars(0, sigLength, genericSignature, 0);	
+	return genericSignature;
+}
 public final int getAccessFlags() {
 	return modifiers & AccJustFlag;
+}
+public TypeVariableBinding getTypeVariable(char[] variableName) {
+	for (int i = this.typeVariables.length; --i >= 0;)
+		if (CharOperation.equals(this.typeVariables[i].sourceName, variableName))
+			return this.typeVariables[i];
+	return null;
+}
+/**
+ * Returns true if method got substituted parameter types
+ * (see ParameterizedMethodBinding)
+ */
+public boolean hasSubstitutedParameters() {
+	return false;
+}
+
+/* Answer true if the return type got substituted.
+ */
+public boolean hasSubstitutedReturnType() {
+	return false;
 }
 
 /* Answer true if the receiver is an abstract method
 */
 public final boolean isAbstract() {
 	return (modifiers & AccAbstract) != 0;
+}
+
+/* Answer true if the receiver is a bridge method
+*/
+public final boolean isBridge() {
+	return (modifiers & AccBridge) != 0;
 }
 
 /* Answer true if the receiver is a constructor
@@ -356,11 +434,24 @@ public final boolean isSynthetic() {
 	return (modifiers & AccSynthetic) != 0;
 }
 
+/* Answer true if the receiver is a vararg method
+*/
+public final boolean isVararg() {
+	return (modifiers & AccVarargs) != 0;
+}
+
 /* Answer true if the receiver's declaring type is deprecated (or any of its enclosing types)
 */
 public final boolean isViewedAsDeprecated() {
 	return (modifiers & AccDeprecated) != 0 ||
 		(modifiers & AccDeprecatedImplicitly) != 0;
+}
+
+/**
+ * Returns the original method (as opposed to parameterized instances)
+ */
+public MethodBinding original() {
+	return this;
 }
 
 public char[] readableName() /* foo(int, Thread) */ {
@@ -399,7 +490,10 @@ public char[] shortReadableName() {
 		}
 	}
 	buffer.append(')');
-	return buffer.toString().toCharArray();
+	int nameLength = buffer.length();
+	char[] shortReadableName = new char[nameLength];
+	buffer.getChars(0, nameLength, shortReadableName, 0);	    
+	return shortReadableName;
 }
 
 protected final void setSelector(char[] selector) {
@@ -454,14 +548,17 @@ public final char[] signature() /* (ILjava/lang/Thread;)Ljava/lang/Object; */ {
 	}
 	buffer.append(')');
 	buffer.append(returnType.signature());
-	return signature = buffer.toString().toCharArray();
+	int nameLength = buffer.length();
+	signature = new char[nameLength];
+	buffer.getChars(0, nameLength, signature, 0);	    
+	
+	return signature;
 }
 public final int sourceEnd() {
 	AbstractMethodDeclaration method = sourceMethod();
 	if (method == null)
 		return 0;
-	else
-		return method.sourceEnd;
+	return method.sourceEnd;
 }
 AbstractMethodDeclaration sourceMethod() {
 	SourceTypeBinding sourceType;
@@ -481,9 +578,9 @@ public final int sourceStart() {
 	AbstractMethodDeclaration method = sourceMethod();
 	if (method == null)
 		return 0;
-	else
-		return method.sourceStart;
+	return method.sourceStart;
 }
+
 /* During private access emulation, the binding can be requested to loose its
  * private visibility when the class file is dumped.
  */
@@ -523,5 +620,8 @@ public String toString() {
 		s += "NULL THROWN EXCEPTIONS"; //$NON-NLS-1$
 	}
 	return s;
+}
+public TypeVariableBinding[] typeVariables() {
+	return this.typeVariables;
 }
 }

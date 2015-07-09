@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,10 +11,11 @@
 package org.eclipse.jdt.internal.compiler.problem;
 
 import org.eclipse.jdt.core.compiler.IProblem;
-import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
 import org.eclipse.jdt.internal.compiler.util.Util;
 
 public class DefaultProblem implements ProblemSeverities, IProblem {
+	
+	private static final String LINE_DELIMITER = System.getProperty("line.separator"); //$NON-NLS-1$
 		
 	private char[] fileName;
 	private int id;
@@ -42,8 +43,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 		this.endPosition = endPosition;
 		this.line = line;
 	}
-
-	public String errorReportSource(ICompilationUnit compilationUnit) {
+	public String errorReportSource(char[] unitSource) {
 		//extra from the source the innacurate     token
 		//and "highlight" it using some underneath ^^^^^
 		//put some context around too.
@@ -51,73 +51,48 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 		//this code assumes that the font used in the console is fixed size
 
 		//sanity .....
-		if ((startPosition > endPosition)
-			|| ((startPosition < 0) && (endPosition < 0)))
+		if ((this.startPosition > this.endPosition)
+			|| ((this.startPosition < 0) && (this.endPosition < 0)))
 			return Util.bind("problem.noSourceInformation"); //$NON-NLS-1$
 
+		StringBuffer errorBuffer = new StringBuffer(" "); //$NON-NLS-1$
+		errorBuffer.append(Util.bind("problem.atLine", String.valueOf(this.line))); //$NON-NLS-1$
+		errorBuffer.append(LINE_DELIMITER).append("\t"); //$NON-NLS-1$
+		
+		char c;
 		final char SPACE = '\u0020';
 		final char MARK = '^';
 		final char TAB = '\t';
-		char[] source = compilationUnit.getContents();
 		//the next code tries to underline the token.....
 		//it assumes (for a good display) that token source does not
 		//contain any \r \n. This is false on statements ! 
 		//(the code still works but the display is not optimal !)
 
-		//compute the how-much-char we are displaying around the inaccurate token
-		int begin = startPosition >= source.length ? source.length - 1 : startPosition;
-		int relativeStart = 0;
-		int end = endPosition >= source.length ? source.length - 1 : endPosition;
-		int relativeEnd = 0;
-		label : for (relativeStart = 0;; relativeStart++) {
-			if (begin == 0)
-				break label;
-			if ((source[begin - 1] == '\n') || (source[begin - 1] == '\r'))
-				break label;
-			begin--;
+		// expand to line limits
+		int length = unitSource.length, begin, end;
+		for (begin = this.startPosition >= length ? length - 1 : this.startPosition; begin > 0; begin--) {
+			if ((c = unitSource[begin - 1]) == '\n' || c == '\r') break;
 		}
-		label : for (relativeEnd = 0;; relativeEnd++) {
-			if ((end + 1) >= source.length)
-				break label;
-			if ((source[end + 1] == '\r') || (source[end + 1] == '\n')) {
-				break label;
-			}
-			end++;
+		for (end = this.endPosition >= length ? length - 1 : this.endPosition ; end+1 < length; end++) {
+			if ((c = unitSource[end + 1]) == '\r' || c == '\n') break;
 		}
-		//extract the message form the source
-		char[] extract = new char[end - begin + 1];
-		System.arraycopy(source, begin, extract, 0, extract.length);
-		char c;
-		//remove all SPACE and TAB that begin the error message...
-		int trimLeftIndex = 0;
-		while (((c = extract[trimLeftIndex++]) == TAB) || (c == SPACE));
-		System.arraycopy(
-			extract,
-			trimLeftIndex - 1,
-			extract = new char[extract.length - trimLeftIndex + 1],
-			0,
-			extract.length);
-		relativeStart -= trimLeftIndex;
-		//buffer spaces and tabs in order to reach the error position
-		int pos = 0;
-		char[] underneath = new char[extract.length]; // can't be bigger
-		for (int i = 0; i <= relativeStart; i++) {
-			if (extract[i] == TAB) {
-				underneath[pos++] = TAB;
-			} else {
-				underneath[pos++] = SPACE;
-			}
-		}
-		//mark the error position
-		for (int i = startPosition;
-			i <= (endPosition >= source.length ? source.length - 1 : endPosition);
-			i++)
-			underneath[pos++] = MARK;
-		//resize underneathto remove 'null' chars
-		System.arraycopy(underneath, 0, underneath = new char[pos], 0, pos);
+		
+		// trim left and right spaces/tabs
+		while ((c = unitSource[begin]) == ' ' || c == '\t') begin++;
+		//while ((c = unitSource[end]) == ' ' || c == '\t') end--; TODO (philippe) should also trim right, but all tests are to be updated
+		
+		// copy source
+		errorBuffer.append(unitSource, begin, end-begin+1);
+		errorBuffer.append(LINE_DELIMITER).append("\t"); //$NON-NLS-1$
 
-		return " " + Util.bind("problem.atLine", String.valueOf(line)) 	//$NON-NLS-2$ //$NON-NLS-1$
-			+ "\n\t" + new String(extract) + "\n\t" + new String(underneath); //$NON-NLS-2$ //$NON-NLS-1$
+		// compute underline
+		for (int i = begin; i <this.startPosition; i++) {
+			errorBuffer.append((unitSource[i] == TAB) ? TAB : SPACE);
+		}
+		for (int i = this.startPosition; i <= (this.endPosition >= length ? length - 1 : this.endPosition); i++) {
+			errorBuffer.append(MARK);
+		}
+		return errorBuffer.toString();
 	}
 
 	/**
@@ -126,7 +101,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public String[] getArguments() {
 
-		return arguments;
+		return this.arguments;
 	}
 
 	/**
@@ -136,7 +111,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public int getID() {
 
-		return id;
+		return this.id;
 	}
 
 	/**
@@ -145,7 +120,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public String getMessage() {
 
-		return message;
+		return this.message;
 	}
 
 	/**
@@ -154,7 +129,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public char[] getOriginatingFileName() {
 
-		return fileName;
+		return this.fileName;
 	}
 
 	/**
@@ -163,7 +138,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public int getSourceEnd() {
 
-		return endPosition;
+		return this.endPosition;
 	}
 
 	/**
@@ -172,7 +147,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public int getSourceLineNumber() {
 
-		return line;
+		return this.line;
 	}
 
 	/**
@@ -181,7 +156,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public int getSourceStart() {
 
-		return startPosition;
+		return this.startPosition;
 	}
 
 	/*
@@ -190,7 +165,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public boolean isError() {
 
-		return (severity & ProblemSeverities.Error) != 0;
+		return (this.severity & ProblemSeverities.Error) != 0;
 	}
 
 	/*
@@ -199,9 +174,13 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public boolean isWarning() {
 
-		return (severity & ProblemSeverities.Error) == 0;
+		return (this.severity & ProblemSeverities.Error) == 0;
 	}
 
+	public void setOriginatingFileName(char[] fileName) {
+		this.fileName = fileName;
+	}
+	
 	/**
 	 * Set the end position of the problem (inclusive), or -1 if unknown.
 	 *
@@ -210,7 +189,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public void setSourceEnd(int sourceEnd) {
 
-		endPosition = sourceEnd;
+		this.endPosition = sourceEnd;
 	}
 
 	/**
@@ -219,7 +198,7 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public void setSourceLineNumber(int lineNumber) {
 
-		line = lineNumber;
+		this.line = lineNumber;
 	}
 
 	/**
@@ -230,18 +209,18 @@ public class DefaultProblem implements ProblemSeverities, IProblem {
 	 */
 	public void setSourceStart(int sourceStart) {
 
-		startPosition = sourceStart;
+		this.startPosition = sourceStart;
 	}
 
 	public String toString() {
 
-		String s = "Pb(" + (id & IgnoreCategoriesMask) + ") "; //$NON-NLS-1$ //$NON-NLS-2$
-		if (message != null) {
-			s += message;
+		String s = "Pb(" + (this.id & IgnoreCategoriesMask) + ") "; //$NON-NLS-1$ //$NON-NLS-2$
+		if (this.message != null) {
+			s += this.message;
 		} else {
-			if (arguments != null)
-				for (int i = 0; i < arguments.length; i++)
-					s += " " + arguments[i]; //$NON-NLS-1$
+			if (this.arguments != null)
+				for (int i = 0; i < this.arguments.length; i++)
+					s += " " + this.arguments[i]; //$NON-NLS-1$
 		}
 		return s;
 	}

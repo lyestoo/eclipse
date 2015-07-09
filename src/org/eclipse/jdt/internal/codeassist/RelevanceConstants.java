@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -22,12 +22,13 @@ public interface RelevanceConstants {
 	int R_CLASS = 20;
 	int R_EXCEPTION = 20;
 	int R_ABSTRACT_METHOD = 20;
-	int R_NON_STATIC = 10;
+	int R_NON_STATIC = 11;
 	int R_UNQUALIFIED = 3;
+	int R_QUALIFIED = 2;
 	int R_NAME_FIRST_PREFIX = 6;
 	int R_NAME_PREFIX = 5;
 	int R_NAME_FIRST_SUFFIX = 4;
 	int R_NAME_SUFFIX = 3;
-	
+	int R_NON_STATIC_OVERIDE = 3;
 	
 }

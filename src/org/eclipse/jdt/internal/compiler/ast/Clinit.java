@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
@@ -60,7 +60,7 @@ public class Clinit extends AbstractMethodDeclaration {
 					&& (!flowInfo.isDefinitelyAssigned(fields[i]))) {
 					scope.problemReporter().uninitializedBlankFinalField(
 						field,
-						scope.referenceType().declarationOf(field));
+						scope.referenceType().declarationOf(field.original()));
 					// can complain against the field decl, since only one <clinit>
 				}
 			}
@@ -101,10 +101,6 @@ public class Clinit extends AbstractMethodDeclaration {
 			if (e.compilationResult == CodeStream.RESTART_IN_WIDE_MODE) {
 				// a branch target required a goto_w, restart code gen in wide mode.
 				try {
-					if (statements != null) {
-						for (int i = 0, max = statements.length; i < max; i++)
-							statements[i].resetStateForCodeGeneration();
-					}
 					classFile.contentsOffset = clinitOffset;
 					classFile.methodCount--;
 					classFile.codeStream.wideMode = true; // request wide mode 
@@ -228,7 +224,7 @@ public class Clinit extends AbstractMethodDeclaration {
 	}
 
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		ClassScope classScope) {
 
 		visitor.visit(this, classScope);
@@ -236,15 +232,17 @@ public class Clinit extends AbstractMethodDeclaration {
 	}
 
 	// 1.4 feature
-	public void setAssertionSupport(FieldBinding assertionSyntheticFieldBinding) {
+	public void setAssertionSupport(FieldBinding assertionSyntheticFieldBinding, boolean needClassLiteralField) {
 
 		this.assertionSyntheticFieldBinding = assertionSyntheticFieldBinding;
 
 		// we need to add the field right now, because the field infos are generated before the methods
 		SourceTypeBinding sourceType =
 			this.scope.outerMostMethodScope().enclosingSourceType();
-		this.classLiteralSyntheticField =
-			sourceType.addSyntheticField(sourceType, scope);
+		if (needClassLiteralField) {
+			this.classLiteralSyntheticField =
+				sourceType.addSyntheticField(sourceType, scope);
+		}
 	}
 
 }

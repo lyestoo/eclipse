@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
@@ -27,6 +30,42 @@ import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
  */
 public class SimpleName extends Name {
 
+	/**
+	 * The "identifier" structural property of this node type.
+	 * 
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor IDENTIFIER_PROPERTY = 
+		new SimplePropertyDescriptor(SimpleName.class, "identifier", String.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List propertyList = new ArrayList(2);
+		createPropertyList(SimpleName.class, propertyList);
+		addProperty(IDENTIFIER_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(propertyList);
+	}
+	
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the AST.JLS* constants
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+	
 	/**
 	 * An unspecified (but externally observable) legal Java identifier.
 	 */
@@ -54,15 +93,39 @@ public class SimpleName extends Name {
 	
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
+	 * @since 3.0
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final Object internalGetSetObjectProperty(SimplePropertyDescriptor property, boolean get, Object value) {
+		if (property == IDENTIFIER_PROPERTY) {
+			if (get) {
+				return getIdentifier();
+			} else {
+				setIdentifier((String) value);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetObjectProperty(property, get, value);
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return SIMPLE_NAME;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		SimpleName result = new SimpleName(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setIdentifier(getIdentifier());
@@ -72,7 +135,7 @@ public class SimpleName extends Name {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -91,7 +154,7 @@ public class SimpleName extends Name {
 	 * @return the identifier of this node
 	 */ 
 	public String getIdentifier() {
-		return identifier;
+		return this.identifier;
 	}
 	
 	/**
@@ -106,13 +169,12 @@ public class SimpleName extends Name {
 	 * 
 	 * @param identifier the identifier of this node
 	 * @exception IllegalArgumentException if the identifier is invalid
-	 * @see AST#AST(java.util.Map)
 	 */ 
 	public void setIdentifier(String identifier) {
 		if (identifier == null) {
 			throw new IllegalArgumentException();
 		}
-		Scanner scanner = getAST().scanner;
+		Scanner scanner = this.ast.scanner;
 		char[] source = identifier.toCharArray();
 		scanner.setSource(source);
 		scanner.resetTo(0, source.length);
@@ -127,8 +189,9 @@ public class SimpleName extends Name {
 		} catch(InvalidInputException e) {
 			throw new IllegalArgumentException();
 		}
-		modifying();
+		preValueChange(IDENTIFIER_PROPERTY);
 		this.identifier = identifier;
+		postValueChange(IDENTIFIER_PROPERTY);
 	}
 
 	/**
@@ -141,6 +204,15 @@ public class SimpleName extends Name {
 	 * providing <code>isConstructor</code> is <code>false</code>.</li>
 	 * <li>The variable name in any type of <code>VariableDeclaration</code>
 	 * node.</li>
+	 * <li>The enum type name in a <code>EnumDeclaration</code> node.</li>
+	 * <li>The enum constant name in an <code>EnumConstantDeclaration</code>
+	 * node.</li>
+	 * <li>The variable name in an <code>EnhancedForStatement</code>
+	 * node.</li>
+	 * <li>The type variable name in a <code>TypeParameter</code>
+	 * node.</li>
+	 * <li>The type name in an <code>AnnotationTypeDeclaration</code> node.</li>
+	 * <li>The member name in an <code>AnnotationTypeMemberDeclaration</code> node.</li>
 	 * </ul>
 	 * <p>
 	 * Note that this is a convenience method that simply checks whether
@@ -152,40 +224,59 @@ public class SimpleName extends Name {
 	 *    <code>false</code> otherwise
 	 */ 
 	public boolean isDeclaration() {
-		ASTNode parent = getParent();
-		if (parent == null) {
+		StructuralPropertyDescriptor d = getLocationInParent();
+		if (d == null) {
 			// unparented node
 			return false;
 		}
+		ASTNode parent = getParent();
 		if (parent instanceof TypeDeclaration) {
-			// could only be the name of the type
-			return true;
+			return (d == TypeDeclaration.NAME_PROPERTY);
 		}
 		if (parent instanceof MethodDeclaration) {
-			// could be the name of the method or constructor
 			MethodDeclaration p = (MethodDeclaration) parent;
-			return !p.isConstructor();
+			// could be the name of the method or constructor
+			return !p.isConstructor() && (d == MethodDeclaration.NAME_PROPERTY);
 		}
 		if (parent instanceof SingleVariableDeclaration) {
-			SingleVariableDeclaration p = (SingleVariableDeclaration) parent;
-			// make sure its the name of the variable (not the initializer)
-			return (p.getName() == this);
+			return (d == SingleVariableDeclaration.NAME_PROPERTY);
 		}
 		if (parent instanceof VariableDeclarationFragment) {
-			VariableDeclarationFragment p = (VariableDeclarationFragment) parent;
-			// make sure its the name of the variable (not the initializer)
-			return (p.getName() == this);
+			return (d == VariableDeclarationFragment.NAME_PROPERTY);
+		}
+		if (parent instanceof EnumDeclaration) {
+			return (d == EnumDeclaration.NAME_PROPERTY);
+		}
+		if (parent instanceof EnumConstantDeclaration) {
+			return (d == EnumConstantDeclaration.NAME_PROPERTY);
+		}
+		if (parent instanceof TypeParameter) {
+			return (d == TypeParameter.NAME_PROPERTY);
+		}
+		if (parent instanceof AnnotationTypeDeclaration) {
+			return (d == AnnotationTypeDeclaration.NAME_PROPERTY);
+		}
+		if (parent instanceof AnnotationTypeMemberDeclaration) {
+			return (d == AnnotationTypeMemberDeclaration.NAME_PROPERTY);
 		}
 		return false;
 	}
 		
 	/* (omit javadoc for this method)
+	 * Method declared on Name.
+	 */
+	void appendName(StringBuffer buffer) {
+		buffer.append(getIdentifier());
+	}
+
+	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		int size = BASE_NODE_SIZE + 1 * 4;
-		if (identifier != null) {
-			size += HEADERS + 3 * 4 + HEADERS + 2 * identifier.length();
+		int size = BASE_NAME_NODE_SIZE + 1 * 4;
+		if (identifier != MISSING_IDENTIFIER) {
+			// everything but our missing id costs
+			size += stringSize(identifier);
 		}
 		return size;
 	}

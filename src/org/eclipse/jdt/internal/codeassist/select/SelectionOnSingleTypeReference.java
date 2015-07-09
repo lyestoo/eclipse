@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -21,7 +21,6 @@ package org.eclipse.jdt.internal.codeassist.select;
  *	---> class X extends <SelectOnType:Object>
  *
  */
- 
 import org.eclipse.jdt.internal.compiler.ast.SingleTypeReference;
 import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
@@ -37,14 +36,13 @@ public SelectionOnSingleTypeReference(char[] source, long pos) {
 public void aboutToResolve(Scope scope) {
 	getTypeBinding(scope.parent); // step up from the ClassScope
 }
-public TypeBinding getTypeBinding(Scope scope) {
+protected TypeBinding getTypeBinding(Scope scope) {
 	// it can be a package, type or member type
 	Binding binding = scope.getTypeOrPackage(new char[][] {token});
 	if (!binding.isValidBinding()) {
 		scope.problemReporter().invalidType(this, (TypeBinding) binding);
 		throw new SelectionNodeFound();
 	}
-
 	throw new SelectionNodeFound(binding);
 }
 public StringBuffer printExpression(int indent, StringBuffer output) {

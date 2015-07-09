@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,23 +11,22 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
-import org.eclipse.jdt.core.*;
+import org.eclipse.core.runtime.IProgressMonitor;
+
 import org.eclipse.jdt.core.IClassFile;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.JavaCore;
-import org.eclipse.jdt.core.JavaModelException;
-import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
-import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
-import org.eclipse.jdt.internal.core.*;
-import org.eclipse.jdt.internal.core.DefaultWorkingCopyOwner;
-import org.eclipse.jdt.internal.core.JavaModelManager;
-import org.eclipse.jdt.internal.core.NameLookup;
+import org.eclipse.jface.text.IDocument;
+import org.eclipse.text.edits.TextEdit;
 
 /**
  * Umbrella owner and abstract syntax tree node factory.
@@ -48,52 +47,215 @@ import org.eclipse.jdt.internal.core.NameLookup;
  * be cloned first to ensures that the added nodes have the correct owning AST.
  * </p>
  * <p>
- * The static method
- * {@link org.eclipse.jdt.core.dom.AST#parseCompilationUnit(char[])
- * parseCompilationUnit(char[])} parses a string
- * containing a Java compilation unit and returns the abstract syntax tree
+ * The class {@link ASTParser} parses a string
+ * containing a Java source code and returns an abstract syntax tree
  * for it. The resulting nodes carry source ranges relating the node back to
- * the original source characters. Other forms of
- * <code>parseCompilationUnit</code> allow optional name and type resolution
- * to be requested at the time the AST is created.
+ * the original source characters.
  * </p>
  * <p>
- * Note that there is no built-in way to serialize a modified AST to a source
- * code string. Naive serialization of a newly-constructed AST to a string is
- * a straightforward application of an AST visitor. However, preserving comments
- * and formatting from the originating source code string is a challenging
- * problem (support for this is planned for a future release).
+ * Compilation units created by <code>ASTParser</code> from a
+ * source document can be serialized after arbitrary modifications
+ * with minimal loss of original formatting. Here is an example:
+ * <pre>
+ * Document doc = new Document("import java.util.List;\nclass X {}\n");
+ * ASTParser parser = ASTParser.newParser(AST.JLS3);
+ * parser.setSource(doc.get().toCharArray());
+ * CompilationUnit cu = (CompilationUnit) parser.createAST(null);
+ * cu.recordModifications();
+ * AST ast = cu.getAST();
+ * ImportDeclaration id = ast.newImportDeclaration();
+ * id.setName(ast.newName(new String[] {"java", "util", "Set"});
+ * cu.imports().add(id); // add import declaration at end
+ * TextEdit edits = cu.rewrite(document, null);
+ * UndoEdit undo = edits.apply(document);
+ * </pre>
+ * See also {@link org.eclipse.jdt.core.dom.rewrite.ASTRewrite} for
+ * an alternative way to describe and serialize changes to a
+ * read-only AST.
  * </p>
  * <p>
  * Clients may create instances of this class, which is not intended to be
  * subclassed.
  * </p>
  * 
- * @see #parseCompilationUnit
+ * @see ASTParser
  * @see ASTNode
  * @since 2.0
  */
 public final class AST {
-
+	/**
+	 * Constant for indicating the AST API that handles JLS2.
+	 * This API is capable of handling all constructs
+	 * in the Java language as described in the Java Language
+     * Specification, Second Edition (JLS2).
+     * JLS2 is a superset of all earlier versions of the
+     * Java language, and the JLS2 API can be used to manipulate
+     * programs written in all versions of the Java language
+     * up to and including J2SE 1.4.
+     *
+	 * @since 3.0
+	 */
+	// TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated Clients should use the JLS3 API.
+	public static final int JLS2 = 2;
+	
+	/**
+	 * Constant for indicating the AST API that handles JLS3.
+	 * This API is capable of handling all constructs in the
+	 * Java language as described in the Java Language
+	 * Specification, Third Edition (JLS3).
+     * JLS3 is a superset of all earlier versions of the
+     * Java language, and the JLS3 API can be used to manipulate
+     * programs written in all versions of the Java language
+     * up to and including J2SE 1.5.
+     * <p>
+     * <b>NOTE:</b>In Eclipse 3.0, there is no underlying parser support for
+     * JLS3 ASTs. This support is planned for the follow-on release of
+     * Eclipse which includes support for J2SE 1.5. Without a parser to create
+     * JLS3 ASTs, they are not much use. Use JLS2 ASTs instead.
+     * </p>
+     *
+	 * @since 3.0
+	 */
+	public static final int JLS3 = 3;
+	
+	/**
+	 * The binding resolver for this AST. Initially a binding resolver that
+	 * does not resolve names at all.
+	 */
+	private BindingResolver resolver = new BindingResolver();
+	
+	/**
+	 * The event handler for this AST. 
+	 * Initially an event handler that does not nothing.
+	 * @since 3.0
+	 */
+	private NodeEventHandler eventHandler = new NodeEventHandler();
+	
+	/**
+	 * Level of AST API supported by this AST.
+	 * @since 3.0
+	 */
+	int apiLevel;
+	
 	/**
 	 * Internal modification count; initially 0; increases monotonically
 	 * <b>by one or more</b> as the AST is successively modified.
 	 */
-	private long modCount = 0;
+	private long modificationCount = 0;
 	
+	/**
+	 * Internal original modification count; value is equals to <code>
+	 * modificationCount</code> at the end of the parse (<code>ASTParser
+	 * </code>). If this ast is not created with a parser then value is 0.
+	 * @since 3.0
+	 */
+	private long originalModificationCount = 0;
+
+	/**
+	 * When disableEvents > 0, events are not reported and
+	 * the modification count stays fixed.
+	 * <p>
+	 * This mechanism is used in lazy initialization of a node
+	 * to prevent events from being reported for the modification
+	 * of the node as well as for the creation of the missing child.
+	 * </p>
+	 * @since 3.0
+	 */
+	private int disableEvents = 0;
+	
+	/**
+	 * Internal object unique to the AST instance. Readers must synchronize on
+	 * this object when the modifying instance fields.
+	 * @since 3.0
+	 */
+	private final Object internalASTLock = new Object();
+
 	/**
 	 * Java Scanner used to validate preconditions for the creation of specific nodes
 	 * like CharacterLiteral, NumberLiteral, StringLiteral or SimpleName.
 	 */
 	Scanner scanner;
+	
+	/**
+	 * Internal ast rewriter used to record ast modification when record mode is enabled.
+	 */
+	InternalASTRewrite rewriter;
+	
+	/**
+	 * Default value of <code>flag<code> when a new node is created.
+	 */
+	private int defaultNodeFlag = 0;
+	
+	/**
+	 * Creates a new Java abstract syntax tree
+     * (AST) following the specified set of API rules. 
+     * 
+ 	 * @param level the API level; one of the LEVEL constants
+     * @since 3.0
+	 */
+	private AST(int level) {
+		if ((level != AST.JLS2)
+			&& (level != AST.JLS3)) {
+			throw new IllegalArgumentException();
+		}
+		this.apiLevel = level;
+		// initialize a scanner
+		this.scanner = new Scanner(
+				true /*comment*/, 
+				true /*whitespace*/, 
+				false /*nls*/, 
+				ClassFileConstants.JDK1_3 /*sourceLevel*/, 
+				null/*taskTag*/, 
+				null/*taskPriorities*/,
+				true/*taskCaseSensitive*/);
+	}
 
 	/**
 	 * Creates a new, empty abstract syntax tree using default options.
 	 * 
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#getDefaultOptions()
 	 */
+	// TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated Clients should port their code to use the new JLS3 API and call {@link #newAST(int)} instead of using this constructor.
 	public AST() {
 		this(JavaCore.getDefaultOptions());
+	}
+
+	/**
+	 * Internal method.
+	 * <p>
+	 * This method converts the given internal compiler AST for the given source string
+	 * into a compilation unit. This method is not intended to be called by clients.
+	 * </p>
+	 * 
+ 	 * @param level the API level; one of the LEVEL constants
+	 * @param compilationUnitDeclaration an internal AST node for a compilation unit declaration
+	 * @param source the string of the Java compilation unit
+	 * @param options compiler options
+	 * @param monitor the progress monitor used to report progress and request cancelation,
+	 *     or <code>null</code> if none
+	 * @param isResolved whether the given compilation unit declaration is resolved
+	 * @return the compilation unit node
+	 */
+	public static CompilationUnit convertCompilationUnit(
+		int level,
+		org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration compilationUnitDeclaration,
+		char[] source,
+		Map options,
+		boolean isResolved,
+		IProgressMonitor monitor) {
+		
+		ASTConverter converter = new ASTConverter(options, isResolved, monitor);
+		AST ast = AST.newAST(level);
+		int savedDefaultNodeFlag = ast.getDefaultNodeFlag();
+		ast.setDefaultNodeFlag(ASTNode.ORIGINAL);
+		BindingResolver resolver = isResolved ? new DefaultBindingResolver(compilationUnitDeclaration.scope) : new BindingResolver();
+		ast.setBindingResolver(resolver);
+		converter.setAST(ast);
+	
+		CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
+		cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
+		ast.setDefaultNodeFlag(savedDefaultNodeFlag);
+		return cu;
 	}
 
 	/**
@@ -105,7 +267,9 @@ public final class AST {
 	 *    indicates source compatibility mode (as per <code>JavaCore</code>);
 	 *    <code>"1.3"</code> means the source code is as per JDK 1.3;
 	 *    <code>"1.4"</code> means the source code is as per JDK 1.4
-	 *    (<code>assert</code> is a keyword);
+	 *    (<code>"assert"</code> is now a keyword);
+	 *    <code>"1.5"</code> means the source code is as per JDK 1.5
+	 *    (<code>"enum"</code> is now a keyword);
 	 *    additional legal values may be added later. </li>
 	 * </ul>
 	 * Options other than the above are ignored.
@@ -113,18 +277,44 @@ public final class AST {
 	 * 
 	 * @param options the table of options (key type: <code>String</code>;
 	 *    value type: <code>String</code>)
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#getDefaultOptions()
 	 */
+	// TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated Clients should port their code to use the new JLS3 API and call {@link #newAST(int)} instead of using this constructor.
 	public AST(Map options) {
-		this.scanner = new Scanner(
-			true /*comment*/, 
-			true /*whitespace*/, 
-			false /*nls*/, 
-			JavaCore.VERSION_1_4.equals(options.get(JavaCore.COMPILER_SOURCE)) ? ClassFileConstants.JDK1_4 : ClassFileConstants.JDK1_3 /*sourceLevel*/, 
-			null/*taskTag*/, 
-			null/*taskPriorities*/);
+		this(JLS2);
+		// override scanner if 1.4 asked for
+		if (JavaCore.VERSION_1_4.equals(options.get(JavaCore.COMPILER_SOURCE))) {
+			this.scanner = new Scanner(
+				true /*comment*/, 
+				true /*whitespace*/, 
+				false /*nls*/, 
+				ClassFileConstants.JDK1_4 /*sourceLevel*/, 
+				null/*taskTag*/, 
+				null/*taskPriorities*/,
+				true/*taskCaseSensitive*/);
+		}
 	}
 		
+	/**
+	 * Creates a new Java abstract syntax tree
+     * (AST) following the specified set of API rules. 
+     * <p>
+     * Clients should use this method. It is provided only so that
+     * test suites can create AST instances that employ the JLS2 APIs.
+     * </p>
+     * 
+ 	 * @param level the API level; one of the LEVEL constants
+	 * @return new AST instance following the specified set of API rules. 
+     * @since 3.0
+	 */
+	public static AST newAST(int level) {
+		if ((level != AST.JLS2)
+			&& (level != AST.JLS3)) {
+			throw new IllegalArgumentException();
+		}
+		return new AST(level);
+	}
+
 	/**
 	 * Returns the modification count for this AST. The modification count
 	 * is a non-negative value that increases (by 1 or perhaps by more) as
@@ -151,24 +341,26 @@ public final class AST {
 	 *    this AST
 	 */
 	public long modificationCount() {
-		return modCount;
+		return this.modificationCount;
 	}
 
 	/**
-	 * Set the modification count to the new value
+	 * Return the API level supported by this AST.
 	 * 
-	 * @param value the new value
+	 * @return level the API level; one of the <code>JLS*</code>LEVEL
+     * declared on <code>AST</code>; assume this set is open-ended
+     * @since 3.0
 	 */
-	void setModificationCount(long value) {
-		this.modCount = value;
+	public int apiLevel() {
+		return this.apiLevel;	
 	}
-		
+
 	/**
 	 * Indicates that this AST is about to be modified.
 	 * <p>
 	 * The following things count as modifying an AST:
 	 * <ul>
-	 * <li>creating a new node owned by this AST,</li>
+	 * <li>creating a new node owned by this AST</li>
 	 * <li>adding a child to a node owned by this AST</li>
 	 * <li>removing a child from a node owned by this AST</li>
 	 * <li>setting a non-node attribute of a node owned by this AST</li>.
@@ -180,71 +372,329 @@ public final class AST {
 	 * </p> 
 	 */
 	void modifying() {
+		// when this method is called during lazy init, events are disabled
+		// and the modification count will not be increased
+		if (this.disableEvents > 0) {
+			return;
+		}
 		// increase the modification count
-		modCount++;	
+		this.modificationCount++;
 	}
 
 	/**
-	 * Parses the source string of the given Java model compilation unit element
-	 * and creates and returns a corresponding abstract syntax tree. The source 
-	 * string is obtained from the Java model element using
-	 * <code>ICompilationUnit.getSource()</code>.
-	 * <p>
-	 * The returned compilation unit node is the root node of a new AST.
-	 * Each node in the subtree carries source range(s) information relating back
-	 * to positions in the source string (the source string is not remembered
-	 * with the AST).
-	 * The source range usually begins at the first character of the first token 
-	 * corresponding to the node; leading whitespace and comments are <b>not</b>
-	 * included. The source range usually extends through the last character of
-	 * the last token corresponding to the node; trailing whitespace and
-	 * comments are <b>not</b> included. There are a handful of exceptions
-	 * (including compilation units and the various body declarations); the
-	 * specification for these node type spells out the details.
-	 * Source ranges nest properly: the source range for a child is always
-	 * within the source range of its parent, and the source ranges of sibling
-	 * nodes never overlap.
-	 * If a syntax error is detected while parsing, the relevant node(s) of the
-	 * tree will be flagged as <code>MALFORMED</code>.
-	 * </p>
-	 * <p>
-	 * If <code>resolveBindings</code> is <code>true</code>, the various names
-	 * and types appearing in the compilation unit can be resolved to "bindings"
-	 * by calling the <code>resolveBinding</code> methods. These bindings 
-	 * draw connections between the different parts of a program, and 
-	 * generally afford a more powerful vantage point for clients who wish to
-	 * analyze a program's structure more deeply. These bindings come at a 
-	 * considerable cost in both time and space, however, and should not be
-	 * requested frivolously. The additional space is not reclaimed until the 
-	 * AST, all its nodes, and all its bindings become garbage. So it is very
-	 * important to not retain any of these objects longer than absolutely
-	 * necessary. Bindings are resolved at the time the AST is created. Subsequent
-	 * modifications to the AST do not affect the bindings returned by
-	 * <code>resolveBinding</code> methods in any way; these methods return the
-	 * same binding as before the AST was modified (including modifications
-	 * that rearrange subtrees by reparenting nodes).
-	 * If <code>resolveBindings</code> is <code>false</code>, the analysis 
-	 * does not go beyond parsing and building the tree, and all 
-	 * <code>resolveBinding</code> methods return <code>null</code> from the 
-	 * outset.
-	 * </p>
+     * Disable events.
+	 * This method is thread-safe for AST readers.
 	 * 
-	 * @param unit the Java model compilation unit whose source code is to be parsed
-	 * @param resolveBindings <code>true</code> if bindings are wanted, 
-	 *   and <code>false</code> if bindings are not of interest
-	 * @return the compilation unit node
-	 * @exception IllegalArgumentException if the given Java element does not 
-	 * exist or if its source string cannot be obtained
-	 * @see ASTNode#getFlags()
-	 * @see ASTNode#MALFORMED
-	 * @see ASTNode#getStartPosition()
-	 * @see ASTNode#getLength()
+	 * @see #reenableEvents()
+     * @since 3.0
+     */
+	final void disableEvents() {
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by another reader
+			this.disableEvents++;
+		}
+		// while disableEvents > 0 no events will be reported, and mod count will stay fixed
+	}
+	
+	/**
+     * Reenable events.
+	 * This method is thread-safe for AST readers.
+	 * 
+	 * @see #disableEvents()
+     * @since 3.0
+     */
+	final void reenableEvents() {
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by another reader
+			this.disableEvents--;
+		}
+	}
+	
+	/**
+	 * Reports that the given node is about to lose a child.
+	 * 
+	 * @param node the node about to be modified
+	 * @param child the node about to be removed
+	 * @param property the child or child list property descriptor
+	 * @since 3.0
 	 */
-	public static CompilationUnit parseCompilationUnit(
-		ICompilationUnit unit,
-		boolean resolveBindings) {
-
-		return parseCompilationUnit(unit, resolveBindings, DefaultWorkingCopyOwner.PRIMARY);
+	void preRemoveChildEvent(ASTNode node, ASTNode child, StructuralPropertyDescriptor property) {
+		// IMPORTANT: this method is called by readers during lazy init
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE DEL]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.preRemoveChildEvent(node, child, property);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has not been changed yet
+		} finally {
+			reenableEvents();
+		}
+	}
+	
+	/**
+	 * Reports that the given node jsut lost a child.
+	 * 
+	 * @param node the node that was modified
+	 * @param child the child node that was removed
+	 * @param property the child or child list property descriptor
+	 * @since 3.0
+	 */
+	void postRemoveChildEvent(ASTNode node, ASTNode child, StructuralPropertyDescriptor property) {
+		// IMPORTANT: this method is called by readers during lazy init
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE DEL]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.postRemoveChildEvent(node, child, property);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has not been changed yet
+		} finally {
+			reenableEvents();
+		}
+	}
+	
+	/**
+	 * Reports that the given node is about have a child replaced.
+	 * 
+	 * @param node the node about to be modified
+	 * @param child the child node about to be removed
+	 * @param newChild the replacement child
+	 * @param property the child or child list property descriptor
+	 * @since 3.0
+	 */
+	void preReplaceChildEvent(ASTNode node, ASTNode child, ASTNode newChild, StructuralPropertyDescriptor property) {
+		// IMPORTANT: this method is called by readers during lazy init
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE REP]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.preReplaceChildEvent(node, child, newChild, property);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has not been changed yet
+		} finally {
+			reenableEvents();
+		}
+	}
+	
+	/**
+	 * Reports that the given node has just had a child replaced.
+	 * 
+	 * @param node the node modified
+	 * @param child the child removed
+	 * @param newChild the replacement child
+	 * @param property the child or child list property descriptor
+	 * @since 3.0
+	 */
+	void postReplaceChildEvent(ASTNode node, ASTNode child, ASTNode newChild, StructuralPropertyDescriptor property) {
+		// IMPORTANT: this method is called by readers during lazy init
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE REP]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.postReplaceChildEvent(node, child, newChild, property);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has not been changed yet
+		} finally {
+			reenableEvents();
+		}
+	}
+	
+	/**
+	 * Reports that the given node is about to gain a child.
+	 * 
+	 * @param node the node that to be modified
+	 * @param child the node that to be added as a child
+	 * @param property the child or child list property descriptor
+	 * @since 3.0
+	 */
+	void preAddChildEvent(ASTNode node, ASTNode child, StructuralPropertyDescriptor property) {
+		// IMPORTANT: this method is called by readers during lazy init
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE ADD]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.preAddChildEvent(node, child, property);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has already been changed
+		} finally {
+			reenableEvents();
+		}
+	}
+	
+	/**
+	 * Reports that the given node has just gained a child.
+	 * 
+	 * @param node the node that was modified
+	 * @param child the node that was added as a child
+	 * @param property the child or child list property descriptor
+	 * @since 3.0
+	 */
+	void postAddChildEvent(ASTNode node, ASTNode child, StructuralPropertyDescriptor property) {
+		// IMPORTANT: this method is called by readers during lazy init
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE ADD]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.postAddChildEvent(node, child, property);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has already been changed
+		} finally {
+			reenableEvents();
+		}
+	}
+	
+	/**
+	 * Reports that the given node is about to change the value of a
+	 * non-child property.
+	 * 
+	 * @param node the node to be modified
+	 * @param property the property descriptor
+	 * @since 3.0
+	 */
+	void preValueChangeEvent(ASTNode node, SimplePropertyDescriptor property) {
+		// IMPORTANT: this method is called by readers during lazy init
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE CHANGE]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.preValueChangeEvent(node, property);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has already been changed
+		} finally {
+			reenableEvents();
+		}
+	}
+	
+	/**
+	 * Reports that the given node has just changed the value of a
+	 * non-child property.
+	 * 
+	 * @param node the node that was modified
+	 * @param property the property descriptor
+	 * @since 3.0
+	 */
+	void postValueChangeEvent(ASTNode node, SimplePropertyDescriptor property) {
+		// IMPORTANT: this method is called by readers during lazy init
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE CHANGE]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.postValueChangeEvent(node, property);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has already been changed
+		} finally {
+			reenableEvents();
+		}
+	}
+	
+	/**
+	 * Reports that the given node is about to be cloned.
+	 * 
+	 * @param node the node to be cloned
+	 * @since 3.0
+	 */
+	void preCloneNodeEvent(ASTNode node) {
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE CLONE]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.preCloneNodeEvent(node);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has already been changed
+		} finally {
+			reenableEvents();
+		}
+	}
+	
+	/**
+	 * Reports that the given node has just been cloned.
+	 * 
+	 * @param node the node that was cloned
+	 * @param clone the clone of <code>node</code>
+	 * @since 3.0
+	 */
+	void postCloneNodeEvent(ASTNode node, ASTNode clone) {
+		synchronized (this.internalASTLock) {
+			// guard against concurrent access by a reader doing lazy init
+			if (this.disableEvents > 0) {
+				// doing lazy init OR already processing an event
+				// System.out.println("[BOUNCE CLONE]"); //$NON-NLS-1$
+				return;
+			} else {
+				disableEvents();
+			}
+		}
+		try {
+			this.eventHandler.postCloneNodeEvent(node, clone);
+			// N.B. even if event handler blows up, the AST is not
+			// corrupted since node has already been changed
+		} finally {
+			reenableEvents();
+		}
 	}
 	
 	/**
@@ -291,18 +741,10 @@ public final class AST {
 	 * <code>resolveBinding</code> methods return <code>null</code> from the 
 	 * outset.
 	 * </p>
-	 * <p>
-	 * When bindings are created, instead of considering compilation units on disk only
-	 * one can supply a <code>WorkingCopyOwner</code>. Working copies owned 
-	 * by this owner take precedence over the underlying compilation units when looking
-	 * up names and drawing the connections.
-	 * </p>
 	 * 
 	 * @param unit the Java model compilation unit whose source code is to be parsed
 	 * @param resolveBindings <code>true</code> if bindings are wanted, 
 	 *   and <code>false</code> if bindings are not of interest
-	 * @param owner the owner of working copies that take precedence over underlying 
-	 *   compilation units
 	 * @return the compilation unit node
 	 * @exception IllegalArgumentException if the given Java element does not 
 	 * exist or if its source string cannot be obtained
@@ -310,66 +752,25 @@ public final class AST {
 	 * @see ASTNode#MALFORMED
 	 * @see ASTNode#getStartPosition()
 	 * @see ASTNode#getLength()
-	 * @see WorkingCopyOwner
-	 * @since 3.0
+	 * @since 2.0
+	 * @deprecated Use {@link ASTParser} instead.
 	 */
 	public static CompilationUnit parseCompilationUnit(
 		ICompilationUnit unit,
-		boolean resolveBindings,
-		WorkingCopyOwner owner) {
-				
-		if (unit == null) {
-			throw new IllegalArgumentException();
-		}
-		if (owner == null) {
-			throw new IllegalArgumentException();
-		}
-		
-		char[] source = null;
-		try {
-			source = unit.getSource().toCharArray();
-		} catch(JavaModelException e) {
-			// no source, then we cannot build anything
-			throw new IllegalArgumentException();
-		}
+		boolean resolveBindings) {
 
-		if (resolveBindings) {
-			NameLookup lookup = null;
-			try {
-				// set the units to look inside
-				lookup = ((JavaProject)unit.getJavaProject()).getNameLookup();
-				JavaModelManager manager = JavaModelManager.getJavaModelManager();
-				ICompilationUnit[] workingCopies = manager.getWorkingCopies(owner, true/*add primary WCs*/);
-				lookup.setUnitsToLookInside(workingCopies);
-				
-				// parse and resolve
-				CompilationUnitDeclaration compilationUnitDeclaration = CompilationUnitResolver.resolve(unit);
-				ASTConverter converter = new ASTConverter(unit.getJavaProject().getOptions(true), true);
-				AST ast = new AST();
-				BindingResolver resolver = new DefaultBindingResolver(compilationUnitDeclaration.scope);
-				ast.setBindingResolver(resolver);
-				converter.setAST(ast);
-			
-				CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
-				cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
-				resolver.storeModificationCount(ast.modificationCount());
-				return cu;
-			} catch(JavaModelException e) {
-				/* if a JavaModelException is thrown trying to retrieve the name environment
-				 * then we simply do a parsing without creating bindings.
-				 * Therefore all binding resolution will return null.
-				 */
-				return parseCompilationUnit(source);			
-			} finally {
-				if (lookup != null) {
-					lookup.setUnitsToLookInside(null);
-				}
-			}
-		} else {
-			return parseCompilationUnit(source);
+		try {
+			ASTParser c = ASTParser.newParser(AST.JLS2);
+			c.setSource(unit);
+			c.setResolveBindings(resolveBindings);
+			ASTNode result = c.createAST(null);
+			return (CompilationUnit) result;
+		} catch (IllegalStateException e) {
+			// convert ASTParser's complaints into old form
+			throw new IllegalArgumentException();
 		}
 	}
-
+	
 	/**
 	 * Parses the source string corresponding to the given Java class file
 	 * element and creates and returns a corresponding abstract syntax tree.
@@ -416,7 +817,7 @@ public final class AST {
 	 * outset.
 	 * </p>
 	 * 
-	 * @param classFile the Java model compilation unit whose source code is to be parsed
+	 * @param classFile the Java model class file whose corresponding source code is to be parsed
 	 * @param resolveBindings <code>true</code> if bindings are wanted, 
 	 *   and <code>false</code> if bindings are not of interest
 	 * @return the compilation unit node
@@ -427,149 +828,27 @@ public final class AST {
 	 * @see ASTNode#getStartPosition()
 	 * @see ASTNode#getLength()
 	 * @since 2.1
+	 * @deprecated Use {@link ASTParser} instead.
 	 */
 	public static CompilationUnit parseCompilationUnit(
 		IClassFile classFile,
 		boolean resolveBindings) {
-			
-		return parseCompilationUnit(classFile, resolveBindings, DefaultWorkingCopyOwner.PRIMARY);
-	}
-	
-	/**
-	 * Parses the source string corresponding to the given Java class file
-	 * element and creates and returns a corresponding abstract syntax tree.
-	 * The source string is obtained from the Java model element using
-	 * <code>IClassFile.getSource()</code>, and is only available for a class
-	 * files with attached source.
-	 * <p>
-	 * The returned compilation unit node is the root node of a new AST.
-	 * Each node in the subtree carries source range(s) information relating back
-	 * to positions in the source string (the source string is not remembered
-	 * with the AST).
-	 * The source range usually begins at the first character of the first token 
-	 * corresponding to the node; leading whitespace and comments are <b>not</b>
-	 * included. The source range usually extends through the last character of
-	 * the last token corresponding to the node; trailing whitespace and
-	 * comments are <b>not</b> included. There are a handful of exceptions
-	 * (including compilation units and the various body declarations); the
-	 * specification for these node type spells out the details.
-	 * Source ranges nest properly: the source range for a child is always
-	 * within the source range of its parent, and the source ranges of sibling
-	 * nodes never overlap.
-	 * If a syntax error is detected while parsing, the relevant node(s) of the
-	 * tree will be flagged as <code>MALFORMED</code>.
-	 * </p>
-	 * <p>
-	 * If <code>resolveBindings</code> is <code>true</code>, the various names
-	 * and types appearing in the compilation unit can be resolved to "bindings"
-	 * by calling the <code>resolveBinding</code> methods. These bindings 
-	 * draw connections between the different parts of a program, and 
-	 * generally afford a more powerful vantage point for clients who wish to
-	 * analyze a program's structure more deeply. These bindings come at a 
-	 * considerable cost in both time and space, however, and should not be
-	 * requested frivolously. The additional space is not reclaimed until the 
-	 * AST, all its nodes, and all its bindings become garbage. So it is very
-	 * important to not retain any of these objects longer than absolutely
-	 * necessary. Bindings are resolved at the time the AST is created. Subsequent
-	 * modifications to the AST do not affect the bindings returned by
-	 * <code>resolveBinding</code> methods in any way; these methods return the
-	 * same binding as before the AST was modified (including modifications
-	 * that rearrange subtrees by reparenting nodes).
-	 * If <code>resolveBindings</code> is <code>false</code>, the analysis 
-	 * does not go beyond parsing and building the tree, and all 
-	 * <code>resolveBinding</code> methods return <code>null</code> from the 
-	 * outset.
-	 * </p>
-	 * <p>
-	 * When bindings are created, instead of considering compilation units on disk only
-	 * one can supply a <code>WorkingCopyOwner</code>. Working copies owned 
-	 * by this owner take precedence over the underlying compilation units when looking
-	 * up names and drawing the connections.
-	 * </p>
-	 * 
-	 * @param classFile the Java model compilation unit whose source code is to be parsed
-	 * @param resolveBindings <code>true</code> if bindings are wanted, 
-	 *   and <code>false</code> if bindings are not of interest
-	 * @param owner the owner of working copies that take precedence over underlying 
-	 *   compilation units
-	 * @return the compilation unit node
-	 * @exception IllegalArgumentException if the given Java element does not 
-	 * exist or if its source string cannot be obtained
-	 * @see ASTNode#getFlags()
-	 * @see ASTNode#MALFORMED
-	 * @see ASTNode#getStartPosition()
-	 * @see ASTNode#getLength()
-	 * @see WorkingCopyOwner
-	 * @since 3.0
-	 */
-	public static CompilationUnit parseCompilationUnit(
-		IClassFile classFile,
-		boolean resolveBindings,
-		WorkingCopyOwner owner) {
-			
+
 		if (classFile == null) {
 			throw new IllegalArgumentException();
 		}
-		if (owner == null) {
-			throw new IllegalArgumentException();
-		}
-		char[] source = null;
-		String sourceString = null;
 		try {
-			sourceString = classFile.getSource();
-		} catch (JavaModelException e) {
+			ASTParser c = ASTParser.newParser(AST.JLS2);
+			c.setSource(classFile);
+			c.setResolveBindings(resolveBindings);
+			ASTNode result = c.createAST(null);
+			return (CompilationUnit) result;
+		} catch (IllegalStateException e) {
+			// convert ASTParser's complaints into old form
 			throw new IllegalArgumentException();
-		}
-		if (sourceString == null) {
-			throw new IllegalArgumentException();
-		}
-		source = sourceString.toCharArray();
-		if (!resolveBindings) {
-			return AST.parseCompilationUnit(source);
-		}
-		StringBuffer buffer = new StringBuffer(SuffixConstants.SUFFIX_STRING_java);
-		
-		String classFileName = classFile.getElementName(); // this includes the trailing .class
-		buffer.insert(0, classFileName.toCharArray(), 0, classFileName.indexOf('.'));
-		IJavaProject project = classFile.getJavaProject();
-		NameLookup lookup = null;
-		try {
-			// set the units to look inside
-			lookup = ((JavaProject)project).getNameLookup();
-			JavaModelManager manager = JavaModelManager.getJavaModelManager();
-			ICompilationUnit[] workingCopies = manager.getWorkingCopies(owner, true/*add primary WCs*/);
-			lookup.setUnitsToLookInside(workingCopies);
-			
-			// parse and resolve
-			CompilationUnitDeclaration compilationUnitDeclaration =
-				CompilationUnitResolver.resolve(
-					source,
-					CharOperation.splitOn('.', classFile.getType().getPackageFragment().getElementName().toCharArray()),
-					buffer.toString(),
-					project);
-			ASTConverter converter = new ASTConverter(project.getOptions(true), true);
-			AST ast = new AST();
-			BindingResolver resolver = new DefaultBindingResolver(compilationUnitDeclaration.scope);
-			ast.setBindingResolver(resolver);
-			converter.setAST(ast);
-		
-			CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
-			cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
-			resolver.storeModificationCount(ast.modificationCount());
-			return cu;
-		} catch(JavaModelException e) {
-			/* if a JavaModelException is thrown trying to retrieve the name environment
-			 * then we simply do a parsing without creating bindings.
-			 * Therefore all binding resolution will return null.
-			 */
-			return parseCompilationUnit(source);			
-		} finally {
-			if (lookup != null) {
-				lookup.setUnitsToLookInside(null);
-			}
 		}
 	}
-			
+	
 	/**
 	 * Parses the given string as the hypothetical contents of the named
 	 * compilation unit and creates and returns a corresponding abstract syntax tree.
@@ -632,145 +911,25 @@ public final class AST {
 	 * @see ASTNode#MALFORMED
 	 * @see ASTNode#getStartPosition()
 	 * @see ASTNode#getLength()
+	 * @since 2.0
+	 * @deprecated Use {@link ASTParser} instead.
 	 */
 	public static CompilationUnit parseCompilationUnit(
 		char[] source,
 		String unitName,
 		IJavaProject project) {
-		
-		return parseCompilationUnit(source, unitName, project, DefaultWorkingCopyOwner.PRIMARY);
-	}
-				
-	/**
-	 * Parses the given string as the hypothetical contents of the named
-	 * compilation unit and creates and returns a corresponding abstract syntax tree.
-	 * <p>
-	 * The returned compilation unit node is the root node of a new AST.
-	 * Each node in the subtree carries source range(s) information relating back
-	 * to positions in the given source string (the given source string itself
-	 * is not remembered with the AST).
-	 * The source range usually begins at the first character of the first token 
-	 * corresponding to the node; leading whitespace and comments are <b>not</b>
-	 * included. The source range usually extends through the last character of
-	 * the last token corresponding to the node; trailing whitespace and
-	 * comments are <b>not</b> included. There are a handful of exceptions
-	 * (including compilation units and the various body declarations); the
-	 * specification for these node type spells out the details.
-	 * Source ranges nest properly: the source range for a child is always
-	 * within the source range of its parent, and the source ranges of sibling
-	 * nodes never overlap.
-	 * If a syntax error is detected while parsing, the relevant node(s) of the
-	 * tree will be flagged as <code>MALFORMED</code>.
-	 * </p>
-	 * <p>
-	 * If the given project is not <code>null</code>, the various names
-	 * and types appearing in the compilation unit can be resolved to "bindings"
-	 * by calling the <code>resolveBinding</code> methods. These bindings 
-	 * draw connections between the different parts of a program, and 
-	 * generally afford a more powerful vantage point for clients who wish to
-	 * analyze a program's structure more deeply. These bindings come at a 
-	 * considerable cost in both time and space, however, and should not be
-	 * requested frivolously. The additional space is not reclaimed until the 
-	 * AST, all its nodes, and all its bindings become garbage. So it is very
-	 * important to not retain any of these objects longer than absolutely
-	 * necessary. Bindings are resolved at the time the AST is created. Subsequent
-	 * modifications to the AST do not affect the bindings returned by
-	 * <code>resolveBinding</code> methods in any way; these methods return the
-	 * same binding as before the AST was modified (including modifications
-	 * that rearrange subtrees by reparenting nodes).
-	 * If the given project is <code>null</code>, the analysis 
-	 * does not go beyond parsing and building the tree, and all 
-	 * <code>resolveBinding</code> methods return <code>null</code> from the 
-	 * outset.
-	 * </p>
-	 * <p>
-	 * When bindings are created, instead of considering compilation units on disk only
-	 * one can supply a <code>WorkingCopyOwner</code>. Working copies owned 
-	 * by this owner take precedence over the underlying compilation units when looking
-	 * up names and drawing the connections.
-	 * </p>
-	 * <p>
-	 * The name of the compilation unit must be supplied for resolving bindings.
-	 * This name should include the ".java" suffix and match the name of the main
-	 * (public) class or interface declared in the source. For example, if the source
-	 * declares a public class named "Foo", the name of the compilation should be
-	 * "Foo.java". For the purposes of resolving bindings, types declared in the
-	 * source string hide types by the same name available through the classpath
-	 * of the given project.
-	 * </p>
-	 * 
-	 * @param source the string to be parsed as a Java compilation unit
-	 * @param unitName the name of the compilation unit that would contain the source
-	 *    string, or <code>null</code> if <code>javaProject</code> is also <code>null</code>
-	 * @param project the Java project used to resolve names, or 
-	 *    <code>null</code> if bindings are not resolved
-	 * @param owner the owner of working copies that take precedence over underlying 
-	 *   compilation units
-	 * @return the compilation unit node
-	 * @see ASTNode#getFlags()
-	 * @see ASTNode#MALFORMED
-	 * @see ASTNode#getStartPosition()
-	 * @see ASTNode#getLength()
-	 * @see WorkingCopyOwner
-	 * @since 3.0
-	 */
-	public static CompilationUnit parseCompilationUnit(
-		char[] source,
-		String unitName,
-		IJavaProject project,
-		WorkingCopyOwner owner) {
-			
+
 		if (source == null) {
 			throw new IllegalArgumentException();
 		}
-		if (unitName == null && project != null) {
-			throw new IllegalArgumentException();
-		}
-		if (project == null) {
-			// this just reduces to the other simplest case
-			return parseCompilationUnit(source);
-		}
-		if (owner == null) {
-			throw new IllegalArgumentException();
-		}
-	
-		NameLookup lookup = null;
-		try {
-			// set the units to look inside
-			lookup = ((JavaProject)project).getNameLookup();
-			JavaModelManager manager = JavaModelManager.getJavaModelManager();
-			ICompilationUnit[] workingCopies = manager.getWorkingCopies(owner, true/*add primary WCs*/);
-			lookup.setUnitsToLookInside(workingCopies);
-				
-				// parse and resolve
-			CompilationUnitDeclaration compilationUnitDeclaration =
-				CompilationUnitResolver.resolve(
-					source,
-					unitName,
-					project);
-			ASTConverter converter = new ASTConverter(project.getOptions(true), true);
-			AST ast = new AST();
-			BindingResolver resolver = new DefaultBindingResolver(compilationUnitDeclaration.scope);
-			ast.setBindingResolver(resolver);
-			converter.setAST(ast);
-		
-			CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
-			cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
-			resolver.storeModificationCount(ast.modificationCount());
-			return cu;
-		} catch(JavaModelException e) {
-			/* if a JavaModelException is thrown trying to retrieve the name environment
-			 * then we simply do a parsing without creating bindings.
-			 * Therefore all binding resolution will return null.
-			 */
-			return parseCompilationUnit(source);			
-		} finally {
-			if (lookup != null) {
-				lookup.setUnitsToLookInside(null);
-			}
-		}
+		ASTParser c = ASTParser.newParser(AST.JLS2);
+		c.setSource(source);
+		c.setUnitName(unitName);
+		c.setProject(project);
+		ASTNode result = c.createAST(null);
+		return (CompilationUnit) result;
 	}
-	  	
+				
 	/**
 	 * Parses the given string as a Java compilation unit and creates and 
 	 * returns a corresponding abstract syntax tree.
@@ -798,331 +957,83 @@ public final class AST {
 	 * </p>
 	 * 
 	 * @param source the string to be parsed as a Java compilation unit
+	 * @return the compilation unit node
 	 * @see ASTNode#getFlags()
 	 * @see ASTNode#MALFORMED
 	 * @see ASTNode#getStartPosition()
 	 * @see ASTNode#getLength()
+	 * @since 2.0
+	 * @deprecated Use {@link ASTParser} instead.
 	 */
 	public static CompilationUnit parseCompilationUnit(char[] source) {
 		if (source == null) {
 			throw new IllegalArgumentException();
 		}
-		CompilationUnitDeclaration compilationUnitDeclaration = 
-			CompilationUnitResolver.parse(source, JavaCore.getOptions()); // no better custom options
-
-		ASTConverter converter = new ASTConverter(JavaCore.getOptions(), false);
-		AST ast = new AST();
-		ast.setBindingResolver(new BindingResolver());
-		converter.setAST(ast);
-				
-		CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
-		
-		// line end table should be extracted from scanner
-		cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
-		return cu;
+		ASTParser c = ASTParser.newParser(AST.JLS2);
+		c.setSource(source);
+		ASTNode result = c.createAST(null);
+		return (CompilationUnit) result;
 	}
 
-	/**
-	 * Parses the source string of the given Java model compilation unit element
-	 * and creates and returns an abridged abstract syntax tree. This method
-	 * differs from
-	 * {@link #parseCompilationUnit(ICompilationUnit,boolean)
-	 * parseCompilationUnit(ICompilationUnit,boolean)} only in 
-	 * that the resulting AST does not have nodes for the entire compilation
-	 * unit. Rather, the AST is only fleshed out for the node that include
-	 * the given source position. This kind of limited AST is sufficient for
-	 * certain purposes but totally unsuitable for others. In places where it
-	 * can be used, the limited AST offers the advantage of being smaller and
-	 * faster to faster to construct.
-	 * </p>
-	 * <p>
-	 * The resulting AST always includes nodes for all of the compilation unit's
-	 * package, import, and top-level type declarations. It also always contains
-	 * nodes for all the body declarations for those top-level types, as well
-	 * as body declarations for any member types. However, some of the body
-	 * declarations may be abridged. In particular, the statements ordinarily
-	 * found in the body of a method declaration node will not be included
-	 * (the block will be empty) unless the source position falls somewhere
-	 * within the source range of that method declaration node. The same is true
-	 * for initializer declarations; the statements ordinarily found in the body
-	 * of initializer node will not be included unless the source position falls
-	 * somewhere within the source range of that initializer declaration node.
-	 * Field declarations are never abridged. Note that the AST for the body of
-	 * that one unabridged method (or initializer) is 100% complete; it has all
-	 * its statements, including any local or anonymous type declarations 
-	 * embedded within them. When the the given position is not located within
-	 * the source range of any body declaration of a top-level type, the AST
-	 * returned is a skeleton that includes nodes for all and only the major
-	 * declarations; this kind of AST is still quite useful because it contains
-	 * all the constructs that introduce names visible to the world outside the
-	 * compilation unit.
-	 * </p>
-	 * <p>
-	 * In all other respects, this method works the same as
-	 * {@link #parseCompilationUnit(ICompilationUnit,boolean)
-	 * parseCompilationUnit(ICompilationUnit,boolean)}.
-	 * The source string is obtained from the Java model element using
-	 * <code>ICompilationUnit.getSource()</code>.
-	 * </p>
-	 * <p>
-	 * The returned compilation unit node is the root node of a new AST.
-	 * Each node in the subtree carries source range(s) information relating back
-	 * to positions in the source string (the source string is not remembered
-	 * with the AST).
-	 * The source range usually begins at the first character of the first token 
-	 * corresponding to the node; leading whitespace and comments are <b>not</b>
-	 * included. The source range usually extends through the last character of
-	 * the last token corresponding to the node; trailing whitespace and
-	 * comments are <b>not</b> included.
-	 * If a syntax error is detected while parsing, the relevant node(s) of the
-	 * tree will be flagged as <code>MALFORMED</code>.
-	 * </p>
-	 * <p>
-	 * If <code>resolveBindings</code> is <code>true</code>, the various names
-	 * and types appearing in the method declaration can be resolved to "bindings"
-	 * by calling the <code>resolveBinding</code> methods. These bindings 
-	 * draw connections between the different parts of a program, and 
-	 * generally afford a more powerful vantage point for clients who wish to
-	 * analyze a program's structure more deeply. These bindings come at a 
-	 * considerable cost in both time and space, however, and should not be
-	 * requested frivolously. The additional space is not reclaimed until the 
-	 * AST, all its nodes, and all its bindings become garbage. So it is very
-	 * important to not retain any of these objects longer than absolutely
-	 * necessary. Bindings are resolved at the time the AST is created. Subsequent
-	 * modifications to the AST do not affect the bindings returned by
-	 * <code>resolveBinding</code> methods in any way; these methods return the
-	 * same binding as before the AST was modified (including modifications
-	 * that rearrange subtrees by reparenting nodes).
-	 * If <code>resolveBindings</code> is <code>false</code>, the analysis 
-	 * does not go beyond parsing and building the tree, and all 
-	 * <code>resolveBinding</code> methods return <code>null</code> from the 
-	 * outset.
-	 * </p>
-	 * 
-	 * @param unit the Java model compilation unit whose source code is to be parsed
-	 * @param position a position into the corresponding body declaration
-	 * @param resolveBindings <code>true</code> if bindings are wanted, 
-	 *   and <code>false</code> if bindings are not of interest
-	 * @return the abridged compilation unit node
-	 * @exception IllegalArgumentException if the given Java element does not 
-	 * exist or if its source string cannot be obtained
-	 * @see ASTNode#getFlags
-	 * @see ASTNode#MALFORMED
-	 * @see ASTNode#getStartPosition
-	 * @see ASTNode#getLength
-	 * @since 3.0
-	 */
-	public static CompilationUnit parsePartialCompilationUnit(
-		ICompilationUnit unit,
-		int position,
-		boolean resolveBindings) {
-			return parsePartialCompilationUnit(unit, position, resolveBindings, DefaultWorkingCopyOwner.PRIMARY);
-	}
-
-	/**
-	/**
-	 * Parses the source string of the given Java model compilation unit element
-	 * and creates and returns an abridged abstract syntax tree. This method
-	 * differs from
-	 * {@link #parseCompilationUnit(ICompilationUnit,boolean,WorkingCopyOwner)
-	 * parseCompilationUnit(ICompilationUnit,boolean,WorkingCopyOwner)} only in 
-	 * that the resulting AST does not have nodes for the entire compilation
-	 * unit. Rather, the AST is only fleshed out for the node that include
-	 * the given source position. This kind of limited AST is sufficient for
-	 * certain purposes but totally unsuitable for others. In places where it
-	 * can be used, the limited AST offers the advantage of being smaller and
-	 * faster to faster to construct.
-	 * </p>
-	 * <p>
-	 * The resulting AST always includes nodes for all of the compilation unit's
-	 * package, import, and top-level type declarations. It also always contains
-	 * nodes for all the body declarations for those top-level types, as well
-	 * as body declarations for any member types. However, some of the body
-	 * declarations may be abridged. In particular, the statements ordinarily
-	 * found in the body of a method declaration node will not be included
-	 * (the block will be empty) unless the source position falls somewhere
-	 * within the source range of that method declaration node. The same is true
-	 * for initializer declarations; the statements ordinarily found in the body
-	 * of initializer node will not be included unless the source position falls
-	 * somewhere within the source range of that initializer declaration node.
-	 * Field declarations are never abridged. Note that the AST for the body of
-	 * that one unabridged method (or initializer) is 100% complete; it has all
-	 * its statements, including any local or anonymous type declarations 
-	 * embedded within them. When the the given position is not located within
-	 * the source range of any body declaration of a top-level type, the AST
-	 * returned is a skeleton that includes nodes for all and only the major
-	 * declarations; this kind of AST is still quite useful because it contains
-	 * all the constructs that introduce names visible to the world outside the
-	 * compilation unit.
-	 * </p>
-	 * <p>
-	 * In all other respects, this method works the same as
-	 * {@link #parseCompilationUnit(ICompilationUnit,boolean,WorkingCopyOwner)
-	 * parseCompilationUnit(ICompilationUnit,boolean,WorkingCopyOwner)}.
-	 * The source string is obtained from the Java model element using
-	 * <code>ICompilationUnit.getSource()</code>.
-	 * </p>
-	 * <p>
-	 * The returned compilation unit node is the root node of a new AST.
-	 * Each node in the subtree carries source range(s) information relating back
-	 * to positions in the source string (the source string is not remembered
-	 * with the AST).
-	 * The source range usually begins at the first character of the first token 
-	 * corresponding to the node; leading whitespace and comments are <b>not</b>
-	 * included. The source range usually extends through the last character of
-	 * the last token corresponding to the node; trailing whitespace and
-	 * comments are <b>not</b> included.
-	 * If a syntax error is detected while parsing, the relevant node(s) of the
-	 * tree will be flagged as <code>MALFORMED</code>.
-	 * </p>
-	 * <p>
-	 * If <code>resolveBindings</code> is <code>true</code>, the various names
-	 * and types appearing in the method declaration can be resolved to "bindings"
-	 * by calling the <code>resolveBinding</code> methods. These bindings 
-	 * draw connections between the different parts of a program, and 
-	 * generally afford a more powerful vantage point for clients who wish to
-	 * analyze a program's structure more deeply. These bindings come at a 
-	 * considerable cost in both time and space, however, and should not be
-	 * requested frivolously. The additional space is not reclaimed until the 
-	 * AST, all its nodes, and all its bindings become garbage. So it is very
-	 * important to not retain any of these objects longer than absolutely
-	 * necessary. Bindings are resolved at the time the AST is created. Subsequent
-	 * modifications to the AST do not affect the bindings returned by
-	 * <code>resolveBinding</code> methods in any way; these methods return the
-	 * same binding as before the AST was modified (including modifications
-	 * that rearrange subtrees by reparenting nodes).
-	 * If <code>resolveBindings</code> is <code>false</code>, the analysis 
-	 * does not go beyond parsing and building the tree, and all 
-	 * <code>resolveBinding</code> methods return <code>null</code> from the 
-	 * outset.
-	 * </p>
-	 * <p>
-	 * When bindings are created, instead of considering compilation units on disk only
-	 * one can supply a <code>WorkingCopyOwner</code>. Working copies owned 
-	 * by this owner take precedence over the underlying compilation units when looking
-	 * up names and drawing the connections.
-	 * </p>
-	 * 
-	 * @param unit the Java model compilation unit whose source code is to be parsed
-	 * @param position a position into the corresponding body declaration
-	 * @param resolveBindings <code>true</code> if bindings are wanted, 
-	 *   and <code>false</code> if bindings are not of interest
-	 * @param owner the owner of working copies that take precedence over underlying 
-	 *   compilation units
-	 * @return the abridged compilation unit node
-	 * @exception IllegalArgumentException if the given Java element does not 
-	 * exist or the source range is null or if its source string cannot be obtained
-	 * @see ASTNode#getFlags
-	 * @see ASTNode#MALFORMED
-	 * @see ASTNode#getStartPosition
-	 * @see ASTNode#getLength
-	 * @since 3.0
-	 */
-	public static CompilationUnit parsePartialCompilationUnit(
-		ICompilationUnit unit,
-		int position,
-		boolean resolveBindings,
-		WorkingCopyOwner owner) {
-				
-		if (unit == null) {
-			throw new IllegalArgumentException();
-		}
-		if (owner == null) {
-			throw new IllegalArgumentException();
-		}
-		
-		char[] source = null;
-		try {
-			source = unit.getSource().toCharArray();
-		} catch(JavaModelException e) {
-			// no source, then we cannot build anything
-			throw new IllegalArgumentException();
-		}
-
-		NodeSearcher searcher = new NodeSearcher(position);
-
-		final Map options = unit.getJavaProject().getOptions(true);
-		if (resolveBindings) {
-			NameLookup lookup = null;
-			try {
-				// set the units to look inside
-				lookup = ((JavaProject)unit.getJavaProject()).getNameLookup();
-				JavaModelManager manager = JavaModelManager.getJavaModelManager();
-				ICompilationUnit[] workingCopies = manager.getWorkingCopies(owner, true/*add primary WCs*/);
-				lookup.setUnitsToLookInside(workingCopies);
-
-				// parse and resolve
-				CompilationUnitDeclaration compilationUnitDeclaration = CompilationUnitResolver.resolve(
-					unit,
-					searcher);
-				
-				ASTConverter converter = new ASTConverter(options, true);
-				AST ast = new AST();
-				BindingResolver resolver = new DefaultBindingResolver(compilationUnitDeclaration.scope);
-				ast.setBindingResolver(resolver);
-				converter.setAST(ast);
-			
-				CompilationUnit compilationUnit = converter.convert(compilationUnitDeclaration, source);
-				compilationUnit.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
-				resolver.storeModificationCount(ast.modificationCount());
-				return compilationUnit;
-			} catch(JavaModelException e) {
-				/* if a JavaModelException is thrown trying to retrieve the name environment
-				 * then we simply do a parsing without creating bindings.
-				 * Therefore all binding resolution will return null.
-				 */
-				CompilationUnitDeclaration compilationUnitDeclaration = CompilationUnitResolver.parse(
-					source,
-					searcher,
-					options);
-				
-				ASTConverter converter = new ASTConverter(options, false);
-				AST ast = new AST();
-				final BindingResolver resolver = new BindingResolver();
-				ast.setBindingResolver(resolver);
-				converter.setAST(ast);
-	
-				CompilationUnit compilationUnit = converter.convert(compilationUnitDeclaration, source);
-				compilationUnit.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
-				resolver.storeModificationCount(ast.modificationCount());
-				return compilationUnit;
-			} finally {
-				if (lookup != null) {
-					lookup.setUnitsToLookInside(null);
-				}
-			}
-		} else {
-			CompilationUnitDeclaration compilationUnitDeclaration = CompilationUnitResolver.parse(
-				source,
-				searcher,
-				options);
-			
-			ASTConverter converter = new ASTConverter(options, false);
-			AST ast = new AST();
-			final BindingResolver resolver = new BindingResolver();
-			ast.setBindingResolver(resolver);
-			converter.setAST(ast);
-
-			CompilationUnit compilationUnit = converter.convert(compilationUnitDeclaration, source);
-			compilationUnit.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
-			resolver.storeModificationCount(ast.modificationCount());
-			return compilationUnit;
-		}
-	}
-	
-	/**
-	 * The binding resolver for this AST. Initially a binding resolver that
-	 * does not resolve names at all.
-	 */
-	private BindingResolver resolver = new BindingResolver();
-	
 	/**
 	 * Returns the binding resolver for this AST.
 	 * 
 	 * @return the binding resolver for this AST
 	 */
 	BindingResolver getBindingResolver() {
-		return resolver;
+		return this.resolver;
+	}
+
+	/**
+	 * Returns the event handler for this AST.
+	 * 
+	 * @return the event handler for this AST
+	 * @since 3.0
+	 */
+	NodeEventHandler getEventHandler() {
+		return this.eventHandler;
+	}
+
+	/**
+	 * Sets the event handler for this AST.
+	 * 
+	 * @param eventHandler the event handler for this AST
+	 * @since 3.0
+	 */
+	void setEventHandler(NodeEventHandler eventHandler) {
+		if (this.eventHandler == null) {
+			throw new IllegalArgumentException();
+		}
+		this.eventHandler = eventHandler;
+	}
+	
+	/**
+	 * Returns default node flags of new nodes of this AST.
+	 * 
+	 * @return the default node flags of new nodes of this AST
+	 * @since 3.0
+	 */
+	int getDefaultNodeFlag() {
+		return this.defaultNodeFlag;
+	}
+	
+	/**
+	 * Sets default node flags of new nodes of this AST.
+	 * 
+	 * @param flag node flags of new nodes of this AST
+	 * @since 3.0
+	 */
+	void setDefaultNodeFlag(int flag) {
+		this.defaultNodeFlag = flag;
+	}
+	
+	/**
+	 * Set <code>originalModificationCount</code> to the current modification count
+	 * 
+	 * @since 3.0
+	 */
+	void setOriginalModificationCount(long count) {
+		this.originalModificationCount = count;
 	}
 
 	/** 
@@ -1178,6 +1089,102 @@ public final class AST {
 			throw new IllegalArgumentException();
 		}
 		this.resolver = resolver;
+	}
+
+	/**
+     * Checks that this AST operation is not used when
+     * building level JLS2 ASTs.
+
+     * @exception UnsupportedOperationException
+	 * @since 3.0
+     */
+	void unsupportedIn2() {
+	  if (this.apiLevel == AST.JLS2) {
+	  	throw new UnsupportedOperationException("Operation not supported in JLS2 AST"); //$NON-NLS-1$
+	  }
+	}
+
+	/**
+     * Checks that this AST operation is only used when
+     * building level JLS2 ASTs.
+
+     * @exception UnsupportedOperationException
+	 * @since 3.0
+     */
+	void supportedOnlyIn2() {
+	  if (this.apiLevel != AST.JLS2) {
+	  	throw new UnsupportedOperationException("Operation not supported in JLS2 AST"); //$NON-NLS-1$
+	  }
+	}
+
+	/**
+	 * new Class[] {AST.class}
+	 * @since 3.0
+	 */
+	private static final Class[] AST_CLASS = new Class[] {AST.class};
+
+	/**
+	 * new Object[] {this}
+	 * @since 3.0
+	 */
+	private final Object[] THIS_AST= new Object[] {this};
+	
+	/**
+	 * Creates an unparented node of the given node class
+	 * (non-abstract subclass of {@link ASTNode}). 
+	 * 
+	 * @param nodeClass AST node class
+	 * @return a new unparented node owned by this AST
+	 * @exception IllegalArgumentException if <code>nodeClass</code> is 
+	 * <code>null</code> or is not a concrete node type class
+	 * @since 3.0
+	 */
+	public ASTNode createInstance(Class nodeClass) {
+		if (nodeClass == null) {
+			throw new IllegalArgumentException();
+		}
+		try {
+			// invoke constructor with signature Foo(AST)
+			Constructor c = nodeClass.getDeclaredConstructor(AST_CLASS);
+			Object result = c.newInstance(this.THIS_AST);
+			return (ASTNode) result;
+		} catch (NoSuchMethodException e) {
+			// all AST node classes have a Foo(AST) constructor
+			// therefore nodeClass is not legit
+			throw new IllegalArgumentException();
+		} catch (InstantiationException e) {
+			// all concrete AST node classes can be instantiated
+			// therefore nodeClass is not legit
+			throw new IllegalArgumentException();
+		} catch (IllegalAccessException e) {
+			// all AST node classes have an accessible Foo(AST) constructor
+			// therefore nodeClass is not legit
+			throw new IllegalArgumentException();
+		} catch (InvocationTargetException e) {
+			// concrete AST node classes do not die in the constructor
+			// therefore nodeClass is not legit
+			throw new IllegalArgumentException();
+		}		
+	}
+
+	/**
+	 * Creates an unparented node of the given node type.
+	 * This convenience method is equivalent to:
+	 * <pre>
+	 * createInstance(ASTNode.nodeClassForType(nodeType))
+	 * </pre>
+	 * 
+	 * @param nodeType AST node type, one of the node type
+	 * constants declared on {@link ASTNode}
+	 * @return a new unparented node owned by this AST
+	 * @exception IllegalArgumentException if <code>nodeType</code> is 
+	 * not a legal AST node type
+	 * @since 3.0
+	 */
+	public ASTNode createInstance(int nodeType) {
+		// nodeClassForType throws IllegalArgumentException if nodeType is bogus
+		Class nodeClass = ASTNode.nodeClassForType(nodeType);
+		return createInstance(nodeClass);
 	}
 
 	//=============================== NAMES ===========================
@@ -1343,6 +1350,69 @@ public final class AST {
 		return result;
 	}
 
+	/**
+	 * Creates and returns a new unparented parameterized type node with the
+	 * given type and an empty list of type arguments.
+	 * 
+	 * @param type the type that is parameterized
+	 * @return a new unparented parameterized type node
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public ParameterizedType newParameterizedType(Type type) {
+		ParameterizedType result = new ParameterizedType(this);
+		result.setType(type);
+		return result;
+	}
+
+	/**
+	 * Creates and returns a new unparented qualified type node with 
+	 * the given qualifier type and name.
+	 * 
+	 * @param qualifier the qualifier type node
+	 * @param name the simple name being qualified
+	 * @return a new unparented qualified type node
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public QualifiedType newQualifiedType(Type qualifier, SimpleName name) {
+		QualifiedType result = new QualifiedType(this);
+		result.setQualifier(qualifier);
+		result.setName(name);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new unparented wildcard type node with no 
+	 * type bound.
+	 * 
+	 * @return a new unparented wildcard type node
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public WildcardType newWildcardType() {
+		WildcardType result = new WildcardType(this);
+		return result;
+	}
+
 	//=============================== DECLARATIONS ===========================
 	/**
 	 * Creates an unparented compilation unit node owned by this AST.
@@ -1397,11 +1467,15 @@ public final class AST {
 	/**
 	 * Creates an unparented class declaration node owned by this AST.
 	 * The name of the class is an unspecified, but legal, name; 
-	 * no modifiers; no Javadoc comment; no superclass or superinterfaces; 
+	 * no modifiers; no doc comment; no superclass or superinterfaces; 
 	 * and an empty class body.
 	 * <p>
 	 * To create an interface, use this method and then call
-	 * <code>TypeDeclaration.setInterface(true)</code> and
+	 * <code>TypeDeclaration.setInterface(true)</code>.
+	 * </p>
+	 * <p>
+	 * To create an enum declaration, use this method and then call
+	 * <code>TypeDeclaration.setEnumeration(true)</code>.
 	 * </p>
 	 * 
 	 * @return a new unparented type declaration node
@@ -1415,7 +1489,7 @@ public final class AST {
 	/**
 	 * Creates an unparented method declaration node owned by this AST.
 	 * By default, the declaration is for a method of an unspecified, but 
-	 * legal, name; no modifiers; no Javadoc comment; no parameters; return
+	 * legal, name; no modifiers; no doc comment; no parameters; return
 	 * type void; no extra array dimensions; no thrown exceptions; and no
 	 * body (as opposed to an empty body).
 	 * <p>
@@ -1436,7 +1510,7 @@ public final class AST {
 	 * Creates an unparented single variable declaration node owned by this AST.
 	 * By default, the declaration is for a variable with an unspecified, but 
 	 * legal, name and type; no modifiers; no array dimensions after the
-	 * variable; and no initializer.
+	 * variable; no initializer; not variable arity.
 	 * 
 	 * @return a new unparented single variable declaration node
 	 */
@@ -1470,13 +1544,287 @@ public final class AST {
 	}
 
 	/**
-	 * Creates and returns a new Javadoc comment node.
-	 * Initially the new node has an unspecified, but legal, Javadoc comment.
+	 * Creates an unparented enum constant declaration node owned by this AST.
+	 * The name of the constant is an unspecified, but legal, name; 
+	 * no doc comment; no modifiers or annotations; no arguments; 
+	 * and an empty class body.
 	 * 
-	 * @return a new unparented Javadoc comment node
+	 * @return a new unparented enum constant declaration node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public EnumConstantDeclaration newEnumConstantDeclaration() {
+		EnumConstantDeclaration result = new EnumConstantDeclaration(this);
+		return result;
+	}
+	
+	/**
+	 * Creates an unparented enum declaration node owned by this AST.
+	 * The name of the enum is an unspecified, but legal, name; 
+	 * no doc comment; no modifiers or annotations; 
+	 * no superinterfaces; and no body declarations.
+	 * 
+	 * @return a new unparented enum declaration node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public EnumDeclaration newEnumDeclaration() {
+		EnumDeclaration result = new EnumDeclaration(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new unparented type parameter type node with an
+	 * unspecified type variable name and an empty list of type bounds.
+	 * 
+	 * @return a new unparented type parameter node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public TypeParameter newTypeParameter() {
+		TypeParameter result = new TypeParameter(this);
+		return result;
+	}
+
+	/**
+	 * Creates and returns a new unparented annotation type declaration
+	 * node for an unspecified, but legal, name; no modifiers; no javadoc; 
+	 * and an empty list of member declarations.
+	 * 
+	 * @return a new unparented annotation type declaration node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public AnnotationTypeDeclaration newAnnotationTypeDeclaration() {
+		AnnotationTypeDeclaration result = new AnnotationTypeDeclaration(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new unparented annotation type 
+	 * member declaration node for an unspecified, but legal, 
+	 * member name and type; no modifiers; no javadoc; 
+	 * and no default value.
+	 * 
+	 * @return a new unparented annotation type member declaration node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public AnnotationTypeMemberDeclaration newAnnotationTypeMemberDeclaration() {
+		AnnotationTypeMemberDeclaration result = new AnnotationTypeMemberDeclaration(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new unparented modifier node for the given
+	 * modifier.
+	 * 
+	 * @param keyword one of the modifier keyword constants
+	 * @return a new unparented modifier node
+	 * @exception IllegalArgumentException if the primitive type code is invalid
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public Modifier newModifier(Modifier.ModifierKeyword keyword) {
+		Modifier result = new Modifier(this);
+		result.setKeyword(keyword);
+		return result;
+	}
+
+	/**
+	 * Creates and returns a list of new unparented modifier nodes 
+	 * for the given modifier flags. When multiple modifiers are 
+	 * requested the modifiers nodes will appear in the following order:
+	 * public, protected, private, abstract, static, final, synchronized,
+	 * native, strictfp, transient, volatile. This order is consistent
+	 * with the recommendations in JLS2 8.1.1, 8.3.1, and 8.4.3.
+	 * 
+	 * @param flags bitwise or of modifier flags declared on {@link Modifier}
+	 * @return a possibly empty list of new unparented modifier nodes
+	 *   (element type <code>Modifier</code>)
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.1
+	 */
+	public List newModifiers(int flags) {
+		if (this.apiLevel == AST.JLS2) {
+			unsupportedIn2();
+		}
+		List result = new ArrayList(3); // 3 modifiers is more than average
+		if (Modifier.isPublic(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
+		}
+		if (Modifier.isProtected(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.PROTECTED_KEYWORD));
+		}
+		if (Modifier.isPrivate(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.PRIVATE_KEYWORD));
+		}
+		if (Modifier.isAbstract(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.ABSTRACT_KEYWORD));
+		}
+		if (Modifier.isStatic(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.STATIC_KEYWORD));
+		}
+		if (Modifier.isFinal(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.FINAL_KEYWORD));
+		}
+		if (Modifier.isSynchronized(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.SYNCHRONIZED_KEYWORD));
+		}
+		if (Modifier.isNative(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.NATIVE_KEYWORD));
+		}
+		if (Modifier.isStrictfp(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.STRICTFP_KEYWORD));
+		}
+		if (Modifier.isTransient(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.TRANSIENT_KEYWORD));
+		}
+		if (Modifier.isVolatile(flags)) {
+			result.add(newModifier(Modifier.ModifierKeyword.VOLATILE_KEYWORD));
+		}
+		return result;
+	}
+
+	//=============================== COMMENTS ===========================
+
+	/**
+	 * Creates and returns a new block comment placeholder node.
+	 * <p>
+	 * Note that this node type is used to recording the source
+	 * range where a comment was found in the source string.
+	 * These comment nodes are normally found (only) in 
+	 * {@linkplain CompilationUnit#getCommentList() 
+	 * the comment table} for parsed compilation units.
+	 * </p>
+	 * 
+	 * @return a new unparented block comment node
+	 * @since 3.0
+	 */
+	public BlockComment newBlockComment() {
+		BlockComment result = new BlockComment(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new line comment placeholder node.
+	 * <p>
+	 * Note that this node type is used to recording the source
+	 * range where a comment was found in the source string.
+	 * These comment nodes are normally found (only) in 
+	 * {@linkplain CompilationUnit#getCommentList() 
+	 * the comment table} for parsed compilation units.
+	 * </p>
+	 * 
+	 * @return a new unparented line comment node
+	 * @since 3.0
+	 */
+	public LineComment newLineComment() {
+		LineComment result = new LineComment(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new doc comment node.
+	 * Initially the new node has an empty list of tag elements
+	 * (and, for backwards compatability, an unspecified, but legal,
+	 * doc comment string)
+	 * 
+	 * @return a new unparented doc comment node
 	 */
 	public Javadoc newJavadoc() {
 		Javadoc result = new Javadoc(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new tag element node.
+	 * Initially the new node has no tag name and an empty list of fragments.
+	 * <p>
+	 * Note that this node type is used only inside doc comments
+	 * ({@link Javadoc}).
+	 * </p>
+	 * 
+	 * @return a new unparented tag element node
+	 * @since 3.0
+	 */
+	public TagElement newTagElement() {
+		TagElement result = new TagElement(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new text element node.
+	 * Initially the new node has an empty text string.
+	 * <p>
+	 * Note that this node type is used only inside doc comments
+	 * ({@link Javadoc Javadoc}).
+	 * </p>
+	 * 
+	 * @return a new unparented text element node
+	 * @since 3.0
+	 */
+	public TextElement newTextElement() {
+		TextElement result = new TextElement(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new member reference node.
+	 * Initially the new node has no qualifier name and 
+	 * an unspecified, but legal, member name.
+	 * <p>
+	 * Note that this node type is used only inside doc comments
+	 * ({@link Javadoc}).
+	 * </p>
+	 * 
+	 * @return a new unparented member reference node
+	 * @since 3.0
+	 */
+	public MemberRef newMemberRef() {
+		MemberRef result = new MemberRef(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new method reference node.
+	 * Initially the new node has no qualifier name, 
+	 * an unspecified, but legal, method name, and an
+	 * empty parameter list. 
+	 * <p>
+	 * Note that this node type is used only inside doc comments
+	 * ({@link Javadoc Javadoc}).
+	 * </p>
+	 * 
+	 * @return a new unparented method reference node
+	 * @since 3.0
+	 */
+	public MethodRef newMethodRef() {
+		MethodRef result = new MethodRef(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new method reference node.
+	 * Initially the new node has an unspecified, but legal,
+	 * type, and no parameter name. 
+	 * <p>
+	 * Note that this node type is used only inside doc comments
+	 * ({@link Javadoc}).
+	 * </p>
+	 * 
+	 * @return a new unparented method reference parameter node
+	 * @since 3.0
+	 */
+	public MethodRefParameter newMethodRefParameter() {
+		MethodRefParameter result = new MethodRefParameter(this);
 		return result;
 	}
 	
@@ -1534,7 +1882,38 @@ public final class AST {
 	public TypeDeclarationStatement 
 			newTypeDeclarationStatement(TypeDeclaration decl) {
 		TypeDeclarationStatement result = new TypeDeclarationStatement(this);
-		result.setTypeDeclaration(decl);
+		result.setDeclaration(decl);
+		return result;
+	}
+	
+	/**
+	 * Creates a new unparented local type declaration statement node 
+	 * owned by this AST, for the given type declaration.
+	 * <p>
+	 * This method can be used to convert any kind of type declaration
+	 * (<code>AbstractTypeDeclaration</code>) into a statement
+	 * (<code>Statement</code>) by wrapping it.
+	 * </p>
+	 * 
+	 * @param decl the type declaration
+	 * @return a new unparented local type declaration statement node
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
+	 * @since 3.0
+	 */
+	public TypeDeclarationStatement 
+			newTypeDeclarationStatement(AbstractTypeDeclaration decl) {
+		TypeDeclarationStatement result = new TypeDeclarationStatement(this);
+		if (this.apiLevel == AST.JLS2) {
+			result.setTypeDeclaration((TypeDeclaration) decl);
+		}
+		if (this.apiLevel >= AST.JLS3) {
+			result.setDeclaration(decl);
+		}
 		return result;
 	}
 	
@@ -1736,10 +2115,24 @@ public final class AST {
 	 * By default, there are no initializers, no condition expression, 
 	 * no updaters, and the body is an empty block.
 	 * 
-	 * @return a new unparented throw statement node
+	 * @return a new unparented for statement node
 	 */
 	public ForStatement newForStatement() {
 		return new ForStatement(this);
+	}
+
+	/**
+	 * Creates a new unparented enhanced for statement node owned by this AST.
+	 * By default, the paramter and expression are unspecified
+	 * but legal subtrees, and the body is an empty block.
+	 * 
+	 * @return a new unparented throw statement node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public EnhancedForStatement newEnhancedForStatement() {
+		return new EnhancedForStatement(this);
 	}
 
 	//=============================== EXPRESSIONS ===========================
@@ -1839,7 +2232,8 @@ public final class AST {
 	/**
 	 * Creates an unparented method invocation expression node owned by this 
 	 * AST. By default, the name of the method is unspecified (but legal) 
-	 * there is no receiver expression, and the list of arguments is empty.
+	 * there is no receiver expression, no type arguments, and the list of
+	 * arguments is empty.
 	 * 
 	 * @return a new unparented method invocation expression node
 	 */
@@ -1851,7 +2245,7 @@ public final class AST {
 	/**
 	 * Creates an unparented "super" method invocation expression node owned by 
 	 * this AST. By default, the name of the method is unspecified (but legal) 
-	 * there is no qualifier, and the list of arguments is empty.
+	 * there is no qualifier, no type arguments, and the list of arguments is empty.
 	 * 
 	 * @return a new unparented  "super" method invocation 
 	 *    expression node
@@ -1863,8 +2257,8 @@ public final class AST {
 	
 	/**
 	 * Creates an unparented alternate constructor ("this(...);") invocation 
-	 * statement node owned by this AST. By default, the list of arguments
-	 * is empty.
+	 * statement node owned by this AST. By default, the lists of arguments
+	 * and type arguments are both empty.
 	 * <p>
 	 * Note that this type of node is a Statement, whereas a regular
 	 * method invocation is an Expression. The only valid use of these 
@@ -1881,7 +2275,7 @@ public final class AST {
 	/**
 	 * Creates an unparented alternate super constructor ("super(...);") 
 	 * invocation statement node owned by this AST. By default, there is no
-	 * qualifier and the list of arguments is empty.
+	 * qualifier, no type arguments, and the list of arguments is empty.
 	 * <p>
 	 * Note that this type of node is a Statement, whereas a regular
 	 * super method invocation is an Expression. The only valid use of these 
@@ -1931,7 +2325,7 @@ public final class AST {
 	/**
 	 * Creates a new unparented field declaration node owned by this AST, 
 	 * for the given variable declaration fragment. By default, there are no
-	 * modifiers, no javadoc comment, and the base type is unspecified 
+	 * modifiers, no doc comment, and the base type is unspecified 
 	 * (but legal).
 	 * <p>
 	 * This method can be used to wrap a variable declaration fragment
@@ -2098,14 +2492,14 @@ public final class AST {
 	 * Examples:
 	 * <code>
 	 * <pre>
-	 * 	// new String[len]
+	 * // new String[len]
 	 * ArrayCreation ac1 = ast.newArrayCreation();
 	 * ac1.setType(
 	 *    ast.newArrayType(
 	 *       ast.newSimpleType(ast.newSimpleName("String"))));
 	 * ac1.dimensions().add(ast.newSimpleName("len"));
-
-	 * 	// new double[7][24][]
+     *
+	 * // new double[7][24][]
 	 * ArrayCreation ac2 = ast.newArrayCreation();
 	 * ac2.setType(
 	 *    ast.newArrayType(
@@ -2136,9 +2530,9 @@ public final class AST {
 	/**
 	 * Creates and returns a new unparented class instance creation 
 	 * ("new") expression node owned by this AST. By default, 
-	 * there is no qualifying expression, an unspecified (but legal) type name,
-	 * an empty list of arguments, and does not declare an anonymous
-	 * class declaration.
+	 * there is no qualifying expression, no type parameters,
+	 * an unspecified (but legal) type name, an empty list of
+	 * arguments, and does not declare an anonymous class declaration.
 	 * 
 	 * @return a new unparented class instance creation expression node
 	 */
@@ -2179,6 +2573,130 @@ public final class AST {
 	public ConditionalExpression newConditionalExpression() {
 		ConditionalExpression result = new ConditionalExpression(this);
 		return result;
+	}
+	
+	//=============================== ANNOTATIONS ====================
+	
+	/**
+	 * Creates and returns a new unparented normal annotation node with
+	 * an unspecified type name and an empty list of member value
+	 * pairs.
+	 * 
+	 * @return a new unparented normal annotation node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public NormalAnnotation newNormalAnnotation() {
+		NormalAnnotation result = new NormalAnnotation(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new unparented marker annotation node with
+	 * an unspecified type name.
+	 * 
+	 * @return a new unparented marker annotation node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public MarkerAnnotation newMarkerAnnotation() {
+		MarkerAnnotation result = new MarkerAnnotation(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new unparented single member annotation node with
+	 * an unspecified type name and value.
+	 * 
+	 * @return a new unparented single member annotation node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public SingleMemberAnnotation newSingleMemberAnnotation() {
+		SingleMemberAnnotation result = new SingleMemberAnnotation(this);
+		return result;
+	}
+	
+	/**
+	 * Creates and returns a new unparented member value pair node with
+	 * an unspecified member name and value.
+	 * 
+	 * @return a new unparented member value pair node
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */
+	public MemberValuePair newMemberValuePair() {
+		MemberValuePair result = new MemberValuePair(this);
+		return result;
+	}
+	
+	/**
+	 * Enables the recording of changes to the given compilation
+	 * unit and its descendents. The compilation unit must have
+	 * been created by <code>ASTParser</code> and still be in
+	 * its original state. Once recording is on,
+	 * arbitrary changes to the subtree rooted at the compilation
+	 * unit are recorded internally. Once the modification has
+	 * been completed, call <code>rewrite</code> to get an object
+	 * representing the corresponding edits to the original 
+	 * source code string.
+	 *
+	 * @exception IllegalArgumentException if this compilation unit is
+	 * marked as unmodifiable, or if this compilation unit has already 
+	 * been tampered with, or if recording has already been enabled,
+	 * or if <code>root</code> is not owned by this AST
+	 * @see CompilationUnit#recordModifications()
+	 * @since 3.0
+	 */
+	void recordModifications(CompilationUnit root) {
+		if(this.modificationCount != this.originalModificationCount) {
+			throw new IllegalArgumentException("AST is already modified"); //$NON-NLS-1$
+		} else if(this.rewriter  != null) {
+			throw new IllegalArgumentException("AST modifications are already recorded"); //$NON-NLS-1$
+		} else if((root.getFlags() & ASTNode.PROTECT) != 0) {
+			throw new IllegalArgumentException("Root node is unmodifiable"); //$NON-NLS-1$
+		} else if(root.getAST() != this) {
+			throw new IllegalArgumentException("Root node is not owned by this ast"); //$NON-NLS-1$
+		}
+		
+		this.rewriter = new InternalASTRewrite(root);
+		this.setEventHandler(this.rewriter);
+	}
+	
+	/**
+	 * Converts all modifications recorded into an object
+	 * representing the corresponding text edits to the
+	 * given document containing the original source
+	 * code for the compilation unit that gave rise to
+	 * this AST.
+	 * 
+	 * @param document original document containing source code
+	 * for the compilation unit
+	 * @param options the table of formatter options
+	 * (key type: <code>String</code>; value type: <code>String</code>);
+	 * or <code>null</code> to use the standard global options
+	 * {@link JavaCore#getOptions() JavaCore.getOptions()}.
+	 * @return text edit object describing the changes to the
+	 * document corresponding to the recorded AST modifications
+	 * @exception IllegalArgumentException if the document passed is
+	 * <code>null</code> or does not correspond to this AST
+	 * @exception IllegalStateException if <code>recordModifications</code>
+	 * was not called to enable recording
+	 * @see CompilationUnit#rewrite(IDocument, Map)
+	 * @since 3.0
+	 */
+	TextEdit rewrite(IDocument document, Map options) {
+		if (document == null) {
+			throw new IllegalArgumentException();
+		}
+		if (this.rewriter  == null) {
+			throw new IllegalStateException("Modifications record is not enabled"); //$NON-NLS-1$
+		}
+		return this.rewriter.rewriteAST(document, options);
 	}
 }
 

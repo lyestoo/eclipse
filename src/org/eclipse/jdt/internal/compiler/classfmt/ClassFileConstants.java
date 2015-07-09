@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -42,7 +42,7 @@ public interface ClassFileConstants extends IConstants {
 	int MAJOR_VERSION_1_2 = 46;
 	int MAJOR_VERSION_1_3 = 47;
 	int MAJOR_VERSION_1_4 = 48;
-	int MAJOR_VERSION_1_5 = 49; // TODO : (olivier) 1.5. major version value need to be confirmed
+	int MAJOR_VERSION_1_5 = 49; 
 	
 	int MINOR_VERSION_0 = 0;
 	int MINOR_VERSION_1 = 1;
@@ -56,4 +56,8 @@ public interface ClassFileConstants extends IConstants {
 	long JDK1_3 =  ((long)ClassFileConstants.MAJOR_VERSION_1_3 << 16) + ClassFileConstants.MINOR_VERSION_0;
 	long JDK1_4 = ((long)ClassFileConstants.MAJOR_VERSION_1_4 << 16) + ClassFileConstants.MINOR_VERSION_0;
 	long JDK1_5 = ((long)ClassFileConstants.MAJOR_VERSION_1_5 << 16) + ClassFileConstants.MINOR_VERSION_0;	
+	
+	// jdk level used to denote future releases: optional behavior is not enabled for now, but may become so. In order to enable these,
+	// search for references to this constant, and change it to one of the official JDT constants above.
+	long JDK_DEFERRED = Long.MAX_VALUE; 
 }

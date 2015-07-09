@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
@@ -66,9 +66,8 @@ public class ForStatement extends Statement {
 
 		// process the initializations
 		if (initializations != null) {
-			int count = initializations.length, i = 0;
-			while (i < count) {
-				flowInfo = initializations[i++].analyseCode(scope, flowContext, flowInfo);
+			for (int i = 0, count = initializations.length; i < count; i++) {
+				flowInfo = initializations[i].analyseCode(scope, flowContext, flowInfo);
 			}
 		}
 		preCondInitStateIndex =
@@ -137,39 +136,28 @@ public class ForStatement extends Statement {
 			} else {
 				if (condLoopContext != null)
 					condLoopContext.complainOnFinalAssignmentsInLoop(scope, flowInfo);
+				actionInfo = actionInfo.mergedWith(loopingContext.initsOnContinue.unconditionalInits());
 				loopingContext.complainOnFinalAssignmentsInLoop(scope, actionInfo);
-				actionInfo =
-					actionInfo.mergedWith(loopingContext.initsOnContinue.unconditionalInits());
-				// for increments
 			}
 		}
+		// for increments
 		if ((continueLabel != null) && (increments != null)) {
 			LoopingFlowContext loopContext =
 				new LoopingFlowContext(flowContext, this, null, null, scope);
-			int i = 0, count = increments.length;
-			while (i < count)
-				actionInfo = increments[i++].analyseCode(scope, loopContext, actionInfo);
+			for (int i = 0, count = increments.length; i < count; i++) {
+				actionInfo = increments[i].analyseCode(scope, loopContext, actionInfo);
+			}
 			loopContext.complainOnFinalAssignmentsInLoop(scope, actionInfo);
 		}
 
-		// infinite loop
-		FlowInfo mergedInfo;
-		if (isConditionOptimizedTrue) {
-			mergedInitStateIndex =
-				currentScope.methodScope().recordInitializationStates(
-					mergedInfo = loopingContext.initsOnBreak);
-			return mergedInfo;
-		}
-
-		//end of loop: either condition false or break
-		mergedInfo =
-			flowInfo.initsWhenFalse().unconditionalInits().mergedWith(
-				loopingContext.initsOnBreak.unconditionalInits());
-		if (isConditionOptimizedTrue && continueLabel == null){
-			mergedInfo.setReachMode(FlowInfo.UNREACHABLE);
-		}
-		mergedInitStateIndex =
-			currentScope.methodScope().recordInitializationStates(mergedInfo);
+		//end of loop
+		FlowInfo mergedInfo = FlowInfo.mergedOptimizedBranches(
+				loopingContext.initsOnBreak, 
+				isConditionOptimizedTrue, 
+				flowInfo.initsWhenFalse(), 
+				isConditionOptimizedFalse, 
+				!isConditionTrue /*for(;;){}while(true); unreachable(); */);
+		mergedInitStateIndex = currentScope.methodScope().recordInitializationStates(mergedInfo);
 		return mergedInfo;
 	}
 
@@ -196,9 +184,9 @@ public class ForStatement extends Statement {
 		// label management
 		Label actionLabel = new Label(codeStream);
 		Label conditionLabel = new Label(codeStream);
-		breakLabel.codeStream = codeStream;
+		breakLabel.initialize(codeStream);
 		if (continueLabel != null) {
-			continueLabel.codeStream = codeStream;
+			continueLabel.initialize(codeStream);
 		}
 		// jump over the actionBlock
 		if ((condition != null)
@@ -233,9 +221,7 @@ public class ForStatement extends Statement {
 
 		// May loose some local variable initializations : affecting the local variable attributes
 		if (preCondInitStateIndex != -1) {
-			codeStream.removeNotDefinitelyAssignedVariables(
-				currentScope,
-				preCondInitStateIndex);
+			codeStream.removeNotDefinitelyAssignedVariables(currentScope, preCondInitStateIndex);
 		}
 
 		// generate the condition
@@ -254,9 +240,8 @@ public class ForStatement extends Statement {
 			codeStream.exitUserScope(scope);
 		}
 		if (mergedInitStateIndex != -1) {
-			codeStream.removeNotDefinitelyAssignedVariables(
-				currentScope,
-				mergedInitStateIndex);
+			codeStream.removeNotDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
+			codeStream.addDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
 		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
@@ -294,15 +279,6 @@ public class ForStatement extends Statement {
 		return output.append(';');
 	}
 
-	public void resetStateForCodeGeneration() {
-		if (this.breakLabel != null) {
-			this.breakLabel.resetStateForCodeGeneration();
-		}
-		if (this.continueLabel != null) {
-			this.continueLabel.resetStateForCodeGeneration();
-		}
-	}
-
 	public void resolve(BlockScope upperScope) {
 
 		// use the scope that will hold the init declarations
@@ -312,7 +288,7 @@ public class ForStatement extends Statement {
 				initializations[i].resolve(scope);
 		if (condition != null) {
 			TypeBinding type = condition.resolveTypeExpecting(scope, BooleanBinding);
-			condition.implicitWidening(type, type);
+			condition.computeConversion(scope, type, type);
 		}
 		if (increments != null)
 			for (int i = 0, length = increments.length; i < length; i++)
@@ -322,7 +298,7 @@ public class ForStatement extends Statement {
 	}
 	
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		BlockScope blockScope) {
 
 		if (visitor.visit(this, blockScope)) {

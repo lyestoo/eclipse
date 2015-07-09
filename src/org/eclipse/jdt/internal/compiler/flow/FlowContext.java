@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,7 +12,7 @@ package org.eclipse.jdt.internal.compiler.flow;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.Reference;
 import org.eclipse.jdt.internal.compiler.ast.SubRoutineStatement;
 import org.eclipse.jdt.internal.compiler.ast.TryStatement;
@@ -30,12 +30,12 @@ import org.eclipse.jdt.internal.compiler.lookup.VariableBinding;
  */
 public class FlowContext implements TypeConstants {
 	
-	public AstNode associatedNode;
+	public ASTNode associatedNode;
 	public FlowContext parent;
 
 	public final static FlowContext NotContinuableContext = new FlowContext(null, null);
 		
-	public FlowContext(FlowContext parent, AstNode associatedNode) {
+	public FlowContext(FlowContext parent, ASTNode associatedNode) {
 
 		this.parent = parent;
 		this.associatedNode = associatedNode;
@@ -48,7 +48,7 @@ public class FlowContext implements TypeConstants {
 	
 	public void checkExceptionHandlers(
 		TypeBinding[] raisedExceptions,
-		AstNode location,
+		ASTNode location,
 		FlowInfo flowInfo,
 		BlockScope scope) {
 
@@ -95,7 +95,10 @@ public class FlowContext implements TypeConstants {
 						for (int raisedIndex = 0; raisedIndex < raisedCount; raisedIndex++) {
 							TypeBinding raisedException;
 							if ((raisedException = raisedExceptions[raisedIndex]) != null) {
-								switch (Scope.compareTypes(raisedException, caughtException)) {
+							    int state = caughtException == null 
+							    	? EqualOrMoreSpecific /* any exception */
+							        : Scope.compareTypes(raisedException, caughtException);
+								switch (state) {
 									case EqualOrMoreSpecific :
 										exceptionContext.recordHandlingException(
 											caughtException,
@@ -183,7 +186,7 @@ public class FlowContext implements TypeConstants {
 
 	public void checkExceptionHandlers(
 		TypeBinding raisedException,
-		AstNode location,
+		ASTNode location,
 		FlowInfo flowInfo,
 		BlockScope scope) {
 
@@ -213,7 +216,10 @@ public class FlowContext implements TypeConstants {
 						caughtIndex < caughtCount;
 						caughtIndex++) {
 						ReferenceBinding caughtException = caughtExceptions[caughtIndex];
-						switch (Scope.compareTypes(raisedException, caughtException)) {
+					    int state = caughtException == null 
+					    	? EqualOrMoreSpecific /* any exception */
+					        : Scope.compareTypes(raisedException, caughtException);						
+						switch (state) {
 							case EqualOrMoreSpecific :
 								exceptionContext.recordHandlingException(
 									caughtException,
@@ -285,11 +291,9 @@ public class FlowContext implements TypeConstants {
 			char[] currentLabelName;
 			if (((currentLabelName = current.labelName()) != null)
 				&& CharOperation.equals(currentLabelName, labelName)) {
-				if (lastNonReturningSubRoutine == null) {
+				if (lastNonReturningSubRoutine == null)
 					return current;
-				} else {
-					return lastNonReturningSubRoutine;
-				}
+				return lastNonReturningSubRoutine;
 			}
 			current = current.parent;
 		}
@@ -320,17 +324,13 @@ public class FlowContext implements TypeConstants {
 
 				// matching label found					
 				if ((lastContinuable != null)
-					&& (current.associatedNode.concreteStatement()	== lastContinuable.associatedNode)) {
-						
-					if (lastNonReturningSubRoutine == null) {
-						return lastContinuable;
-					} else {
-						return lastNonReturningSubRoutine;
-					}
-				} else {
-					// label is found, but not a continuable location
-					return NotContinuableContext;
-				}
+						&& (current.associatedNode.concreteStatement()	== lastContinuable.associatedNode)) {
+				    
+					if (lastNonReturningSubRoutine == null) return lastContinuable;
+					return lastNonReturningSubRoutine;
+				} 
+				// label is found, but not a continuable location
+				return NotContinuableContext;
 			}
 			current = current.parent;
 		}
@@ -349,11 +349,8 @@ public class FlowContext implements TypeConstants {
 				lastNonReturningSubRoutine = current;
 			}
 			if (current.isBreakable() && current.labelName() == null) {
-				if (lastNonReturningSubRoutine == null) {
-					return current;
-				} else {
-					return lastNonReturningSubRoutine;
-				}
+				if (lastNonReturningSubRoutine == null) return current;
+				return lastNonReturningSubRoutine;
 			}
 			current = current.parent;
 		}
@@ -372,11 +369,9 @@ public class FlowContext implements TypeConstants {
 				lastNonReturningSubRoutine = current;
 			}
 			if (current.isContinuable()) {
-				if (lastNonReturningSubRoutine == null) {
+				if (lastNonReturningSubRoutine == null)
 					return current;
-				} else {
-					return lastNonReturningSubRoutine;
-				}
+				return lastNonReturningSubRoutine;
 			}
 			current = current.parent;
 		}
@@ -445,7 +440,10 @@ public class FlowContext implements TypeConstants {
 
 	public void recordSettingFinal(
 		VariableBinding variable,
-		Reference finalReference) {
+		Reference finalReference,
+		FlowInfo flowInfo) {
+
+		if (!flowInfo.isReachable()) return;
 
 		// for initialization inside looping statement that effectively loops
 		FlowContext context = this;

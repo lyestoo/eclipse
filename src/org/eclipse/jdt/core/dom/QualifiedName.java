@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
@@ -29,6 +32,50 @@ package org.eclipse.jdt.core.dom;
  * @since 2.0
  */
 public class QualifiedName extends Name {
+	
+	/**
+	 * The "qualifier" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor QUALIFIER_PROPERTY = 
+		new ChildPropertyDescriptor(QualifiedName.class, "qualifier", Name.class, MANDATORY, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "name" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor NAME_PROPERTY = 
+		new ChildPropertyDescriptor(QualifiedName.class, "name", SimpleName.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List propertyList = new ArrayList(3);
+		createPropertyList(QualifiedName.class, propertyList);
+		addProperty(QUALIFIER_PROPERTY, propertyList);
+		addProperty(NAME_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(propertyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/**
 	 * The identifier; lazily initialized; defaults to a unspecified, legal 
 	 * Java identifier.
@@ -58,14 +105,45 @@ public class QualifiedName extends Name {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == QUALIFIER_PROPERTY) {
+			if (get) {
+				return getQualifier();
+			} else {
+				setQualifier((Name) child);
+				return null;
+			}
+		}
+		if (property == NAME_PROPERTY) {
+			if (get) {
+				return getName();
+			} else {
+				setName((SimpleName) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return QUALIFIED_NAME;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		QualifiedName result = new QualifiedName(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setQualifier((Name) getQualifier().clone(target));
@@ -76,7 +154,7 @@ public class QualifiedName extends Name {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -100,19 +178,23 @@ public class QualifiedName extends Name {
 	 * @return the qualifier part of this qualified name
 	 */ 
 	public Name getQualifier() {
-		if (qualifier == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setQualifier(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.qualifier == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.qualifier == null) {
+					preLazyInit();
+					this.qualifier = new SimpleName(this.ast);
+					postLazyInit(this.qualifier, QUALIFIER_PROPERTY);
+				}
+			}
 		}
-		return qualifier;
+		return this.qualifier;
 	}
 	
 	/**
 	 * Sets the qualifier of this qualified name to the given name.
 	 * 
-	 * @param the qualifier of this qualified name
+	 * @param qualifier the qualifier of this qualified name
 	 * @exception IllegalArgumentException if:
 	 * <ul>
 	 * <li>the node belongs to a different AST</li>
@@ -124,9 +206,10 @@ public class QualifiedName extends Name {
 		if (qualifier == null) {
 			throw new IllegalArgumentException();
 		}
-		// a QualifiedName may occur inside a QualifiedName - must check cycles
-		replaceChild(this.qualifier, qualifier, true);
+		ASTNode oldChild = this.qualifier;
+		preReplaceChild(oldChild, qualifier, QUALIFIER_PROPERTY);
 		this.qualifier = qualifier;
+		postReplaceChild(oldChild, qualifier, QUALIFIER_PROPERTY);
 	}
 	
 	/**
@@ -135,13 +218,17 @@ public class QualifiedName extends Name {
 	 * @return the name being qualified 
 	 */ 
 	public SimpleName getName() {
-		if (name == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setName(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.name == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.name == null) {
+					preLazyInit();
+					this.name = new SimpleName(this.ast);
+					postLazyInit(this.name, NAME_PROPERTY);
+				}
+			}
 		}
-		return name;
+		return this.name;
 	}
 	
 	/**
@@ -158,15 +245,26 @@ public class QualifiedName extends Name {
 		if (name == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.name, name, false);
+		ASTNode oldChild = this.name;
+		preReplaceChild(oldChild, name, NAME_PROPERTY);
 		this.name = name;
+		postReplaceChild(oldChild, name, NAME_PROPERTY);
 	}
 	
+	/* (omit javadoc for this method)
+	 * Method declared on Name.
+	 */
+	void appendName(StringBuffer buffer) {
+		getQualifier().appendName(buffer);
+		buffer.append('.');
+		getName().appendName(buffer);
+	}
+
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		return BASE_NODE_SIZE + 3 * 4;
+		return BASE_NAME_NODE_SIZE + 2 * 4;
 	}
 	
 	/* (omit javadoc for this method)
@@ -175,8 +273,8 @@ public class QualifiedName extends Name {
 	int treeSize() {
 		return 
 			memSize()
-			+ (name == null ? 0 : getName().treeSize())
-			+ (qualifier == null ? 0 : getQualifier().treeSize());
+			+ (this.name == null ? 0 : getName().treeSize())
+			+ (this.qualifier == null ? 0 : getQualifier().treeSize());
 	}
 }
 

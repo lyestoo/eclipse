@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,6 +16,7 @@ import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.QualifiedNameReference;
 import org.eclipse.jdt.internal.compiler.ast.SingleNameReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
 import org.eclipse.jdt.internal.compiler.flow.UnconditionalFlowInfo;
@@ -34,9 +35,10 @@ public class MethodScope extends BlockScope {
 	public boolean isStatic; // method modifier or initializer one
 
 	//fields used during name resolution
-	public static final int NotInFieldDecl = -1; //must be a negative value 
 	public boolean isConstructorCall = false; 
-	public int fieldDeclarationIndex = NotInFieldDecl; 
+	public FieldBinding initializedField; // the field being initialized
+	public int lastVisibleFieldID = -1; // the ID of the last field which got declared 
+	// note that #initializedField can be null AND lastVisibleFieldID >= 0, when processing instance field initializers.
 
 	// flow analysis
 	public int analysisIndex; // for setting flow-analysis id
@@ -246,7 +248,7 @@ public class MethodScope extends BlockScope {
 			// do not report fake used variable
 			if (isReportingUnusedArgument
 					&& local.useFlag == LocalVariableBinding.UNUSED
-					&& ((local.declaration.bits & AstNode.IsLocalDeclarationReachableMASK) != 0)) { // declaration is reachable
+					&& ((local.declaration.bits & ASTNode.IsLocalDeclarationReachableMASK) != 0)) { // declaration is reachable
 				this.problemReporter().unusedArgument(local.declaration);
 			}
 
@@ -279,7 +281,7 @@ public class MethodScope extends BlockScope {
 					this.offset++;
 				}
 				if (this.offset > 0xFF) { // no more than 255 words of arguments
-					this.problemReporter().noMoreAvailableSpaceForArgument(argument, (AstNode)this.referenceContext); 
+					this.problemReporter().noMoreAvailableSpaceForArgument(argument, (ASTNode)this.referenceContext); 
 				}
 			}
 		}
@@ -299,6 +301,9 @@ public class MethodScope extends BlockScope {
 		SourceTypeBinding declaringClass = referenceType().binding;
 		int modifiers = method.modifiers | AccUnresolved;
 		if (method.isConstructor()) {
+			if (method.isDefaultConstructor()) {
+				modifiers |= AccIsDefaultConstructor;
+			}
 			method.binding = new MethodBinding(modifiers, null, null, declaringClass);
 			checkAndSetModifiersForConstructor(method.binding);
 		} else {
@@ -308,8 +313,16 @@ public class MethodScope extends BlockScope {
 				new MethodBinding(modifiers, method.selector, null, null, null, declaringClass);
 			checkAndSetModifiersForMethod(method.binding);
 		}
-
 		this.isStatic = method.binding.isStatic();
+		
+		TypeParameter[] typeParameters = method.typeParameters();
+	    // do not construct type variables if source < 1.5
+		if (typeParameters == null || environment().options.sourceLevel < ClassFileConstants.JDK1_5) {
+		    method.binding.typeVariables = NoTypeVariables;
+		} else {
+			method.binding.typeVariables = createTypeVariables(typeParameters, method.binding);
+			method.binding.modifiers |= AccGenericSignature;
+		}
 		return method.binding;
 	}
 
@@ -326,9 +339,10 @@ public class MethodScope extends BlockScope {
 	public FieldBinding findField(
 		TypeBinding receiverType,
 		char[] fieldName,
-		InvocationSite invocationSite) {
+		InvocationSite invocationSite,
+		boolean needResolve) {
 
-		FieldBinding field = super.findField(receiverType, fieldName, invocationSite);
+		FieldBinding field = super.findField(receiverType, fieldName, invocationSite, needResolve);
 		if (field == null)
 			return null;
 		if (!field.isValidBinding())
@@ -341,6 +355,7 @@ public class MethodScope extends BlockScope {
 
 		if (invocationSite instanceof SingleNameReference)
 			return new ProblemFieldBinding(
+				field, // closest match
 				field.declaringClass,
 				fieldName,
 				NonStaticReferenceInConstructorInvocation);
@@ -350,6 +365,7 @@ public class MethodScope extends BlockScope {
 			if (name.binding == null)
 				// only true when the field is the fieldbinding at the beginning of name's tokens
 				return new ProblemFieldBinding(
+					field, // closest match
 					field.declaringClass,
 					fieldName,
 					NonStaticReferenceInConstructorInvocation);
@@ -386,9 +402,8 @@ public class MethodScope extends BlockScope {
 			ProblemReporter problemReporter = referenceCompilationUnit().problemReporter;
 			problemReporter.referenceContext = referenceContext;
 			return problemReporter;
-		} else {
-			return outerMethodScope.problemReporter();
 		}
+		return outerMethodScope.problemReporter();
 	}
 
 	public final int recordInitializationStates(FlowInfo flowInfo) {
@@ -478,7 +493,8 @@ public class MethodScope extends BlockScope {
 			s += newLine + "\t" + locals[i].toString(); //$NON-NLS-1$
 		s += newLine + "startIndex = " + startIndex; //$NON-NLS-1$
 		s += newLine + "isConstructorCall = " + isConstructorCall; //$NON-NLS-1$
-		s += newLine + "fieldDeclarationIndex = " + fieldDeclarationIndex; //$NON-NLS-1$
+		s += newLine + "initializedField = " + initializedField; //$NON-NLS-1$
+		s += newLine + "lastVisibleFieldID = " + lastVisibleFieldID; //$NON-NLS-1$
 		s += newLine + "referenceContext = " + referenceContext; //$NON-NLS-1$
 		return s;
 	}

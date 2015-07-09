@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -19,7 +19,7 @@ import org.eclipse.jdt.internal.compiler.parser.*;
 public class Initializer extends FieldDeclaration {
 	
 	public Block block;
-	public int lastFieldID;
+	public int lastVisibleFieldID;
 	public int bodyStart;
 	public int bodyEnd;
 	
@@ -91,9 +91,11 @@ public class Initializer extends FieldDeclaration {
 	
 	public void resolve(MethodScope scope) {
 
-		int previous = scope.fieldDeclarationIndex;
+	    FieldBinding previousField = scope.initializedField;
+		int previousFieldID = scope.lastVisibleFieldID;
 		try {
-			scope.fieldDeclarationIndex = lastFieldID;
+		    scope.initializedField = null;
+			scope.lastVisibleFieldID = lastVisibleFieldID;
 			if (isStatic()) {
 				ReferenceBinding declaringType = scope.enclosingSourceType();
 				if (declaringType.isNestedType() && !declaringType.isStatic())
@@ -103,11 +105,12 @@ public class Initializer extends FieldDeclaration {
 			}
 			block.resolve(scope);
 		} finally {
-			scope.fieldDeclarationIndex = previous;
+		    scope.initializedField = previousField;
+			scope.lastVisibleFieldID = previousFieldID;
 		}
 	}
 
-	public void traverse(IAbstractSyntaxTreeVisitor visitor, MethodScope scope) {
+	public void traverse(ASTVisitor visitor, MethodScope scope) {
 
 		if (visitor.visit(this, scope)) {
 			block.traverse(visitor, scope);

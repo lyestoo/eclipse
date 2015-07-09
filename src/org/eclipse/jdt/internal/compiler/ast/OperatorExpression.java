@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -43,7 +43,7 @@ public abstract class OperatorExpression extends Expression implements OperatorI
 		OperatorSignatures[XOR] = get_XOR();
 	}
 
-	public static final String generateTableTestCase(){ // TODO (olivier) should be extracted into a regression test case
+	public static final String generateTableTestCase(){
 		//return a String which is a java method allowing to test
 		//the non zero entries of all tables
 	
@@ -167,7 +167,7 @@ public abstract class OperatorExpression extends Expression implements OperatorI
 
 	public static final int[] get_AND(){
 	
-		//the code is an int
+		//the code is an int, only 20 bits are used, see below.
 		// (cast)  left   Op (cast)  rigth --> result
 		//  0000   0000       0000   0000      0000
 		//  <<16   <<12       <<8    <<4       

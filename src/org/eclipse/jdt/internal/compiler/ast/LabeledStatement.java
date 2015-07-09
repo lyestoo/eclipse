@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -67,7 +67,7 @@ public class LabeledStatement extends Statement {
 		}
 	}
 	
-	public AstNode concreteStatement() {
+	public ASTNode concreteStatement() {
 		
 		// return statement.concreteStatement(); // for supporting nested labels:   a:b:c: someStatement (see 21912)
 		return statement;
@@ -85,7 +85,7 @@ public class LabeledStatement extends Statement {
 		
 		int pc = codeStream.position;
 		if (targetLabel != null) {
-			targetLabel.codeStream = codeStream;
+			targetLabel.initialize(codeStream);
 			if (statement != null) {
 				statement.generateCode(currentScope, codeStream);
 			}
@@ -93,9 +93,8 @@ public class LabeledStatement extends Statement {
 		}
 		// May loose some local variable initializations : affecting the local variable attributes
 		if (mergedInitStateIndex != -1) {
-			codeStream.removeNotDefinitelyAssignedVariables(
-				currentScope,
-				mergedInitStateIndex);
+			codeStream.removeNotDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
+			codeStream.addDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
 		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
@@ -119,18 +118,12 @@ public class LabeledStatement extends Statement {
 
 
 	public void traverse(
-		IAbstractSyntaxTreeVisitor visitor,
+		ASTVisitor visitor,
 		BlockScope blockScope) {
 
 		if (visitor.visit(this, blockScope)) {
 			if (this.statement != null) this.statement.traverse(visitor, blockScope);
 		}
 		visitor.endVisit(this, blockScope);
-	}
-
-	public void resetStateForCodeGeneration() {
-		if (this.targetLabel != null) {	
-			this.targetLabel.resetStateForCodeGeneration();
-		}
 	}
 }

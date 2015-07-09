@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,8 +11,11 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Type node for a named class or interface type.
+ * Type node for a named class type, a named interface type, or a type variable.
  * <p>
  * This kind of node is used to convert a name (<code>Name</code>) into a type
  * (<code>Type</code>) by wrapping it.
@@ -21,6 +24,42 @@ package org.eclipse.jdt.core.dom;
  * @since 2.0
  */
 public class SimpleType extends Type {
+	
+	/**
+	 * The "name" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor NAME_PROPERTY = 
+		new ChildPropertyDescriptor(SimpleType.class, "name", Name.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List propertyList = new ArrayList(2);
+		createPropertyList(SimpleType.class, propertyList);
+		addProperty(NAME_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(propertyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/** 
 	 * The type name node; lazily initialized; defaults to a type with
 	 * an unspecfied, but legal, name.
@@ -43,14 +82,37 @@ public class SimpleType extends Type {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == NAME_PROPERTY) {
+			if (get) {
+				return getName();
+			} else {
+				setName((Name) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return SIMPLE_TYPE;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		SimpleType result = new SimpleType(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setName((Name) (getName()).clone(target));
@@ -60,7 +122,7 @@ public class SimpleType extends Type {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -82,13 +144,17 @@ public class SimpleType extends Type {
 	 * @return the name of this simple type
 	 */ 
 	public Name getName() {
-		if (typeName == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setName(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.typeName == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.typeName == null) {
+					preLazyInit();
+					this.typeName = new SimpleName(this.ast);
+					postLazyInit(this.typeName, NAME_PROPERTY);
+				}
+			}
 		}
-		return typeName;
+		return this.typeName;
 	}
 	
 	/**
@@ -105,8 +171,10 @@ public class SimpleType extends Type {
 		if (typeName == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.typeName, typeName, false);
+		ASTNode oldChild = this.typeName;
+		preReplaceChild(oldChild, typeName, NAME_PROPERTY);
 		this.typeName = typeName;
+		postReplaceChild(oldChild, typeName, NAME_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)
@@ -123,7 +191,7 @@ public class SimpleType extends Type {
 	int treeSize() {
 		return 
 			memSize()
-			+ (typeName == null ? 0 : getName().treeSize());
+			+ (this.typeName == null ? 0 : getName().treeSize());
 	}
 }
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,15 +11,13 @@
 package org.eclipse.jdt.internal.compiler.parser;
 
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.AnonymousLocalTypeDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.Block;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Initializer;
-import org.eclipse.jdt.internal.compiler.ast.LocalTypeDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.MemberTypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Statement;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.lookup.CompilerModifiers;
 
@@ -133,14 +131,14 @@ public RecoveredElement add(TypeDeclaration memberTypeDeclaration, int bracketBa
 		return this.parent.add(memberTypeDeclaration, bracketBalanceValue);
 	}
 	
-	if (memberTypeDeclaration instanceof AnonymousLocalTypeDeclaration){
+	if ((memberTypeDeclaration.bits & ASTNode.IsAnonymousTypeMASK) != 0){
 		if (this.methodCount > 0) {
 			// add it to the last method body
 			RecoveredMethod lastMethod = this.methods[this.methodCount-1];
 			lastMethod.methodDeclaration.bodyEnd = 0; // reopen method
 			lastMethod.methodDeclaration.declarationSourceEnd = 0; // reopen method
 			lastMethod.bracketBalance++; // expect one closing brace
-			return lastMethod.add(typeDeclaration, bracketBalanceValue);
+			return lastMethod.add(memberTypeDeclaration, bracketBalanceValue);
 		} else {
 			// ignore
 			return this;
@@ -182,7 +180,11 @@ public int bodyEnd(){
 public boolean bodyStartsAtHeaderEnd(){
 	if (typeDeclaration.superInterfaces == null){
 		if (typeDeclaration.superclass == null){
-			return typeDeclaration.bodyStart == typeDeclaration.sourceEnd+1;
+			if(typeDeclaration.typeParameters == null) {
+				return typeDeclaration.bodyStart == typeDeclaration.sourceEnd+1;
+			} else {
+				return typeDeclaration.bodyStart == typeDeclaration.typeParameters[typeDeclaration.typeParameters.length-1].sourceEnd+1;
+			}
 		} else {
 			return typeDeclaration.bodyStart == typeDeclaration.superclass.sourceEnd+1;
 		}
@@ -210,7 +212,7 @@ public char[] name(){
 /* 
  * Answer the associated parsed structure
  */
-public AstNode parseTree(){
+public ASTNode parseTree(){
 	return typeDeclaration;
 }
 /*
@@ -222,11 +224,11 @@ public int sourceEnd(){
 public String toString(int tab) {
 	StringBuffer result = new StringBuffer(tabString(tab));
 	result.append("Recovered type:\n"); //$NON-NLS-1$
-	if (typeDeclaration instanceof AnonymousLocalTypeDeclaration) {
+	if ((typeDeclaration.bits & ASTNode.IsAnonymousTypeMASK) != 0) {
 		result.append(tabString(tab));
 		result.append(" "); //$NON-NLS-1$
 	}
-	result.append(typeDeclaration.print(tab + 1, result));
+	typeDeclaration.print(tab + 1, result);
 	if (this.memberTypes != null) {
 		for (int i = 0; i < this.memberTypeCount; i++) {
 			result.append("\n"); //$NON-NLS-1$
@@ -257,15 +259,14 @@ public void updateBodyStart(int bodyStart){
 public Statement updatedStatement(){
 
 	// ignore closed anonymous type
-	if (typeDeclaration instanceof AnonymousLocalTypeDeclaration
-		&& !this.preserveContent){
+	if ((typeDeclaration.bits & ASTNode.IsAnonymousTypeMASK) != 0 && !this.preserveContent){
 		return null;
 	}
 		
 	TypeDeclaration updatedType = this.updatedTypeDeclaration();
-	if (updatedType instanceof AnonymousLocalTypeDeclaration){
+	if ((updatedType.bits & ASTNode.IsAnonymousTypeMASK) != 0){
 		/* in presence of an anonymous type, we want the full allocation expression */
-		return ((AnonymousLocalTypeDeclaration)updatedType).allocation;
+		return updatedType.allocation;
 	}
 	return updatedType;
 }
@@ -274,7 +275,7 @@ public TypeDeclaration updatedTypeDeclaration(){
 	/* update member types */
 	if (memberTypeCount > 0){
 		int existingCount = typeDeclaration.memberTypes == null ? 0 : typeDeclaration.memberTypes.length;
-		MemberTypeDeclaration[] memberTypeDeclarations = new MemberTypeDeclaration[existingCount + memberTypeCount];
+		TypeDeclaration[] memberTypeDeclarations = new TypeDeclaration[existingCount + memberTypeCount];
 		if (existingCount > 0){
 			System.arraycopy(typeDeclaration.memberTypes, 0, memberTypeDeclarations, 0, existingCount);
 		}
@@ -285,7 +286,7 @@ public TypeDeclaration updatedTypeDeclaration(){
 			memberTypes[memberTypeCount - 1].typeDeclaration.bodyEnd =  bodyEndValue;
 		}
 		for (int i = 0; i < memberTypeCount; i++){
-			memberTypeDeclarations[existingCount + i] = (MemberTypeDeclaration)memberTypes[i].updatedTypeDeclaration();
+			memberTypeDeclarations[existingCount + i] = memberTypes[i].updatedTypeDeclaration();
 		}
 		typeDeclaration.memberTypes = memberTypeDeclarations;
 	}
@@ -377,32 +378,10 @@ public TypeDeclaration updatedTypeDeclaration(){
 			typeDeclaration.createsInternalConstructor(!parser().diet || insideFieldInitializer, true);
 		} 
 	}
-	/* might need to cast itself into a MemberTypeDeclaration or a LocalTypeDeclaration */
-	TypeDeclaration newTypeDeclaration = null;
 	if (parent instanceof RecoveredType){
-		newTypeDeclaration = new MemberTypeDeclaration(typeDeclaration.compilationResult);
-	} else {
-		if (parent instanceof RecoveredMethod){
-			newTypeDeclaration = new LocalTypeDeclaration(typeDeclaration.compilationResult);
-		}
-	}
-	/* copy slots into new type */
-	if (newTypeDeclaration != null){
-		newTypeDeclaration.modifiers = typeDeclaration.modifiers;
-		newTypeDeclaration.modifiersSourceStart = typeDeclaration.modifiersSourceStart;
-		newTypeDeclaration.name = typeDeclaration.name;
-		newTypeDeclaration.superclass = typeDeclaration.superclass;
-		newTypeDeclaration.superInterfaces = typeDeclaration.superInterfaces;
-		newTypeDeclaration.fields = typeDeclaration.fields;
-		newTypeDeclaration.methods = typeDeclaration.methods;
-		newTypeDeclaration.memberTypes = typeDeclaration.memberTypes;
-		newTypeDeclaration.ignoreFurtherInvestigation = typeDeclaration.ignoreFurtherInvestigation;
-		newTypeDeclaration.maxFieldCount = typeDeclaration.maxFieldCount;
-		newTypeDeclaration.declarationSourceStart = typeDeclaration.declarationSourceStart;
-		newTypeDeclaration.declarationSourceEnd = typeDeclaration.declarationSourceEnd;
-		newTypeDeclaration.bodyEnd = typeDeclaration.bodyEnd;
-		newTypeDeclaration.bodyStart = typeDeclaration.bodyStart;
-		typeDeclaration = newTypeDeclaration;
+		typeDeclaration.bits |= ASTNode.IsMemberTypeMASK;
+	} else if (parent instanceof RecoveredMethod){
+		typeDeclaration.bits |= ASTNode.IsLocalTypeMASK;
 	}
 	return typeDeclaration;
 }
@@ -435,6 +414,30 @@ public void updateFromParserState(){
 				// will reset typeListLength to zero
 				// thus this check will only be performed on first errorCheck after class X implements Y,Z,
 			}
+		} else if (parser.listTypeParameterLength > 0) {
+			int length = parser.listTypeParameterLength;
+			int genericsPtr = parser.genericsPtr;
+			boolean canConsume = genericsPtr + 1 >= length && parser.astPtr > -1;
+			if(canConsume) {
+				if (!(parser.astStack[parser.astPtr] instanceof TypeDeclaration)) {
+					canConsume = false;
+				}
+				while(genericsPtr + 1 > length && !(parser.genericsStack[genericsPtr] instanceof TypeParameter)) {
+					genericsPtr--;
+				}
+				for (int i = 0; i < length; i++) {
+					if(!(parser.genericsStack[genericsPtr - i] instanceof TypeParameter)) {
+						canConsume = false;
+					}
+				}
+			}
+			if(canConsume) {
+				TypeDeclaration typeDecl = (TypeDeclaration)parser.astStack[parser.astPtr];
+				System.arraycopy(parser.genericsStack, genericsPtr - length + 1, typeDecl.typeParameters = new TypeParameter[length], 0, length);
+				typeDecl.bodyStart = typeDecl.typeParameters[length-1].declarationSourceEnd + 1;
+				parser.listTypeParameterLength = 0;
+				parser.lastCheckPoint = typeDecl.bodyStart;
+			}
 		}
 	}
 }
@@ -466,6 +469,9 @@ public RecoveredElement updateOnOpeningBrace(int braceStart, int braceEnd){
 			case -1 :
 			case TokenNameextends :
 			case TokenNameimplements :
+			case TokenNameGREATER :
+			case TokenNameRIGHT_SHIFT :
+			case TokenNameUNSIGNED_RIGHT_SHIFT :
 				if (parser.recoveredStaticInitializerStart == 0) break;
 			default:
 				this.foundOpeningBrace = true;				

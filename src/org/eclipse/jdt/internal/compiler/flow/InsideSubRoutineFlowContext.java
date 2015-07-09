@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
-import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.SubRoutineStatement;
 
 /**
@@ -23,7 +23,7 @@ public class InsideSubRoutineFlowContext extends FlowContext {
 	
 	public InsideSubRoutineFlowContext(
 		FlowContext parent,
-		AstNode associatedNode) {
+		ASTNode associatedNode) {
 		super(parent, associatedNode);
 		this.initsOnReturn = FlowInfo.DEAD_END;				
 	}
@@ -53,7 +53,7 @@ public class InsideSubRoutineFlowContext extends FlowContext {
 		if (initsOnReturn == FlowInfo.DEAD_END) {
 			initsOnReturn = flowInfo.copy().unconditionalInits();
 		} else {
-			initsOnReturn = initsOnReturn.mergedWith(flowInfo.unconditionalInits());
+			initsOnReturn = initsOnReturn.mergedWith(flowInfo.copy().unconditionalInits());
 		}
 	}
 }

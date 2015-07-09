@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -20,11 +20,37 @@ import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
  * There are many kinds of statements.
  * <p>
  * The grammar combines both Statement and BlockStatement.
+ * For JLS2:
  * <pre>
  * Statement:
  *    Block
  *    IfStatement
  *    ForStatement
+ *    WhileStatement
+ *    DoStatement
+ *    TryStatement
+ *    SwitchStatement
+ *    SynchronizedStatement
+ *    ReturnStatement
+ *    ThrowStatement
+ *    BreakStatement
+ *    ContinueStatement
+ *    EmptyStatement
+ *    ExpressionStatement
+ *    LabeledStatement
+ *    AssertStatement
+ *    VariableDeclarationStatement
+ *    TypeDeclarationStatement
+ *    ConstructorInvocation
+ *    SuperConstructorInvocation
+ * </pre>
+ * For JLS3, an enhanced for node type was added:
+ * <pre>
+ * Statement:
+ *    Block
+ *    IfStatement
+ *    ForStatement
+ *    EnhancedForStatement
  *    WhileStatement
  *    DoStatement
  *    TryStatement
@@ -86,8 +112,10 @@ public abstract class Statement extends ASTNode {
 	 * only a partial, and inadequate, solution to the issue of associating
 	 * comments with statements. Furthermore, AST.parseCompilationUnit did not
 	 * associate leading comments, making this moot. Clients that need to access
-	 * comments preceding a statement should use a scanner to reanalyze the
-	 * source text immediately preceding the statement's source range.
+	 * comments preceding a statement should either consult the compilation
+	 * unit's {@linkplain CompilationUnit#getCommentList() comment table}
+	 * or use a scanner to reanalyze the source text immediately preceding
+	 * the statement's source range.
 	 */
 	public String getLeadingComment() {
 		return optionalLeadingComment;
@@ -128,7 +156,7 @@ public abstract class Statement extends ASTNode {
 	public void setLeadingComment(String comment) {
 		if (comment != null) {
 			char[] source = comment.toCharArray();
-			Scanner scanner = this.getAST().scanner;
+			Scanner scanner = this.ast.scanner;
 			scanner.resetTo(0, source.length);
 			scanner.setSource(source);
 			try {
@@ -155,7 +183,9 @@ public abstract class Statement extends ASTNode {
 				throw new IllegalArgumentException();
 			}
 		}
-		modifying();
+		// we do not consider the obsolete comment as a structureal property
+		// but we protect them nevertheless
+		checkModifiable();
 		this.optionalLeadingComment = comment;
 	}
 
@@ -173,11 +203,7 @@ public abstract class Statement extends ASTNode {
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		int size = BASE_NODE_SIZE + 1 * 4;
-		String s = getLeadingComment();
-		if (s != null) {
-			size += HEADERS + 2 * 4 + HEADERS + 2 * s.length();
-		}
+		int size = BASE_NODE_SIZE + 1 * 4 + stringSize(getLeadingComment());
 		return size;
 	}
 }	

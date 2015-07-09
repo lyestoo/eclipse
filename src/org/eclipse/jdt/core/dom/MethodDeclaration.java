@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,13 +11,14 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
 /**
  * Method declaration AST node type. A method declaration
  * is the union of a method declaration and a constructor declaration.
- *
+ * For JLS2:
  * <pre>
  * MethodDeclaration:
  *    [ Javadoc ] { Modifier } ( Type | <b>void</b> ) Identifier <b>(</b>
@@ -30,15 +31,34 @@ import java.util.List;
  * 			 { <b>,</b> FormalParameter } ] <b>)</b>
  *        [<b>throws</b> TypeName { <b>,</b> TypeName } ] Block
  * </pre>
+ * For JLS3, type parameters and reified modifiers
+ * (and annotations) were added:
+ * <pre>
+ * MethodDeclaration:
+ *    [ Javadoc ] { ExtendedModifier }
+ *		  [ <b>&lt;</b> TypeParameter { <b>,</b> TypeParameter } <b>&gt;</b> ]
+ *        ( Type | <b>void</b> ) Identifier <b>(</b>
+ *        [ FormalParameter 
+ * 		     { <b>,</b> FormalParameter } ] <b>)</b> {<b>[</b> <b>]</b> }
+ *        [ <b>throws</b> TypeName { <b>,</b> TypeName } ] ( Block | <b>;</b> )
+ * ConstructorDeclaration:
+ *    [ Javadoc ] { ExtendedModifier }
+ *		  [ <b>&lt;</b> TypeParameter { <b>,</b> TypeParameter } <b>&gt;</b> ]
+ *        Identifier <b>(</b>
+ * 		  [ FormalParameter
+ * 			 { <b>,</b> FormalParameter } ] <b>)</b>
+ *        [<b>throws</b> TypeName { <b>,</b> TypeName } ] Block
+ * </pre>
  * <p>
  * When a Javadoc comment is present, the source
  * range begins with the first character of the "/**" comment delimiter.
  * When there is no Javadoc comment, the source range begins with the first
  * character of the first modifier keyword (if modifiers), or the
- * first character of the return type (method, no modifiers), or the
- * first character of the identifier (constructor, no modifiers).
- * The source range extends through the last character of the ";" token (if
- * no body), or the last character of the block (if body).
+ * first character of the "&lt;" token (method, no modifiers, type parameters), 
+ * or the first character of the return type (method, no modifiers, no type
+ * parameters), or the first character of the identifier (constructor, 
+ * no modifiers). The source range extends through the last character of the
+ * ";" token (if no body), or the last character of the block (if body).
  * </p>
  *
  * @since 2.0 
@@ -46,13 +66,153 @@ import java.util.List;
 public class MethodDeclaration extends BodyDeclaration {
 	
 	/**
-	 * Mask containing all legal modifiers for this construct.
+	 * The "javadoc" structural property of this node type.
+	 * @since 3.0
 	 */
-	private static final int LEGAL_MODIFIERS = 
-		Modifier.PUBLIC | Modifier.PRIVATE | Modifier.PROTECTED
-		| Modifier.STATIC | Modifier.FINAL | Modifier.SYNCHRONIZED
-		| Modifier.NATIVE | Modifier.ABSTRACT | Modifier.STRICTFP;
+	public static final ChildPropertyDescriptor JAVADOC_PROPERTY = 
+		internalJavadocPropertyFactory(MethodDeclaration.class);
+
+	/**
+	 * The "modifiers" structural property of this node type (JLS2 API only).
+	 * @since 3.0
+	 */
+    // TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated Replaced by {@link #MODIFIERS2_PROPERTY} in the JLS3 API.
+	public static final SimplePropertyDescriptor MODIFIERS_PROPERTY = 
+		internalModifiersPropertyFactory(MethodDeclaration.class);
+	
+	/**
+	 * The "modifiers" structural property of this node type (added in JLS3 API).
+	 * @since 3.0
+	 */
+	public static final ChildListPropertyDescriptor MODIFIERS2_PROPERTY = 
+		internalModifiers2PropertyFactory(MethodDeclaration.class);
+	
+	/**
+	 * The "constructor" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor CONSTRUCTOR_PROPERTY = 
+		new SimplePropertyDescriptor(MethodDeclaration.class, "constructor", boolean.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * The "name" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor NAME_PROPERTY = 
+		new ChildPropertyDescriptor(MethodDeclaration.class, "name", SimpleName.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "returnType" structural property of this node type (JLS2 API only).
+	 * @since 3.0
+	 */
+	// TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated Replaced by {@link #RETURN_TYPE2_PROPERTY} in the JLS3 API.
+	public static final ChildPropertyDescriptor RETURN_TYPE_PROPERTY = 
+		new ChildPropertyDescriptor(MethodDeclaration.class, "returnType", Type.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "returnType2" structural property of this node type (added in JLS3 API).
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor RETURN_TYPE2_PROPERTY = 
+		new ChildPropertyDescriptor(MethodDeclaration.class, "returnType2", Type.class, OPTIONAL, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "extraDimensions" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor EXTRA_DIMENSIONS_PROPERTY = 
+		new SimplePropertyDescriptor(MethodDeclaration.class, "extraDimensions", int.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * The "typeParameters" structural property of this node type (added in JLS3 API).
+	 * @since 3.0
+	 */
+	public static final ChildListPropertyDescriptor TYPE_PARAMETERS_PROPERTY = 
+		new ChildListPropertyDescriptor(MethodDeclaration.class, "typeParameters", TypeParameter.class, NO_CYCLE_RISK); //$NON-NLS-1$
+	
+	/**
+	 * The "parameters" structural property of this node type).
+	 * @since 3.0
+	 */
+	public static final ChildListPropertyDescriptor PARAMETERS_PROPERTY = 
+		new ChildListPropertyDescriptor(MethodDeclaration.class, "parameters", SingleVariableDeclaration.class, CYCLE_RISK); //$NON-NLS-1$
+	
+	/**
+	 * The "thrownExceptions" structural property of this node type).
+	 * @since 3.0
+	 */
+	public static final ChildListPropertyDescriptor THROWN_EXCEPTIONS_PROPERTY = 
+		new ChildListPropertyDescriptor(MethodDeclaration.class, "thrownExceptions", Name.class, NO_CYCLE_RISK); //$NON-NLS-1$
+	
+	/**
+	 * The "body" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor BODY_PROPERTY = 
+		new ChildPropertyDescriptor(MethodDeclaration.class, "body", Block.class, OPTIONAL, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS_2_0;
+	
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS_3_0;
+	
+	static {
+		List propertyList = new ArrayList(10);
+		createPropertyList(MethodDeclaration.class, propertyList);
+		addProperty(JAVADOC_PROPERTY, propertyList);
+		addProperty(MODIFIERS_PROPERTY, propertyList);
+		addProperty(CONSTRUCTOR_PROPERTY, propertyList);
+		addProperty(RETURN_TYPE_PROPERTY, propertyList);
+		addProperty(NAME_PROPERTY, propertyList);
+		addProperty(PARAMETERS_PROPERTY, propertyList);
+		addProperty(EXTRA_DIMENSIONS_PROPERTY, propertyList);
+		addProperty(THROWN_EXCEPTIONS_PROPERTY, propertyList);
+		addProperty(BODY_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS_2_0 = reapPropertyList(propertyList);
 		
+		propertyList = new ArrayList(11);
+		createPropertyList(MethodDeclaration.class, propertyList);
+		addProperty(JAVADOC_PROPERTY, propertyList);
+		addProperty(MODIFIERS2_PROPERTY, propertyList);
+		addProperty(CONSTRUCTOR_PROPERTY, propertyList);
+		addProperty(TYPE_PARAMETERS_PROPERTY, propertyList);
+		addProperty(RETURN_TYPE2_PROPERTY, propertyList);
+		addProperty(NAME_PROPERTY, propertyList);
+		addProperty(PARAMETERS_PROPERTY, propertyList);
+		addProperty(EXTRA_DIMENSIONS_PROPERTY, propertyList);
+		addProperty(THROWN_EXCEPTIONS_PROPERTY, propertyList);
+		addProperty(BODY_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS_3_0 = reapPropertyList(propertyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the AST.JLS* constants
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		if (apiLevel == AST.JLS2) {
+			return PROPERTY_DESCRIPTORS_2_0;
+		} else {
+			return PROPERTY_DESCRIPTORS_3_0;
+		}
+	}
+			
 	/**
 	 * <code>true</code> for a constructor, <code>false</code> for a method.
 	 * Defaults to method.
@@ -60,31 +220,41 @@ public class MethodDeclaration extends BodyDeclaration {
 	private boolean isConstructor = false;
 	
 	/**
-	 * The modifiers; bit-wise or of Modifier flags.
-	 * Defaults to none.
-	 */
-	private int modifiers = Modifier.NONE;
-	
-	/**
 	 * The method name; lazily initialized; defaults to an unspecified,
 	 * legal Java identifier.
 	 */
 	private SimpleName methodName = null;
-	
+
 	/**
 	 * The parameter declarations 
 	 * (element type: <code>SingleVariableDeclaration</code>).
 	 * Defaults to an empty list.
 	 */
 	private ASTNode.NodeList parameters =
-		new ASTNode.NodeList(true, SingleVariableDeclaration.class);
+		new ASTNode.NodeList(PARAMETERS_PROPERTY);
 	
 	/**
-	 * The return type; lazily initialized; defaults to void. Note that this 
-	 * field is not used for constructor declarations.
+	 * The return type.
+	 * JLS2 behevior: lazily initialized; defaults to void.
+	 * JLS3 behavior; lazily initialized; defaults to void; null allowed.
+	 * Note that this field is ignored for constructor declarations.
 	 */
 	private Type returnType = null;
 	
+	/**
+	 * Indicated whether the return type has been initialized.
+	 * @since 3.0
+	 */
+	private boolean returnType2Initialized = false;
+	
+	/**
+	 * The type paramters (element type: <code>TypeParameter</code>). 
+	 * Null in JLS2. Added in JLS3; defaults to an empty list
+	 * (see constructor).
+	 * @since 3.0
+	 */
+	private ASTNode.NodeList typeParameters = null;
+
 	/**
 	 * The number of array dimensions that appear after the parameters, rather
 	 * than after the return type itself; defaults to 0.
@@ -98,7 +268,7 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * Defaults to an empty list.
 	 */
 	private ASTNode.NodeList thrownExceptions =
-		new ASTNode.NodeList(false, Name.class);
+		new ASTNode.NodeList(THROWN_EXCEPTIONS_PROPERTY);
 
 	/**
 	 * The method body, or <code>null</code> if none.
@@ -109,9 +279,10 @@ public class MethodDeclaration extends BodyDeclaration {
 	/**
 	 * Creates a new AST node for a method declaration owned 
 	 * by the given AST. By default, the declaration is for a method of an
-	 * unspecified, but legal, name; no modifiers; no javadoc; no parameters; 
-	 * void return type; no array dimensions after the parameters; no thrown
-	 * exceptions; and no body (as opposed to an empty body).
+	 * unspecified, but legal, name; no modifiers; no javadoc; no type 
+	 * parameters; void return type; no parameters; no array dimensions after 
+	 * the parameters; no thrown exceptions; and no body (as opposed to an
+	 * empty body).
 	 * <p>
 	 * N.B. This constructor is package-private; all subclasses must be 
 	 * declared in the same package; clients are unable to declare 
@@ -122,27 +293,176 @@ public class MethodDeclaration extends BodyDeclaration {
 	 */
 	MethodDeclaration(AST ast) {
 		super(ast);
+		if (ast.apiLevel >= AST.JLS3) {
+			this.typeParameters = new ASTNode.NodeList(TYPE_PARAMETERS_PROPERTY);
+		}
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 * @since 3.0
+	 */
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int internalGetSetIntProperty(SimplePropertyDescriptor property, boolean get, int value) {
+		if (property == MODIFIERS_PROPERTY) {
+			if (get) {
+				return getModifiers();
+			} else {
+				setModifiers(value);
+				return 0;
+			}
+		}
+		if (property == EXTRA_DIMENSIONS_PROPERTY) {
+			if (get) {
+				return getExtraDimensions();
+			} else {
+				setExtraDimensions(value);
+				return 0;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetIntProperty(property, get, value);
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final boolean internalGetSetBooleanProperty(SimplePropertyDescriptor property, boolean get, boolean value) {
+		if (property == CONSTRUCTOR_PROPERTY) {
+			if (get) {
+				return isConstructor();
+			} else {
+				setConstructor(value);
+				return false;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetBooleanProperty(property, get, value);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == JAVADOC_PROPERTY) {
+			if (get) {
+				return getJavadoc();
+			} else {
+				setJavadoc((Javadoc) child);
+				return null;
+			}
+		}
+		if (property == NAME_PROPERTY) {
+			if (get) {
+				return getName();
+			} else {
+				setName((SimpleName) child);
+				return null;
+			}
+		}
+		if (property == RETURN_TYPE_PROPERTY) {
+			if (get) {
+				return getReturnType();
+			} else {
+				setReturnType((Type) child);
+				return null;
+			}
+		}
+		if (property == RETURN_TYPE2_PROPERTY) {
+			if (get) {
+				return getReturnType2();
+			} else {
+				setReturnType2((Type) child);
+				return null;
+			}
+		}
+		if (property == BODY_PROPERTY) {
+			if (get) {
+				return getBody();
+			} else {
+				setBody((Block) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final List internalGetChildListProperty(ChildListPropertyDescriptor property) {
+		if (property == MODIFIERS2_PROPERTY) {
+			return modifiers();
+		}
+		if (property == TYPE_PARAMETERS_PROPERTY) {
+			return typeParameters();
+		}
+		if (property == PARAMETERS_PROPERTY) {
+			return parameters();
+		}
+		if (property == THROWN_EXCEPTIONS_PROPERTY) {
+			return thrownExceptions();
+		}
+		// allow default implementation to flag the error
+		return super.internalGetChildListProperty(property);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on BodyDeclaration.
+	 */
+	final ChildPropertyDescriptor internalJavadocProperty() {
+		return JAVADOC_PROPERTY;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on BodyDeclaration.
+	 */
+	final ChildListPropertyDescriptor internalModifiers2Property() {
+		return MODIFIERS2_PROPERTY;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on BodyDeclaration.
+	 */
+	final SimplePropertyDescriptor internalModifiersProperty() {
+		return MODIFIERS_PROPERTY;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return METHOD_DECLARATION;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		MethodDeclaration result = new MethodDeclaration(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setJavadoc(
 			(Javadoc) ASTNode.copySubtree(target, getJavadoc()));
-		result.setModifiers(getModifiers());
+		if (this.ast.apiLevel == AST.JLS2) {
+			result.setModifiers(getModifiers());
+			result.setReturnType(
+					(Type) ASTNode.copySubtree(target, getReturnType()));
+		}
+		if (this.ast.apiLevel >= AST.JLS3) {
+			result.modifiers().addAll(ASTNode.copySubtrees(target, modifiers()));
+			result.typeParameters().addAll(
+					ASTNode.copySubtrees(target, typeParameters()));
+			result.setReturnType2(
+					(Type) ASTNode.copySubtree(target, getReturnType2()));
+		}
 		result.setConstructor(isConstructor());
-		result.setReturnType(
-			(Type) ASTNode.copySubtree(target, getReturnType()));
 		result.setExtraDimensions(getExtraDimensions());
 		result.setName((SimpleName) getName().clone(target));
 		result.parameters().addAll(
@@ -157,7 +477,7 @@ public class MethodDeclaration extends BodyDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -170,11 +490,17 @@ public class MethodDeclaration extends BodyDeclaration {
 		if (visitChildren) {
 			// visit children in normal left to right reading order
 			acceptChild(visitor, getJavadoc());
+			if (this.ast.apiLevel == AST.JLS2) {
+				acceptChild(visitor, getReturnType());
+			} else {
+				acceptChildren(visitor, this.modifiers);
+				acceptChildren(visitor, this.typeParameters);
+				acceptChild(visitor, getReturnType2());
+			}
 			// n.b. visit return type even for constructors
-			acceptChild(visitor, getReturnType());
 			acceptChild(visitor, getName());
-			acceptChildren(visitor, parameters);
-			acceptChildren(visitor, thrownExceptions);
+			acceptChildren(visitor, this.parameters);
+			acceptChildren(visitor, this.thrownExceptions);
 			acceptChild(visitor, getBody());
 		}
 		visitor.endVisit(this);
@@ -187,7 +513,7 @@ public class MethodDeclaration extends BodyDeclaration {
 	 *    and <code>false</code> if this is a method declaration
 	 */ 
 	public boolean isConstructor() {
-		return isConstructor;
+		return this.isConstructor;
 	}
 	
 	/**
@@ -197,45 +523,35 @@ public class MethodDeclaration extends BodyDeclaration {
 	 *    and <code>false</code> for a method declaration
 	 */ 
 	public void setConstructor(boolean isConstructor) {
-		modifying();
+		preValueChange(CONSTRUCTOR_PROPERTY);
 		this.isConstructor = isConstructor;
+		postValueChange(CONSTRUCTOR_PROPERTY);
 	}
 
 	/**
-	 * Returns the modifiers explicitly specified on this declaration.
+	 * Returns the live ordered list of type parameters of this method
+	 * declaration (added in JLS3 API). This list is non-empty for parameterized methods.
 	 * <p>
-	 * Note that deprecated is not included.
+	 * Note: This API element is only needed for dealing with Java code that uses
+	 * new language features of J2SE 1.5. It is included in anticipation of J2SE
+	 * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
+	 * may change slightly before reaching its final form.
 	 * </p>
 	 * 
-	 * @return the bit-wise or of Modifier constants
-	 * @see Modifier
+	 * @return the live list of type parameters
+	 *    (element type: <code>TypeParameter</code>)
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
 	 */ 
-	public int getModifiers() {
-		return modifiers;
+	public List typeParameters() {
+		// more efficient than just calling unsupportedIn2() to check
+		if (this.typeParameters == null) {
+			unsupportedIn2();
+		}
+		return this.typeParameters;
 	}
 	
-	/**
-	 * Sets the modifiers explicitly specified on this declaration.
-	 * <p>
-	 * The following modifiers are valid for methods: public, private, protected,
-	 * static, final, synchronized, native, abstract, and strictfp.
-	 * For constructors, only public, private, and protected are meaningful.
-	 * </p>
-	 * 
-	 * @param modifiers the bit-wise or of Modifier constants
-	 * @see Modifier
-	 * @exception IllegalArgumentException if the modifiers are illegal
-	 */ 
-	public void setModifiers(int modifiers) {
-		if ((modifiers & ~LEGAL_MODIFIERS) != 0) {
-			throw new IllegalArgumentException();
-		}
-		modifying();
-		this.modifiers = modifiers;
-	}
-
-//	public List<TypeParameter> typeParameters(); // JSR-014
-
 	/**
 	 * Returns the name of the method declared in this method declaration.
 	 * For a constructor declaration, this should be the same as the name 
@@ -244,13 +560,17 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * @return the method name node
 	 */ 
 	public SimpleName getName() {
-		if (methodName == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setName(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.methodName == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.methodName == null) {
+					preLazyInit();
+					this.methodName = new SimpleName(this.ast);
+					postLazyInit(this.methodName, NAME_PROPERTY);
+				}
+			}
 		}
-		return methodName;
+		return this.methodName;
 	}
 	
 	/**
@@ -269,8 +589,10 @@ public class MethodDeclaration extends BodyDeclaration {
 		if (methodName == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.methodName, methodName, false);
+		ASTNode oldChild = this.methodName;
+		preReplaceChild(oldChild, methodName, NAME_PROPERTY);
 		this.methodName = methodName;
+		postReplaceChild(oldChild, methodName, NAME_PROPERTY);
 	}
 
 	/**
@@ -281,7 +603,38 @@ public class MethodDeclaration extends BodyDeclaration {
 	 *    (element type: <code>SingleVariableDeclaration</code>)
 	 */ 
 	public List parameters() {
-		return parameters;
+		return this.parameters;
+	}
+	
+	/**
+	 * Returns whether this method declaration declares a
+	 * variable arity method (added in JLS3 API). The convenience method checks
+	 * whether the last parameter is so marked.
+	 * <p>
+	 * Note: This API element is only needed for dealing with Java code that uses
+	 * new language features of J2SE 1.5. It is included in anticipation of J2SE
+	 * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
+	 * may change slightly before reaching its final form.
+	 * </p>
+	 * 
+	 * @return <code>true</code> if this is a variable arity method declaration,
+	 *    and <code>false</code> otherwise
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @see SingleVariableDeclaration#isVarargs()
+	 * @since 3.0
+	 */ 
+	public boolean isVarargs() {
+		// more efficient than just calling unsupportedIn2() to check
+		if (this.modifiers == null) {
+			unsupportedIn2();
+		}
+		if (parameters().isEmpty()) {
+			return false;
+		} else {
+			SingleVariableDeclaration v = (SingleVariableDeclaration) parameters().get(parameters().size() - 1);
+			return v.isVarargs();
+		}
 	}
 	
 	/**
@@ -292,35 +645,43 @@ public class MethodDeclaration extends BodyDeclaration {
 	 *    (element type: <code>Name</code>)
 	 */ 
 	public List thrownExceptions() {
-		return thrownExceptions;
+		return this.thrownExceptions;
 	}
 	
 	/**
 	 * Returns the return type of the method declared in this method 
-	 * declaration, exclusive of any extra array dimensions. 
+	 * declaration, exclusive of any extra array dimensions (JLS2 API only). 
 	 * This is one of the few places where the void type is meaningful.
 	 * <p>
 	 * Note that this child is not relevant for constructor declarations
-	 * (although it does still figure in subtree equality comparisons
+	 * (although, it does still figure in subtree equality comparisons
 	 * and visits), and is devoid of the binding information ordinarily
 	 * available.
 	 * </p>
 	 * 
 	 * @return the return type, possibly the void primitive type
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * an AST later than JLS2
 	 */ 
+	// TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated In the JLS3 API, this method is replaced by <code>getReturnType2</code>, which may return <code>null</code>.
 	public Type getReturnType() {
-		if (returnType == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setReturnType(getAST().newPrimitiveType(PrimitiveType.VOID));
-			getAST().setModificationCount(count);
+	    supportedOnlyIn2();
+		if (this.returnType == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.returnType == null) {
+					preLazyInit();
+					this.returnType = this.ast.newPrimitiveType(PrimitiveType.VOID);
+					postLazyInit(this.returnType, RETURN_TYPE_PROPERTY);
+				}
+			}
 		}
-		return returnType;
+		return this.returnType;
 	}
 
 	/**
 	 * Sets the return type of the method declared in this method declaration
-	 * to the given type, exclusive of any extra array dimensions. This is one
+	 * to the given type, exclusive of any extra array dimensions (JLS2 API only). This is one
 	 * of the few places where the void type is meaningful.
 	 * <p>
 	 * Note that this child is not relevant for constructor declarations
@@ -333,13 +694,84 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * <li>the node belongs to a different AST</li>
 	 * <li>the node already has a parent</li>
 	 * </ul>
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * an AST later than JLS2
 	 */ 
+	// TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated In the JLS3 API, this method is replaced by <code>setReturnType2</code>, which accepts <code>null</code>.
 	public void setReturnType(Type type) {
+	    supportedOnlyIn2();
 		if (type == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.returnType, type, false);
+		ASTNode oldChild = this.returnType;
+		preReplaceChild(oldChild, type, RETURN_TYPE_PROPERTY);
 		this.returnType = type;
+		postReplaceChild(oldChild, type, RETURN_TYPE_PROPERTY);
+	}
+
+	/**
+	 * Returns the return type of the method declared in this method 
+	 * declaration, exclusive of any extra array dimensions (added in JLS3 API). 
+	 * This is one of the few places where the void type is meaningful.
+	 * <p>
+	 * Note that this child is not relevant for constructor declarations
+	 * (although, if present, it does still figure in subtree equality comparisons
+	 * and visits), and is devoid of the binding information ordinarily
+	 * available. In the JLS2 API, the return type is mandatory. 
+	 * In the JLS3 API, the return type is optional.
+	 * </p>
+	 * 
+	 * @return the return type, possibly the void primitive type,
+	 * or <code>null</code> if none
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @since 3.0
+	 */ 
+	public Type getReturnType2() {
+	    unsupportedIn2();
+		if (this.returnType == null && !this.returnType2Initialized) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.returnType == null && !this.returnType2Initialized) {
+					preLazyInit();
+					this.returnType = this.ast.newPrimitiveType(PrimitiveType.VOID);
+					this.returnType2Initialized = true;
+					postLazyInit(this.returnType, RETURN_TYPE2_PROPERTY);
+				}
+			}
+		}
+		return this.returnType;
+	}
+
+	/**
+	 * Sets the return type of the method declared in this method declaration
+	 * to the given type, exclusive of any extra array dimensions (added in JLS3 API).
+	 * This is one of the few places where the void type is meaningful.
+	 * <p>
+	 * Note that this child is not relevant for constructor declarations
+	 * (although it does still figure in subtree equality comparisons and visits).
+	 * In the JLS2 API, the return type is mandatory. 
+	 * In the JLS3 API, the return type is optional.
+	 * </p>
+	 * 
+	 * @param type the new return type, possibly the void primitive type,
+	 * or <code>null</code> if none
+	 * @exception UnsupportedOperationException if this operation is used in
+	 * a JLS2 AST
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
+	 * @since 3.0
+	 */ 
+	public void setReturnType2(Type type) {
+	    unsupportedIn2();
+		this.returnType2Initialized = true;
+		ASTNode oldChild = this.returnType;
+		preReplaceChild(oldChild, type, RETURN_TYPE2_PROPERTY);
+		this.returnType = type;
+		postReplaceChild(oldChild, type, RETURN_TYPE2_PROPERTY);
 	}
 
 	/**
@@ -358,7 +790,7 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * @since 2.1
 	 */ 
 	public int getExtraDimensions() {
-		return extraArrayDimensions;
+		return this.extraArrayDimensions;
 	}
 
 	/**
@@ -382,8 +814,9 @@ public class MethodDeclaration extends BodyDeclaration {
 		if (dimensions < 0) {
 			throw new IllegalArgumentException();
 		}
-		modifying();
+		preValueChange(EXTRA_DIMENSIONS_PROPERTY);
 		this.extraArrayDimensions = dimensions;
+		postValueChange(EXTRA_DIMENSIONS_PROPERTY);
 	}
 
 	/**
@@ -398,7 +831,7 @@ public class MethodDeclaration extends BodyDeclaration {
 	 *    body
 	 */ 
 	public Block getBody() {
-		return optionalBody;
+		return this.optionalBody;
 	}
 
 	/**
@@ -421,8 +854,10 @@ public class MethodDeclaration extends BodyDeclaration {
 	 */ 
 	public void setBody(Block body) {
 		// a MethodDeclaration may occur in a Block - must check cycles
-		replaceChild(this.optionalBody, body, true);
+		ASTNode oldChild = this.optionalBody;
+		preReplaceChild(oldChild, body, BODY_PROPERTY);
 		this.optionalBody = body;
+		postReplaceChild(oldChild, body, BODY_PROPERTY);
 	}
 
 	/**
@@ -437,7 +872,7 @@ public class MethodDeclaration extends BodyDeclaration {
 	 *    resolved
 	 */	
 	public IMethodBinding resolveBinding() {
-		return getAST().getBindingResolver().resolveMethod(this);
+		return this.ast.getBindingResolver().resolveMethod(this);
 	}
 
 	/* (omit javadoc for this method)
@@ -456,10 +891,6 @@ public class MethodDeclaration extends BodyDeclaration {
 			}
 		}
 		buffer.append(")");//$NON-NLS-1$
-		if (!isConstructor()) {
-			buffer.append(" returns ");//$NON-NLS-1$
-			getReturnType().appendPrintString(buffer);
-		}
 		buffer.append("]");//$NON-NLS-1$
 	}
 
@@ -467,7 +898,7 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		return super.memSize() + 8 * 4;
+		return super.memSize() + 9 * 4;
 	}
 	
 	/* (omit javadoc for this method)
@@ -476,12 +907,14 @@ public class MethodDeclaration extends BodyDeclaration {
 	int treeSize() {
 		return
 			memSize()
-			+ (getJavadoc() == null ? 0 : getJavadoc().treeSize())
-			+ (methodName == null ? 0 : getName().treeSize())
-			+ (returnType == null ? 0 : getReturnType().treeSize())
-			+ parameters.listSize()
-			+ thrownExceptions.listSize()
-			+ (optionalBody == null ? 0 : getBody().treeSize());
+			+ (this.optionalDocComment == null ? 0 : getJavadoc().treeSize())
+			+ (this.modifiers == null ? 0 : this.modifiers.listSize())
+			+ (this.typeParameters == null ? 0 : this.typeParameters.listSize())
+			+ (this.methodName == null ? 0 : getName().treeSize())
+			+ (this.returnType == null ? 0 : this.returnType.treeSize())
+			+ this.parameters.listSize()
+			+ this.thrownExceptions.listSize()
+			+ (this.optionalBody == null ? 0 : getBody().treeSize());
 	}
 }
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -10,6 +10,9 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Variable declaration fragment AST node type, used in field declarations, 
@@ -27,6 +30,58 @@ package org.eclipse.jdt.core.dom;
  */
 public class VariableDeclarationFragment extends VariableDeclaration {
 		
+	/**
+	 * The "name" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor NAME_PROPERTY = 
+		new ChildPropertyDescriptor(VariableDeclarationFragment.class, "name", SimpleName.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * The "extraDimensions" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final SimplePropertyDescriptor EXTRA_DIMENSIONS_PROPERTY = 
+		new SimplePropertyDescriptor(VariableDeclarationFragment.class, "extraDimensions", int.class, MANDATORY); //$NON-NLS-1$
+	
+	/**
+	 * The "initializer" structural property of this node type.
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor INITIALIZER_PROPERTY = 
+		new ChildPropertyDescriptor(VariableDeclarationFragment.class, "initializer", Expression.class, OPTIONAL, CYCLE_RISK); //$NON-NLS-1$
+
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+		
+	static {
+		List propertyList = new ArrayList(4);
+		createPropertyList(VariableDeclarationFragment.class, propertyList);
+		addProperty(NAME_PROPERTY, propertyList);
+		addProperty(EXTRA_DIMENSIONS_PROPERTY, propertyList);
+		addProperty(INITIALIZER_PROPERTY, propertyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(propertyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
 	/**
 	 * The variable name; lazily initialized; defaults to an unspecified,
 	 * legal Java identifier.
@@ -62,14 +117,61 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int internalGetSetIntProperty(SimplePropertyDescriptor property, boolean get, int value) {
+		if (property == EXTRA_DIMENSIONS_PROPERTY) {
+			if (get) {
+				return getExtraDimensions();
+			} else {
+				setExtraDimensions(value);
+				return 0;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetIntProperty(property, get, value);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == NAME_PROPERTY) {
+			if (get) {
+				return getName();
+			} else {
+				setName((SimpleName) child);
+				return null;
+			}
+		}
+		if (property == INITIALIZER_PROPERTY) {
+			if (get) {
+				return getInitializer();
+			} else {
+				setInitializer((Expression) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return VARIABLE_DECLARATION_FRAGMENT;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		VariableDeclarationFragment result = new VariableDeclarationFragment(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setName((SimpleName) getName().clone(target));
@@ -82,7 +184,7 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -104,13 +206,17 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	 * Method declared on VariableDeclaration.
 	 */ 
 	public SimpleName getName() {
-		if (variableName == null) {
-			// lazy initialize - use setter to ensure parent link set too
-			long count = getAST().modificationCount();
-			setName(new SimpleName(getAST()));
-			getAST().setModificationCount(count);
+		if (this.variableName == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.variableName == null) {
+					preLazyInit();
+					this.variableName = new SimpleName(this.ast);
+					postLazyInit(this.variableName, NAME_PROPERTY);
+				}
+			}
 		}
-		return variableName;
+		return this.variableName;
 	}
 		
 	/* (omit javadoc for this method)
@@ -120,8 +226,10 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 		if (variableName == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild(this.variableName, variableName, false);
+		ASTNode oldChild = this.variableName;
+		preReplaceChild(oldChild, variableName, NAME_PROPERTY);
 		this.variableName = variableName;
+		postReplaceChild(oldChild, variableName, NAME_PROPERTY);
 	}
 
 	/**
@@ -134,10 +242,12 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	 * dimensions, respectively.
 	 * </p>
 	 * 
+	 * @return the number of extra array dimensions this variable has over
+	 *         and above the type specified in the enclosing declaration
 	 * @since 2.0
 	 */ 
 	public int getExtraDimensions() {
-		return extraArrayDimensions;
+		return this.extraArrayDimensions;
 	}
 
 	/**
@@ -150,31 +260,33 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	 * dimensions, respectively.
 	 * </p>
 	 * 
+	 * @param dimensions the given dimensions
 	 * @since 2.0
 	 */ 
 	public void setExtraDimensions(int dimensions) {
 		if (dimensions < 0) {
 			throw new IllegalArgumentException();
 		}
-		modifying();
+		preValueChange(EXTRA_DIMENSIONS_PROPERTY);
 		this.extraArrayDimensions = dimensions;
+		postValueChange(EXTRA_DIMENSIONS_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on VariableDeclaration.
 	 */ 
 	public Expression getInitializer() {
-		return optionalInitializer;
+		return this.optionalInitializer;
 	}
 	
 	/* (omit javadoc for this method)
 	 * Method declared on VariableDeclaration.
 	 */ 
 	public void setInitializer(Expression initializer) {
-		// a SingleVariableDeclaration may occur inside an Expression 
-		// must check cycles
-		replaceChild(this.optionalInitializer, initializer, true);
+		ASTNode oldChild = this.optionalInitializer;
+		preReplaceChild(oldChild, initializer, INITIALIZER_PROPERTY);
 		this.optionalInitializer = initializer;
+		postReplaceChild(oldChild, initializer, INITIALIZER_PROPERTY);
 	}
 
 	/* (omit javadoc for this method)
@@ -191,7 +303,7 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	int treeSize() {
 		return 
 			memSize()
-			+ (variableName == null ? 0 : getName().treeSize())
-			+ (optionalInitializer == null ? 0 : getInitializer().treeSize());
+			+ (this.variableName == null ? 0 : getName().treeSize())
+			+ (this.optionalInitializer == null ? 0 : getInitializer().treeSize());
 	}
 }

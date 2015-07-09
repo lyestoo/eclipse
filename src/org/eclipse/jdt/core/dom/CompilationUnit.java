@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
@@ -11,10 +11,17 @@
 
 package org.eclipse.jdt.core.dom;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.jdt.core.compiler.IProblem;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
+import org.eclipse.jface.text.IDocument;
+import org.eclipse.text.edits.TextEdit;
 
 /**
  * Java compilation unit AST node type. This is the type of the root of an AST.
@@ -22,18 +29,97 @@ import org.eclipse.jdt.core.compiler.IProblem;
  * The source range for this type of node is ordinarily the entire source file,
  * including leading and trailing whitespace and comments.
  * </p>
- *
+ * For JLS2:
  * <pre>
  * CompilationUnit:
  *    [ PackageDeclaration ]
- *    { ImportDeclaration }
- *    { TypeDeclaration | <b>;</b> }
+ *        { ImportDeclaration }
+ *        { TypeDeclaration | <b>;</b> }
+ * </pre>
+ * For JLS3, the kinds of type declarations
+ * grew to include enum and annotation type declarations:
+ * <pre>
+ * CompilationUnit:
+ *    [ PackageDeclaration ]
+ *        { ImportDeclaration }
+ *        { TypeDeclaration | EnumDeclaration | AnnotationTypeDeclaration | <b>;</b> }
  * </pre>
  * 
  * @since 2.0
  */
 public class CompilationUnit extends ASTNode {
 
+	/**
+	 * The "package" structural property of this node type.
+	 * 
+	 * @since 3.0
+	 */
+	public static final ChildPropertyDescriptor PACKAGE_PROPERTY = 
+		new ChildPropertyDescriptor(CompilationUnit.class, "package", PackageDeclaration.class, OPTIONAL, NO_CYCLE_RISK); //$NON-NLS-1$
+	
+	/**
+	 * The "imports" structural property of this node type.
+	 * 
+	 * @since 3.0
+	 */
+	public static final ChildListPropertyDescriptor IMPORTS_PROPERTY =
+		new ChildListPropertyDescriptor(CompilationUnit.class, "imports", ImportDeclaration.class, NO_CYCLE_RISK); //$NON-NLS-1$
+	
+	/**
+	 * The "types" structural property of this node type.
+	 * 
+	 * @since 3.0
+	 */
+	public static final ChildListPropertyDescriptor TYPES_PROPERTY =
+		new ChildListPropertyDescriptor(CompilationUnit.class, "types", AbstractTypeDeclaration.class, CYCLE_RISK); //$NON-NLS-1$
+	
+	/**
+	 * A list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor}),
+	 * or null if uninitialized.
+	 * @since 3.0
+	 */
+	private static final List PROPERTY_DESCRIPTORS;
+	
+	static {
+		List properyList = new ArrayList(4);
+		createPropertyList(CompilationUnit.class, properyList);
+		addProperty(PACKAGE_PROPERTY, properyList);
+		addProperty(IMPORTS_PROPERTY, properyList);
+		addProperty(TYPES_PROPERTY, properyList);
+		PROPERTY_DESCRIPTORS = reapPropertyList(properyList);
+	}
+
+	/**
+	 * Returns a list of structural property descriptors for this node type.
+	 * Clients must not modify the result.
+	 * 
+	 * @param apiLevel the API level; one of the
+	 * <code>AST.JLS&ast;</code> constants
+
+	 * @return a list of property descriptors (element type: 
+	 * {@link StructuralPropertyDescriptor})
+	 * @since 3.0
+	 */
+	public static List propertyDescriptors(int apiLevel) {
+		return PROPERTY_DESCRIPTORS;
+	}
+			
+	/**
+	 * The comment table, or <code>null</code> if none; initially
+	 * <code>null</code>. This array is the storage underlying
+	 * the <code>optionalCommentList</code> ArrayList.
+	 * @since 3.0
+	 */
+	Comment[] optionalCommentTable = null;
+	
+	/**
+	 * The comment list (element type: <code>Comment</code>, 
+	 * or <code>null</code> if none; initially <code>null</code>.
+	 * @since 3.0
+	 */
+	private List optionalCommentList = null;
+	
 	/**
 	 * The package declaration, or <code>null</code> if none; initially
 	 * <code>null</code>.
@@ -45,14 +131,14 @@ public class CompilationUnit extends ASTNode {
 	 * initially none (elementType: <code>ImportDeclaration</code>).
 	 */
 	private ASTNode.NodeList imports =
-		new ASTNode.NodeList(false, ImportDeclaration.class);
+		new ASTNode.NodeList(IMPORTS_PROPERTY);
 	
 	/**
 	 * The list of type declarations in textual order order; 
-	 * initially none (elementType: <code>TypeDeclaration</code>)
+	 * initially none (elementType: <code>AbstractTypeDeclaration</code>)
 	 */
 	private ASTNode.NodeList types =
-		new ASTNode.NodeList(false, TypeDeclaration.class);
+		new ASTNode.NodeList(TYPES_PROPERTY);
 	
 	/**
 	 * Line end table. If <code>lineEndTable[i] == p</code> then the
@@ -83,7 +169,14 @@ public class CompilationUnit extends ASTNode {
 	 * Problems reported by the compiler during parsing or name resolution.
 	 */
 	private IProblem[] problems = EMPTY_PROBLEMS;
-	 
+	
+	/**
+	 * The comment mapper, or <code>null</code> in none; 
+	 * initially <code>null</code>.
+	 * @since 3.0
+	 */
+	private DefaultCommentMapper commentMapper = null;
+	
 	/**
 	 * Sets the line end table for this compilation unit.
 	 * If <code>lineEndTable[i] == p</code> then line number <code>i+1</code> 
@@ -92,13 +185,15 @@ public class CompilationUnit extends ASTNode {
 	 * For example, the source string <code>A\nB\nC</code> has
 	 * line end table {1, 3, 4}.
 	 * 
-	 * @param lineEndtable the line end table
+	 * @param lineEndTable the line end table
 	 */
 	void setLineEndTable(int[] lineEndTable) {
 		if (lineEndTable == null) {
 			throw new NullPointerException();
 		}
-		modifying();
+		// alternate root is *not* considered a structural property
+		// but we protect them nevertheless
+		checkModifiable();
 		this.lineEndTable = lineEndTable;
 	}
 
@@ -120,15 +215,53 @@ public class CompilationUnit extends ASTNode {
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
+	 * @since 3.0
 	 */
-	public int getNodeType() {
+	final List internalStructuralPropertiesForType(int apiLevel) {
+		return propertyDescriptors(apiLevel);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final ASTNode internalGetSetChildProperty(ChildPropertyDescriptor property, boolean get, ASTNode child) {
+		if (property == PACKAGE_PROPERTY) {
+			if (get) {
+				return getPackage();
+			} else {
+				setPackage((PackageDeclaration) child);
+				return null;
+			}
+		}
+		// allow default implementation to flag the error
+		return super.internalGetSetChildProperty(property, get, child);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final List internalGetChildListProperty(ChildListPropertyDescriptor property) {
+		if (property == IMPORTS_PROPERTY) {
+			return imports();
+		}
+		if (property == TYPES_PROPERTY) {
+			return types();
+		}
+		// allow default implementation to flag the error
+		return super.internalGetChildListProperty(property);
+	}
+	
+	/* (omit javadoc for this method)
+	 * Method declared on ASTNode.
+	 */
+	final int getNodeType0() {
 		return COMPILATION_UNIT;
 	}
 
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	ASTNode clone(AST target) {
+	ASTNode clone0(AST target) {
 		CompilationUnit result = new CompilationUnit(target);
 		// n.b do not copy line number table or messages
 		result.setSourceRange(this.getStartPosition(), this.getLength());
@@ -142,7 +275,7 @@ public class CompilationUnit extends ASTNode {
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
-	public boolean subtreeMatch(ASTMatcher matcher, Object other) {
+	final boolean subtreeMatch0(ASTMatcher matcher, Object other) {
 		// dispatch to correct overloaded match method
 		return matcher.match(this, other);
 	}
@@ -155,8 +288,8 @@ public class CompilationUnit extends ASTNode {
 		if (visitChildren) {
 			// visit children in normal left to right reading order
 			acceptChild(visitor, getPackage());
-			acceptChildren(visitor, imports);
-			acceptChildren(visitor, types);
+			acceptChildren(visitor, this.imports);
+			acceptChildren(visitor, this.types);
 		}
 		visitor.endVisit(this);
 	}
@@ -169,7 +302,7 @@ public class CompilationUnit extends ASTNode {
 	 * @return the package declaration node, or <code>null</code> if none
 	 */ 
 	public PackageDeclaration getPackage() {
-		return optionalPackageDeclaration;
+		return this.optionalPackageDeclaration;
 	}
 	
 	/**
@@ -186,30 +319,37 @@ public class CompilationUnit extends ASTNode {
 	 * </ul>
 	 */ 
 	public void setPackage(PackageDeclaration pkgDecl) {
-		replaceChild(this.optionalPackageDeclaration, pkgDecl, false);
+		ASTNode oldChild = this.optionalPackageDeclaration;
+		preReplaceChild(oldChild, pkgDecl, PACKAGE_PROPERTY);
 		this.optionalPackageDeclaration = pkgDecl;
+		postReplaceChild(oldChild, pkgDecl, PACKAGE_PROPERTY);
 	}
 
 	/**
-	 * Returns the live list of nodes for the import declaration of this 
+	 * Returns the live list of nodes for the import declarations of this 
 	 * compilation unit, in order of appearance.
 	 * 
 	 * @return the live list of import declaration nodes
 	 *    (elementType: <code>ImportDeclaration</code>)
 	 */ 
 	public List imports() {
-		return imports;
+		return this.imports;
 	}
 	
 	/**
-	 * Returns the live list of nodes for the top-level type declaration of this 
+	 * Returns the live list of nodes for the top-level type declarations of this 
 	 * compilation unit, in order of appearance.
+     * <p>
+     * Note that in JLS3, the types may include both enum declarations
+     * and annotation type declarations introduced in J2SE 1.5.
+     * For JLS2, the elements are always <code>TypeDeclaration</code>.
+     * </p>
 	 * 
 	 * @return the live list of top-level type declaration
-	 *    nodes (elementType: <code>TypeDeclaration</code>)
+	 *    nodes (elementType: <code>AbstractTypeDeclaration</code>)
 	 */ 
 	public List types() {
-		return types;
+		return this.types;
 	}
 
 	/**
@@ -225,7 +365,7 @@ public class CompilationUnit extends ASTNode {
 	 * <li></li>
 	 * <li>package - a <code>PackageDeclaration</code></li>
 	 * <li>class or interface - a <code>TypeDeclaration</code> or a
-	 *    <code>AnonymousClassDeclaration</code> (for anonymous classes) </li>
+	 *    <code>AnonymousClassDeclaration</code> (for anonymous classes)</li>
 	 * <li>primitive type - none</li>
 	 * <li>array type - none</li>
 	 * <li>field - a <code>VariableDeclarationFragment</code> in a 
@@ -236,10 +376,14 @@ public class CompilationUnit extends ASTNode {
 	 *    <code>VariableDeclarationExpression</code></li>
 	 * <li>method - a <code>MethodDeclaration</code> </li>
 	 * <li>constructor - a <code>MethodDeclaration</code> </li>
+     * <li>annotation type - an <code>AnnotationTypeDeclaration</code></li>
+     * <li>annotation type member - an <code>AnnotationTypeMemberDeclaration</code></li>
+     * <li>enum type - an <code>EnumDeclaration</code></li>
+     * <li>enum constant - an <code>EnumConstantDeclaration</code></li>
 	 * </ul>
 	 * </p>
 	 * <p>
-	 * Each call to <code>AST.parseCompilationUnit</code> with a request for bindings
+	 * Each call to {@link ASTParser#createAST(org.eclipse.core.runtime.IProgressMonitor)} with a request for bindings
 	 * gives rise to separate universe of binding objects. This method always returns
 	 * <code>null</code> when the binding object comes from a different AST.
 	 * Use <code>findDeclaringNode(binding.getKey())</code> when the binding comes
@@ -250,10 +394,10 @@ public class CompilationUnit extends ASTNode {
 	 * @return the corresponding node where the given binding is declared,
 	 * or <code>null</code> if the binding does not correspond to a node in this
 	 * compilation unit or if bindings were not requested when this AST was built
-	 * @see #findDeclaringNode(java.lang.String)
+	 * @see #findDeclaringNode(String)
 	 */
 	public ASTNode findDeclaringNode(IBinding binding) {
-		return getAST().getBindingResolver().findDeclaringNode(binding);
+		return this.ast.getBindingResolver().findDeclaringNode(binding);
 	}
 
 	/**
@@ -269,7 +413,7 @@ public class CompilationUnit extends ASTNode {
 	 * <li></li>
 	 * <li>package - a <code>PackageDeclaration</code></li>
 	 * <li>class or interface - a <code>TypeDeclaration</code> or a
-	 *    <code>AnonymousClassDeclaration</code> (for anonymous classes) </li>
+	 *    <code>AnonymousClassDeclaration</code> (for anonymous classes)</li>
 	 * <li>primitive type - none</li>
 	 * <li>array type - none</li>
 	 * <li>field - a <code>VariableDeclarationFragment</code> in a 
@@ -280,10 +424,14 @@ public class CompilationUnit extends ASTNode {
 	 *    <code>VariableDeclarationExpression</code></li>
 	 * <li>method - a <code>MethodDeclaration</code> </li>
 	 * <li>constructor - a <code>MethodDeclaration</code> </li>
+     * <li>annotation type - an <code>AnnotationTypeDeclaration</code></li>
+     * <li>annotation type member - an <code>AnnotationTypeMemberDeclaration</code></li>
+     * <li>enum type - an <code>EnumDeclaration</code></li>
+     * <li>enum constant - an <code>EnumConstantDeclaration</code></li>
 	 * </ul>
 	 * </p>
 	 * <p>
-	 * Note that as explained in {@link IBinding#getkey IBinding.getkey}
+	 * Note that as explained in {@link IBinding#getKey() IBinding.getkey}
 	 * there may be no keys for finding the declaring node for local variables,
 	 * local or anonymous classes, etc.
 	 * </p>
@@ -293,11 +441,73 @@ public class CompilationUnit extends ASTNode {
 	 * key is declared, or <code>null</code> if the key is <code>null</code>
 	 * or if the key does not correspond to a node in this compilation unit
 	 * or if bindings were not requested when this AST was built
-	 * @see IBinding#getKey
+	 * @see IBinding#getKey()
 	 * @since 2.1
 	 */
 	public ASTNode findDeclaringNode(String key) {
-		return getAST().getBindingResolver().findDeclaringNode(key);
+		return this.ast.getBindingResolver().findDeclaringNode(key);
+	}
+	
+	/**
+	 * Returns the internal comment mapper.
+	 * 
+	 * @return the comment mapper, or <code>null</code> if none.
+	 * @since 3.0
+	 */
+	DefaultCommentMapper getCommentMapper() {
+		return this.commentMapper;
+	}
+
+	/**
+	 * Initializes the internal comment mapper with the given
+	 * scanner.
+	 * 
+	 * @param scanner the scanner
+	 * @since 3.0
+	 */
+	void initCommentMapper(Scanner scanner) {
+		this.commentMapper = new DefaultCommentMapper(this.optionalCommentTable);
+		this.commentMapper.initialize(this, scanner);
+	}
+
+	/**
+	 * Returns the extended start position of the given node. Unlike
+	 * {@link ASTNode#getStartPosition()} and {@link ASTNode#getLength()},
+	 * the extended source range may include comments and whitespace
+	 * immediately before or after the normal source range for the node.
+	 * 
+	 * @param node the node
+	 * @return the 0-based character index, or <code>-1</code>
+	 *    if no source position information is recorded for this node
+	 * @see #getExtendedLength(ASTNode)
+	 * @since 3.0
+	 */
+	public int getExtendedStartPosition(ASTNode node) {
+		if (this.commentMapper == null) {
+			return -1;
+		} else {
+			return this.commentMapper.getExtendedStartPosition(node);
+		}
+	}
+
+	/**
+	 * Returns the extended source length of the given node. Unlike
+	 * {@link ASTNode#getStartPosition()} and {@link ASTNode#getLength()},
+	 * the extended source range may include comments and whitespace
+	 * immediately before or after the normal source range for the node.
+	 * 
+	 * @param node the node
+	 * @return a (possibly 0) length, or <code>0</code>
+	 *    if no source position information is recorded for this node
+	 * @see #getExtendedStartPosition(ASTNode)
+	 * @since 3.0
+	 */
+	public int getExtendedLength(ASTNode node) {
+		if (this.commentMapper == null) {
+			return 0;
+		} else {
+			return this.commentMapper.getExtendedLength(node);
+		}
 	}
 		
 	/**
@@ -318,7 +528,7 @@ public class CompilationUnit extends ASTNode {
 	 *    position does not correspond to a source line in the original
 	 *    source file or if line number information is not known for this
 	 *    compilation unit
-	 * @see AST#parseCompilationUnit
+	 * @see ASTParser
 	 */
 	public int lineNumber(int position) {
 		int length = lineEndTable.length;
@@ -384,8 +594,8 @@ public class CompilationUnit extends ASTNode {
 	 * </p>
 	 *
 	 * @return the list of messages, possibly empty
-	 * @see #getProblems
-	 * @see AST#parseCompilationUnit
+	 * @see #getProblems()
+	 * @see ASTParser
 	 */
 	public Message[] getMessages() {
 		if (this.messages == null) {
@@ -416,12 +626,12 @@ public class CompilationUnit extends ASTNode {
 	 * </p>
 	 * 
 	 * @return the list of detailed problem objects, possibly empty
-	 * @see #getMessages
-	 * @see AST#parseCompilationUnit
+	 * @see #getMessages()
+	 * @see ASTParser
 	 * @since 2.1
 	 */
 	public IProblem[] getProblems() {
-		return problems;
+		return this.problems;
 	}
 
 	/**
@@ -437,6 +647,98 @@ public class CompilationUnit extends ASTNode {
 		this.problems = problems;
 	}
 		
+	/**
+	 * Returns a list of the comments encountered while parsing
+	 * this compilation unit.
+	 * <p>
+	 * Since the Java language allows comments to appear most anywhere
+	 * in the source text, it is problematic to locate comments in relation
+	 * to the structure of an AST. The one exception is doc comments 
+	 * which, by convention, immediately precede type, field, and
+	 * method declarations; these comments are located in the AST
+	 * by {@link  BodyDeclaration#getJavadoc BodyDeclaration.getJavadoc}.
+	 * Other comments do not show up in the AST. The table of comments
+	 * is provided for clients that need to find the source ranges of
+	 * all comments in the original source string. It includes entries
+	 * for comments of all kinds (line, block, and doc), arranged in order
+	 * of increasing source position. 
+	 * </p>
+	 * Note on comment parenting: The {@link ASTNode#getParent() getParent()}
+	 * of a doc comment associated with a body declaration is the body
+	 * declaration node; for these comment nodes
+	 * {@link ASTNode#getRoot() getRoot()} will return the compilation unit
+	 * (assuming an unmodified AST) reflecting the fact that these nodes
+	 * are property located in the AST for the compilation unit.
+	 * However, for other comment nodes, {@link ASTNode#getParent() getParent()}
+	 * will return <code>null</code>, and {@link ASTNode#getRoot() getRoot()}
+	 * will return the comment node itself, indicating that these comment nodes
+	 * are not directly connected to the AST for the compilation unit. The 
+	 * {@link Comment#getAlternateRoot Comment.getAlternateRoot}
+	 * method provides a way to navigate from a comment to its compilation
+	 * unit.
+	 * </p>
+	 * <p>
+	 * A note on visitors: The only comment nodes that will be visited when
+	 * visiting a compilation unit are the doc comments parented by body
+	 * declarations. To visit all comments in normal reading order, iterate
+	 * over the comment table and call {@link ASTNode#accept(ASTVisitor) accept}
+	 * on each element.
+	 * </p>
+	 * <p>
+	 * Clients cannot modify the resulting list.
+	 * </p>
+	 * 
+	 * @return an unmodifiable list of comments in increasing order of source
+	 * start position, or <code>null</code> if comment information
+	 * for this compilation unit is not available
+	 * @see ASTParser
+	 * @since 3.0
+	 */
+	public List getCommentList() {
+		return this.optionalCommentList;
+	}
+	
+	/**
+	 * Sets the list of the comments encountered while parsing
+	 * this compilation unit.
+	 * 
+	 * @param commentTable a list of comments in increasing order
+	 * of source start position, or <code>null</code> if comment
+	 * information for this compilation unit is not available
+	 * @exception IllegalArgumentException if the comment table is
+	 * not in increasing order of source position
+	 * @see #getCommentList()
+	 * @see ASTParser
+	 * @since 3.0
+	 */
+	void setCommentTable(Comment[] commentTable) {
+		// double check table to ensure that all comments have
+		// source positions and are in strictly increasing order
+		if (commentTable == null) {
+			this.optionalCommentList = null;
+			this.optionalCommentTable = null;
+		} else {
+			int nextAvailablePosition = 0;
+			for (int i = 0; i < commentTable.length; i++) {
+				Comment comment = commentTable[i];
+				if (comment == null) {
+					throw new IllegalArgumentException();
+				}
+				int start = comment.getStartPosition();
+				int length = comment.getLength();
+				if (start < 0 || length < 0 || start < nextAvailablePosition) {
+					throw new IllegalArgumentException();
+				}
+				nextAvailablePosition = comment.getStartPosition() + comment.getLength();
+			}
+			this.optionalCommentTable = commentTable;
+			List commentList = Arrays.asList(commentTable);
+			// protect the list from further modification
+			this.optionalCommentList = Collections.unmodifiableList(commentList);
+		}
+	}
+	
+	
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */
@@ -445,7 +747,7 @@ public class CompilationUnit extends ASTNode {
 		// include the type names
 		buffer.append("["); //$NON-NLS-1$
 		for (Iterator it = types().iterator(); it.hasNext(); ) {
-			TypeDeclaration d = (TypeDeclaration) it.next();
+			AbstractTypeDeclaration d = (AbstractTypeDeclaration) it.next();
 			buffer.append(d.getName().getIdentifier());
 			if (it.hasNext()) {
 				buffer.append(","); //$NON-NLS-1$
@@ -458,10 +760,14 @@ public class CompilationUnit extends ASTNode {
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		int size = BASE_NODE_SIZE + 4 * 4;
-		if (lineEndTable != null) {
-			size += HEADERS + 4 * lineEndTable.length;
+		int size = BASE_NODE_SIZE + 8 * 4;
+		if (this.lineEndTable != null) {
+			size += HEADERS + 4 * this.lineEndTable.length;
 		}
+		if (this.optionalCommentTable != null) {
+			size += HEADERS + 4 * this.optionalCommentTable.length;
+		}
+		// ignore the space taken up by optionalCommentList
 		return size;
 	}
 	
@@ -469,11 +775,82 @@ public class CompilationUnit extends ASTNode {
 	 * Method declared on ASTNode.
 	 */
 	int treeSize() {
-		return
-			memSize()
-			+ (optionalPackageDeclaration == null ? 0 : getPackage().treeSize())
-			+ imports.listSize()
-			+ types.listSize();
+		int size = memSize();
+		if (this.optionalPackageDeclaration != null) {
+			size += getPackage().treeSize();
+		}
+		size += this.imports.listSize();
+		size += this.types.listSize();
+		// include disconnected comments
+		if (this.optionalCommentList != null) {
+			for (int i = 0; i < this.optionalCommentList.size(); i++) {
+				Comment comment = (Comment) this.optionalCommentList.get(i);
+				if (comment != null && comment.getParent() == null) {
+					size += comment.treeSize();
+				}
+			}
+		}
+		return size;
+	}
+	
+	/**
+	 * Enables the recording of changes to this compilation
+	 * unit and its descendents. The compilation unit must have
+	 * been created by <code>ASTParser</code> and still be in
+	 * its original state. Once recording is on,
+	 * arbitrary changes to the subtree rooted at this compilation
+	 * unit are recorded internally. Once the modification has
+	 * been completed, call <code>rewrite</code> to get an object
+	 * representing the corresponding edits to the original 
+	 * source code string.
+	 *
+	 * @exception IllegalArgumentException if this compilation unit is
+	 * marked as unmodifiable, or if this compilation unit has already 
+	 * been tampered with, or recording has already been enabled
+	 * @since 3.0
+	 */
+	public void recordModifications() {
+		getAST().recordModifications(this);
+	}
+	
+	/**
+	 * Converts all modifications recorded for this compilation
+	 * unit into an object representing the corresponding text
+	 * edits to the given document containing the original source
+	 * code for this compilation unit.
+	 * <p>
+	 * The compilation unit must have been created by
+	 * <code>ASTParser</code> from the source code string in the
+	 * given document, and recording must have been turned
+	 * on with a prior call to <code>recordModifications</code>
+	 * while the AST was still in its original state.
+	 * </p>
+	 * <p>
+	 * Calling this methods does not discard the modifications
+	 * on record. Subsequence modifications made to the AST
+	 * are added to the ones already on record. If this method
+	 * is called again later, the resulting text edit object will
+	 * accurately reflect the net cumulative affect of all those
+	 * changes.
+	 * </p>
+	 * 
+	 * @param document original document containing source code
+	 * for this compilation unit
+	 * @param options the table of formatter options
+	 * (key type: <code>String</code>; value type: <code>String</code>);
+	 * or <code>null</code> to use the standard global options
+	 * {@link org.eclipse.jdt.core.JavaCore#getOptions() JavaCore.getOptions()}.
+	 * @return text edit object describing the changes to the
+	 * document corresponding to the recorded AST modifications
+	 * @exception IllegalArgumentException if the document passed is
+	 * <code>null</code> or does not correspond to this AST
+	 * @exception IllegalStateException if <code>recordModifications</code>
+	 * was not called to enable recording
+	 * @see #recordModifications()
+	 * @since 3.0
+	 */
+	public TextEdit rewrite(IDocument document, Map options) {
+		return getAST().rewrite(document, options);
 	}
 }
 
