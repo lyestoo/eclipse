@@ -1,9 +1,9 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2001, 2003 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
@@ -12,10 +12,13 @@
 package org.eclipse.jdt.core.dom;
 
 import java.util.Map;
+
+import org.eclipse.jdt.core.IClassFile;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.AbstractSyntaxTreeVisitorAdapter;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
@@ -97,8 +100,8 @@ public final class AST {
 	 */
 	public AST(Map options) {
 		this.scanner = new Scanner(
-			false /*comment*/, 
-			false /*whitespace*/, 
+			true /*comment*/, 
+			true /*whitespace*/, 
 			false /*nls*/, 
 			JavaCore.VERSION_1_4.equals(options.get(JavaCore.COMPILER_SOURCE)) /*assert*/, 
 			JavaCore.VERSION_1_4.equals(options.get(JavaCore.COMPILER_COMPLIANCE)) /*strict comment*/, 
@@ -167,13 +170,22 @@ public final class AST {
 
 	
 	/**
-	 * Parses the given string as a Java compilation unit and creates and 
-	 * returns a corresponding abstract syntax tree.
+	 * Parses the source string of the given Java model compilation unit element
+	 * and creates and returns a corresponding abstract syntax tree. The source 
+	 * string is obtained from the Java model element using
+	 * <code>ICompilationUnit.getSource()<code>.
 	 * <p>
 	 * The returned compilation unit node is the root node of a new AST.
 	 * Each node in the subtree carries source range(s) information relating back
-	 * to positions in the given source string (the given source string itself
-	 * is not remembered with the AST).
+	 * to positions in the source string (the source string is not remembered
+	 * with the AST).
+	 * The source range usually begins at the first character of the first token 
+	 * corresponding to the node; leading whitespace and comments are <b>not</b>
+	 * included. The source range usually extends through the last character of
+	 * the last token corresponding to the node; trailing whitespace and
+	 * comments are <b>not</b> included. There are a handful of exceptions
+	 * (including compilation units and the various body declarations); the
+	 * specification for these node type spells out the details.
 	 * Source ranges nest properly: the source range for a child is always
 	 * within the source range of its parent, and the source ranges of sibling
 	 * nodes never overlap.
@@ -206,6 +218,8 @@ public final class AST {
 	 * @param resolveBindings <code>true</code> if bindings are wanted, 
 	 *   and <code>false</code> if bindings are not of interest
 	 * @return the compilation unit node
+	 * @exception IllegalArgumentException if the given Java element does not 
+	 * exist or if its source string cannot be obtained
 	 * @see ASTNode#getFlags()
 	 * @see ASTNode#MALFORMED
 	 * @see ASTNode#getStartPosition()
@@ -255,6 +269,116 @@ public final class AST {
 	}
 
 	/**
+	 * Parses the source string corresponding to the given Java class file
+	 * element and creates and returns a corresponding abstract syntax tree.
+	 * The source string is obtained from the Java model element using
+	 * <code>IClassFile.getSource()<code>, and is only available for a class
+	 * files with attached source.
+	 * <p>
+	 * The returned compilation unit node is the root node of a new AST.
+	 * Each node in the subtree carries source range(s) information relating back
+	 * to positions in the source string (the source string is not remembered
+	 * with the AST).
+	 * The source range usually begins at the first character of the first token 
+	 * corresponding to the node; leading whitespace and comments are <b>not</b>
+	 * included. The source range usually extends through the last character of
+	 * the last token corresponding to the node; trailing whitespace and
+	 * comments are <b>not</b> included. There are a handful of exceptions
+	 * (including compilation units and the various body declarations); the
+	 * specification for these node type spells out the details.
+	 * Source ranges nest properly: the source range for a child is always
+	 * within the source range of its parent, and the source ranges of sibling
+	 * nodes never overlap.
+	 * If a syntax error is detected while parsing, the relevant node(s) of the
+	 * tree will be flagged as <code>MALFORMED</code>.
+	 * </p>
+	 * <p>
+	 * If <code>resolveBindings</code> is <code>true</code>, the various names
+	 * and types appearing in the compilation unit can be resolved to "bindings"
+	 * by calling the <code>resolveBinding</code> methods. These bindings 
+	 * draw connections between the different parts of a program, and 
+	 * generally afford a more powerful vantage point for clients who wish to
+	 * analyze a program's structure more deeply. These bindings come at a 
+	 * considerable cost in both time and space, however, and should not be
+	 * requested frivolously. The additional space is not reclaimed until the 
+	 * AST, all its nodes, and all its bindings become garbage. So it is very
+	 * important to not retain any of these objects longer than absolutely
+	 * necessary. Bindings are resolved at the time the AST is created. Subsequent
+	 * modifications to the AST do not affect the bindings returned by
+	 * <code>resolveBinding</code> methods in any way; these methods return the
+	 * same binding as before the AST was modified (including modifications
+	 * that rearrange subtrees by reparenting nodes).
+	 * If <code>resolveBindings</code> is <code>false</code>, the analysis 
+	 * does not go beyond parsing and building the tree, and all 
+	 * <code>resolveBinding</code> methods return <code>null</code> from the 
+	 * outset.
+	 * </p>
+	 * 
+	 * @param classFile the Java model compilation unit whose source code is to be parsed
+	 * @param resolveBindings <code>true</code> if bindings are wanted, 
+	 *   and <code>false</code> if bindings are not of interest
+	 * @return the compilation unit node
+	 * @exception IllegalArgumentException if the given Java element does not 
+	 * exist or if its source string cannot be obtained
+	 * @see ASTNode#getFlags()
+	 * @see ASTNode#MALFORMED
+	 * @see ASTNode#getStartPosition()
+	 * @see ASTNode#getLength()
+	 * @since 2.1
+	 */
+	public static CompilationUnit parseCompilationUnit(
+		IClassFile classFile,
+		boolean resolveBindings) {
+			if (classFile == null) {
+				throw new IllegalArgumentException();
+			}
+			char[] source = null;
+			String sourceString = null;
+			try {
+				sourceString = classFile.getSource();
+			} catch (JavaModelException e) {
+				throw new IllegalArgumentException();
+			}
+			if (sourceString == null) {
+				throw new IllegalArgumentException();
+			}
+			source = sourceString.toCharArray();
+			if (!resolveBindings) {
+				return AST.parseCompilationUnit(source);
+			}
+			StringBuffer buffer = new StringBuffer(".java"); //$NON-NLS-1$
+			
+			String classFileName = classFile.getElementName(); // this includes the trailing .class
+			buffer.insert(0, classFileName.toCharArray(), 0, classFileName.indexOf('.'));
+			IJavaProject project = classFile.getJavaProject();
+			try {
+				CompilationUnitDeclaration compilationUnitDeclaration =
+					CompilationUnitResolver.resolve(
+						source,
+						CharOperation.splitOn('.', classFile.getType().getPackageFragment().getElementName().toCharArray()),
+						buffer.toString(),
+						project,
+						new AbstractSyntaxTreeVisitorAdapter());
+				ASTConverter converter = new ASTConverter(project.getOptions(true), true);
+				AST ast = new AST();
+				BindingResolver resolver = new DefaultBindingResolver(compilationUnitDeclaration.scope);
+				ast.setBindingResolver(resolver);
+				converter.setAST(ast);
+			
+				CompilationUnit cu = converter.convert(compilationUnitDeclaration, source);
+				cu.setLineEndTable(compilationUnitDeclaration.compilationResult.lineSeparatorPositions);
+				resolver.storeModificationCount(ast.modificationCount());
+				return cu;
+			} catch(JavaModelException e) {
+				/* if a JavaModelException is thrown trying to retrieve the name environment
+				 * then we simply do a parsing without creating bindings.
+				 * Therefore all binding resolution will return null.
+				 */
+				return parseCompilationUnit(source);			
+			}
+	}
+			
+	/**
 	 * Parses the given string as the hypothetical contents of the named
 	 * compilation unit and creates and returns a corresponding abstract syntax tree.
 	 * <p>
@@ -262,6 +386,13 @@ public final class AST {
 	 * Each node in the subtree carries source range(s) information relating back
 	 * to positions in the given source string (the given source string itself
 	 * is not remembered with the AST).
+	 * The source range usually begins at the first character of the first token 
+	 * corresponding to the node; leading whitespace and comments are <b>not</b>
+	 * included. The source range usually extends through the last character of
+	 * the last token corresponding to the node; trailing whitespace and
+	 * comments are <b>not</b> included. There are a handful of exceptions
+	 * (including compilation units and the various body declarations); the
+	 * specification for these node type spells out the details.
 	 * Source ranges nest properly: the source range for a child is always
 	 * within the source range of its parent, and the source ranges of sibling
 	 * nodes never overlap.
@@ -360,6 +491,13 @@ public final class AST {
 	 * Each node in the subtree carries source range(s) information relating back
 	 * to positions in the given source string (the given source string itself
 	 * is not remembered with the AST). 
+	 * The source range usually begins at the first character of the first token 
+	 * corresponding to the node; leading whitespace and comments are <b>not</b>
+	 * included. The source range usually extends through the last character of
+	 * the last token corresponding to the node; trailing whitespace and
+	 * comments are <b>not</b> included. There are a handful of exceptions
+	 * (including compilation units and the various body declarations); the
+	 * specification for these node type spells out the details.
 	 * Source ranges nest properly: the source range for a child is always
 	 * within the source range of its parent, and the source ranges of sibling
 	 * nodes never overlap.

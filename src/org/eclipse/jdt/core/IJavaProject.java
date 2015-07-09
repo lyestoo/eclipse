@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
@@ -10,6 +10,7 @@
  *     IBM Corporation - added getOption(String, boolean), getOptions(boolean) and setOptions(Map)
  *     IBM Corporation - deprecated getPackageFragmentRoots(IClasspathEntry) and 
  *                               added findPackageFragmentRoots(IClasspathEntry)
+ *     IBM Corporation - added isOnClasspath(IResource)
  ******************************************************************************/
 package org.eclipse.jdt.core;
 
@@ -33,11 +34,10 @@ import org.eclipse.jdt.core.eval.IEvaluationContext;
  * defining where the builder writes <code>.class</code> files. A project that
  * references packages in another project can access the packages by including
  * the required project in a classpath entry. The Java model will present the
- * source elements in the required project, and when building, the compiler will
- * use the binaries from that project (that is, the output location of the 
- * required project is used as a library). The classpath format is a sequence 
- * of classpath entries describing the location and contents of package fragment
- * roots.
+ * source elements in the required project; when building, the compiler will use
+ * the corresponding generated class files from the required project's output
+ * location(s)). The classpath format is a sequence of classpath entries
+ * describing the location and contents of package fragment roots.
  * </p>
  * Java project elements need to be opened before they can be navigated or manipulated.
  * The children of a Java project are the package fragment roots that are 
@@ -197,10 +197,15 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * <p>
 	 * Non-Java resources includes other files and folders located in the
 	 * project not accounted for by any of it source or binary package fragment
-	 * roots.
+	 * roots. If the project is a source folder itself, resources excluded from the
+	 * corresponding source classpath entry by one or more exclusion patterns
+	 * are considered non-Java resources and will appear in the result
+	 * (possibly in a folder)
 	 * </p>
 	 * 
 	 * @return an array of non-Java resources directly contained in this project
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource
 	 */
 	Object[] getNonJavaResources() throws JavaModelException;
 
@@ -236,13 +241,24 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	Map getOptions(boolean inheritJavaCoreOptions);
 
 	/**
-	 * Returns the full path to the location where the builder writes 
-	 * <code>.class</code> files.
-	 *
-	 * @exception JavaModelException if this element does not exist or if an
-	 *		exception occurs while accessing its corresponding resource
-	 * @return the full path to the location where the builder writes 
-	 * <code>.class</code> files
+	 * Returns the default output location for this project as a workspace-
+	 * relative absolute path.
+	 * <p>
+	 * The default output location is where class files are ordinarily generated
+	 * (and resource files, copied). Each source classpath entry can also
+	 * specify an output location for the generated class files (and copied
+	 * resource files) corresponding to compilation units under that source
+	 * folder. This makes it possible to arrange generated class files for
+	 * different source folders in different output folders, and not
+	 * necessarily the default output folder. This means that the generated
+	 * class files for the project may end up scattered across several folders,
+	 * rather than all in the default output folder (which is more standard).
+	 * </p>
+	 * 
+	 * @return the workspace-relative absolute path of the default output folder
+	 * @exception JavaModelException if this element does not exist
+	 * @see #setOutputLocation
+	 * @see IClasspathEntry#getOutputLocation
 	 */
 	IPath getOutputLocation() throws JavaModelException;
 
@@ -379,15 +395,17 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	/**
 	 * Returns the names of the projects that are directly required by this
 	 * project. A project is required if it is in its classpath.
+	 * <p>
+	 * The project names are returned in the order they appear on the classpath.
 	 *
 	 * @return the names of the projects that are directly required by this
-	 * project
+	 * project in classpath order
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource
 	 */
 	String[] getRequiredProjectNames() throws JavaModelException;
 
-	/**
+	/** TODO: (jim) improve doc to mention classpath containers
 	 * This is a helper method returning the resolved classpath for the project, as a list of classpath entries, 
 	 * where all classpath variable entries have been resolved and substituted with their final target entries.
 	 * <p>
@@ -434,15 +452,33 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 */
 	boolean hasClasspathCycle(IClasspathEntry[] entries);
 	/**
-	 * Returns whether the given element is on the classpath of this project.
+	 * Returns whether the given element is on the classpath of this project, 
+	 * that is, referenced from a classpath entry and not explicitly excluded
+	 * using an exclusion pattern. 
 	 * 
 	 * @param element the given element
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource
-	 * @return true if the given element is on the classpath of this project, false otherwise
+	 * @return <code>true</code> if the given element is on the classpath of
+	 * this project, <code>false</code> otherwise
+	 * @see IClasspathEntry#getExclusionPatterns
 	 * @since 2.0
 	 */
 	boolean isOnClasspath(IJavaElement element) throws JavaModelException;
+	/**
+	 * Returns whether the given resource is on the classpath of this project,
+	 * that is, referenced from a classpath entry and not explicitly excluded
+	 * using an exclusion pattern.
+	 * 
+	 * @param element the given element
+	 * @exception JavaModelException if this project does not exist or if an
+	 *		exception occurs while accessing its corresponding resource
+	 * @return <code>true</code> if the given resource is on the classpath of
+	 * this project, <code>false</code> otherwise
+	 * @see IClasspathEntry#getExclusionPatterns
+	 * @since 2.1
+	 */
+	boolean isOnClasspath(IResource resource) throws JavaModelException;
 
 	/**
 	 * Creates a new evaluation context.
@@ -502,21 +538,34 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	void setOptions(Map newOptions);
 
 	/**
-	 * Sets the output location of this project to the location
-	 * described by the given absolute path.
+	 * Sets the default output location of this project to the location
+	 * described by the given workspace-relative absolute path.
 	 * <p>
-	 *
-	 * @param path the given absolute path
-	 * @param monitor the given progress monitor
+	 * The default output location is where class files are ordinarily generated
+	 * (and resource files, copied). Each source classpath entries can also
+	 * specify an output location for the generated class files (and copied
+	 * resource files) corresponding to compilation units under that source
+	 * folder. This makes it possible to arrange that generated class files for
+	 * different source folders to end up in different output folders, and not
+	 * necessarily the default output folder. This means that the generated
+	 * class files for the project may end up scattered across several folders,
+	 * rather than all in the default output folder (which is more standard).
+	 * </p>
+	 * 
+	 * @param path the workspace-relative absolute path of the default output
+	 * folder
+	 * @param monitor the progress monitor
 	 * 
 	 * @exception JavaModelException if the classpath could not be set. Reasons include:
 	 * <ul>
-	 *  <li>This Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
-	 *	<li>The path refers to a location not contained in this project (<code>PATH_OUTSIDE_PROJECT</code>)
-	 *	<li>The path is not an absolute path (<code>RELATIVE_PATH</code>)
-	 *  <li>The path is nested inside a package fragment root of this project (<code>INVALID_PATH</code>)
+	 *  <li> This Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
+	 *  <li> The path refers to a location not contained in this project (<code>PATH_OUTSIDE_PROJECT</code>)
+	 *  <li> The path is not an absolute path (<code>RELATIVE_PATH</code>)
+	 *  <li> The path is nested inside a package fragment root of this project (<code>INVALID_PATH</code>)
 	 *  <li> The output location is being modified during resource change event notification (CORE_EXCEPTION)	 
 	 * </ul>
+	 * @see #getOutputLocation
+     * @see IClasspathEntry#getOutputLocation
 	 */
 	void setOutputLocation(IPath path, IProgressMonitor monitor)
 		throws JavaModelException;
@@ -553,29 +602,37 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 		throws JavaModelException;
 		
 	/**
-	 * Sets the both the classpath of this project and its output location at once.
-	 * The classpath is defined using a list of classpath entries. In particular such a classpath may contain
-	 * classpath variable entries. Classpath variable entries can be resolved individually (see <code>JavaCore#getClasspathVariable</code>),
-	 * or the full classpath can be resolved at once using the helper method <code>getResolvedClasspath</code>.
+	 * Sets the both the classpath of this project and its default output
+	 * location at once. The classpath is defined using a list of classpath
+	 * entries. In particular, such a classpath may contain classpath variable
+	 * entries. Classpath variable entries can be resolved individually (see
+	 * <code>JavaCore#getClasspathVariable</code>), or the full classpath can be
+	 * resolved at once using the helper method
+	 * <code>getResolvedClasspath</code>.
 	 * <p>
-	 * A classpath variable provides an indirection level for better sharing a classpath. As an example, it allows
-	 * a classpath to no longer refer directly to external JARs located in some user specific location. The classpath
-	 * can simply refer to some variables defining the proper locations of these external JARs.
+	 * A classpath variable provides an indirection level for better sharing a
+	 * classpath. As an example, it allows a classpath to no longer refer
+	 * directly to external JARs located in some user specific location. The
+	 * classpath can simply refer to some variables defining the proper
+	 * locations of these external JARs.
+	 * </p>
 	 * <p>
 	 * Setting the classpath to <code>null</code> specifies a default classpath
 	 * (the project root). Setting the classpath to an empty array specifies an
 	 * empty classpath.
+	 * </p>
 	 * <p>
-	 * If a cycle is detected while setting this classpath, an error marker will be added
-	 * to the project closing the cycle.
-	 * To avoid this problem, use <code>hasClasspathCycle(IClasspathEntry[] entries)</code>
-	 * before setting the classpath.
-	 *
-	 * @param entries a list of classpath entries
-	 * @param monitor the given progress monitor
-	 * @param outputLocation the given output location
+	 * If a cycle is detected while setting this classpath, an error marker will
+	 * be added to the project closing the cycle. To avoid this problem, use
+	 * <code>hasClasspathCycle(IClasspathEntry[] entries)</code> before setting
+	 * the classpath.
+	 * </p>
 	 * 
-	 * @exception JavaModelException if the classpath could not be set. Reasons include:
+	 * @param entries a list of classpath entries
+	 * @param monitor the progress monitor
+	 * @param outputLocation the default output location
+	 * @exception JavaModelException if the classpath could not be set. Reasons
+	 * include:
 	 * <ul>
 	 * <li> This Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
 	 * <li> Two or more entries specify source roots with the same or overlapping paths (NAME_COLLISION)

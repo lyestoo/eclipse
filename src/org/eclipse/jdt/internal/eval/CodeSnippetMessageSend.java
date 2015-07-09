@@ -12,7 +12,6 @@ package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.internal.compiler.ast.MessageSend;
 import org.eclipse.jdt.internal.compiler.ast.NameReference;
-import org.eclipse.jdt.internal.compiler.ast.ThisReference;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
@@ -54,15 +53,13 @@ public void generateCode(
 		// outer access ?
 		if (!isStatic && ((bits & DepthMASK) != 0)) {
 			// outer method can be reached through emulation
-			Object[] path =
-				currentScope.getExactEmulationPath(
-					currentScope.enclosingSourceType().enclosingTypeAt(
-						(bits & DepthMASK) >> DepthSHIFT));
+			ReferenceBinding targetType = currentScope.enclosingSourceType().enclosingTypeAt((bits & DepthMASK) >> DepthSHIFT);
+			Object[] path = currentScope.getEmulationPath(targetType, true /*only exact match*/, false/*consider enclosing arg*/);
 			if (path == null) {
 				// emulation was not possible (should not happen per construction)
 				currentScope.problemReporter().needImplementation();
 			} else {
-				codeStream.generateOuterAccess(path, this, currentScope);
+				codeStream.generateOuterAccess(path, this, targetType, currentScope);
 			}
 		} else {
 			receiver.generateCode(currentScope, codeStream, !isStatic);
@@ -169,7 +166,7 @@ public void manageSyntheticAccessIfNecessary(BlockScope currentScope) {
 	if (binding.declaringClass != this.qualifyingType
 		&& !this.qualifyingType.isArrayType()
 		&& ((currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4
-				&& (receiver != ThisReference.ThisImplicit || !binding.isStatic())
+				&& (!receiver.isImplicitThis() || !binding.isStatic())
 				&& binding.declaringClass.id != T_Object) // no change for Object methods
 			|| !binding.declaringClass.canBeSeenBy(currentScope))) {
 		codegenBinding = currentScope.enclosingSourceType().getUpdatedMethodBinding(binding, (ReferenceBinding) this.qualifyingType);
@@ -203,7 +200,7 @@ public TypeBinding resolveType(BlockScope scope) {
 	}
 
 	binding = 
-		receiver == ThisReference.ThisImplicit
+		receiver.isImplicitThis()
 			? scope.getImplicitMethod(selector, argumentTypes, this)
 			: scope.getMethod(receiverType, selector, argumentTypes, this); 
 	if (!binding.isValidBinding()) {

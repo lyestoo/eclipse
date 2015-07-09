@@ -143,12 +143,27 @@ protected void classInstanceCreation(boolean alwaysQualified) {
 		super.classInstanceCreation(alwaysQualified);
 	}
 }
+protected void consumeArrayCreationExpressionWithoutInitializer() {
+	// ArrayCreationWithoutArrayInitializer ::= 'new' PrimitiveType DimWithOrWithOutExprs
+	// ArrayCreationWithoutArrayInitializer ::= 'new' ClassOrInterfaceType DimWithOrWithOutExprs
 
-protected void consumeArrayCreationExpression() {
-	// ArrayCreationExpression ::= 'new' PrimitiveType DimWithOrWithOutExprs ArrayInitializeropt
-	// ArrayCreationExpression ::= 'new' ClassOrInterfaceType DimWithOrWithOutExprs ArrayInitializeropt
+	super.consumeArrayCreationExpressionWithoutInitializer();
 
-	super.consumeArrayCreationExpression();
+	ArrayAllocationExpression alloc = (ArrayAllocationExpression)expressionStack[expressionPtr];
+	if (alloc.type == assistNode){
+		if (!diet){
+			this.restartRecovery	= true;	// force to restart in recovery mode
+			this.lastIgnoredToken = -1;	
+		}
+		this.isOrphanCompletionNode = true;
+	}
+}
+
+protected void consumeArrayCreationExpressionWithInitializer() {
+	// ArrayCreationWithArrayInitializer ::= 'new' PrimitiveType DimWithOrWithOutExprs ArrayInitializer
+	// ArrayCreationWithArrayInitializer ::= 'new' ClassOrInterfaceType DimWithOrWithOutExprs ArrayInitializer
+
+	super.consumeArrayCreationExpressionWithInitializer();
 
 	ArrayAllocationExpression alloc = (ArrayAllocationExpression)expressionStack[expressionPtr];
 	if (alloc.type == assistNode){
@@ -201,16 +216,18 @@ protected void consumeEnterAnonymousClassBody() {
 	this.lastCheckPoint = alloc.sourceEnd + 1;
 	if (!diet){
 		this.restartRecovery	= true;	// force to restart in recovery mode
-		this.lastIgnoredToken = -1;	
+		this.lastIgnoredToken = -1;
+		currentToken = 0; // opening brace already taken into account
+		hasReportedError = true;
 	}
-	this.isOrphanCompletionNode = true;
-		
-	anonymousType.bodyStart = scanner.currentPosition;	
+
+	anonymousType.bodyStart = scanner.currentPosition;
 	listLength = 0; // will be updated when reading super-interfaces
 	// recovery
-	if (currentElement != null){ 
+	if (currentElement != null){
 		lastCheckPoint = anonymousType.bodyStart;
-		currentElement = currentElement.add(anonymousType, 0); // the recoveryTokenCheck will deal with the open brace
+		currentElement = currentElement.add(anonymousType, 0);
+		currentToken = 0; // opening brace already taken into account
 		lastIgnoredToken = -1;		
 	}
 }
@@ -277,6 +294,14 @@ protected void consumeFieldAccess(boolean isSuperAccess) {
 protected void consumeFormalParameter() {
 	if (this.indexOfAssistIdentifier() < 0) {
 		super.consumeFormalParameter();
+		if((!diet || dietInt != 0) && astPtr > -1) {
+			Argument argument = (Argument) astStack[astPtr];
+			if(argument.type == assistNode) {
+				isOrphanCompletionNode = true;
+				this.restartRecovery	= true;	// force to restart in recovery mode
+				this.lastIgnoredToken = -1;	
+			}
+		}
 	} else {
 
 		identifierLengthPtr--;
@@ -676,6 +701,12 @@ protected void updateRecoveryState() {
 	/* may be able to retrieve completionNode as an orphan, and then attach it */
 	this.selectionIdentifierCheck();
 	this.attachOrphanCompletionNode();
+	
+	// if an assist node has been found and a recovered element exists,
+	// mark enclosing blocks as to be preserved
+	if (this.assistNode != null && this.currentElement != null) {
+		currentElement.preserveEnclosingBlocks();
+	}
 	
 	/* check and update recovered state based on current token,
 		this action is also performed when shifting token after recovery

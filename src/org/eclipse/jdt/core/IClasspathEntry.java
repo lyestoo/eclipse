@@ -8,7 +8,8 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *     IBM Corporation - added exclusion patterns to source entries
- ******************************************************************************/
+ *     IBM Corporation - added specific output location to source entries, and cleaning flag
+ * *****************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.core.runtime.IPath;
@@ -95,9 +96,10 @@ import org.eclipse.core.runtime.IPath;
  * <p>
  * Any classpath entry other than a source folder (kind <code>CPE_SOURCE</code>) can
  * be marked as being exported. Exported entries are automatically contributed to
- * dependent projects, along with the project's output folder, which is implicitly
- * exported. The project's output folder is always listed first, followed by the
- * any exported entries.
+ * dependent projects, along with the project's default output folder, which is
+ * implicitly exported, and any auxiliary output folders specified on source
+ * classpath entries. The project's output folder(s) are always listed first,
+ * followed by the any exported entries.
  * <p>
  * This interface is not intended to be implemented by clients.
  * Classpath entries can be created via methods on <code>JavaCore</code>.
@@ -256,6 +258,22 @@ public interface IClasspathEntry {
 	 *   kinds of classpath entries
 	 * @since 2.1	 */
 	IPath[] getExclusionPatterns();
+	
+	/**
+	 * Returns the full path to the specific location where the builder writes 
+	 * <code>.class</code> files generated for this source entry 
+	 * (entry kind <code>CPE_SOURCE</code>).
+	 * <p>
+	 * Source entries can optionally be associated with a specific output location.
+	 * If none is provided, the source entry will be implicitly associated with its project
+	 * default output location (see <code>IJavaProject#getOutputLocation</code>).
+	 * </p>
+	 * 
+	 * @return the full path to the specific location where the builder writes 
+	 * <code>.class</code> files for this source entry, or <code>null</code>
+	 * if using default output folder
+	 * @since 2.1	 */
+	IPath getOutputLocation();
 	
 	/**
 	 * Returns the path of this classpath entry.

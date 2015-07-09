@@ -19,10 +19,10 @@ import java.util.Map;
 
 import org.eclipse.jdt.core.ICodeFormatter;
 import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.core.compiler.ITerminalSymbols;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.ConfigurableOption;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
+import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
 import org.eclipse.jdt.internal.formatter.impl.FormatterOptions;
 import org.eclipse.jdt.internal.formatter.impl.SplitLine;
 
@@ -32,14 +32,14 @@ import org.eclipse.jdt.internal.formatter.impl.SplitLine;
  * on this instance to format <code>aString</code>.
  * It will return the formatted string.</ul>
 */
-public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
+public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 
 	public FormatterOptions options;
 
 	/** 
 	 * Represents a block in the <code>constructions</code> stack.
 	 */
-	public static final int BLOCK = ITerminalSymbols.TokenNameLBRACE;
+	public static final int BLOCK = TerminalTokens.TokenNameLBRACE;
 
 	/** 
 	 * Represents a block following a control statement in the <code>constructions</code> stack.
@@ -143,23 +143,14 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 	 * Creates a new instance of Code Formatter using the given settings.
 	 */
 	public CodeFormatter(Map settings) {
-
-		// initialize internal state
-		constructionsCount = 0;
-		constructions = new int[10];
-		currentLineIndentationLevel = indentationLevel = initialIndentationLevel;
-		currentCommentOffset = -1;
-
 		// initialize primary and secondary scanners
 		scanner = new Scanner(true /*comment*/, true /*whitespace*/, false /*nls*/, false /*assert*/, false /*strict comment*/, null /*taskTags*/, null/*taskPriorities*/); // regular scanner for forming lines
+		// to record positions of the beginning of lines.
 		scanner.recordLineSeparator = true;
 
-		// to remind of the position of the beginning of the line.
-		splitScanner = new Scanner(true /*comment*/, true /*whitespace*/, false /*nls*/, false /*assert*/, false /*strict comment */, null /*taskTags*/, null/*taskPriorities*/);
 		// secondary scanner to split long lines formed by primary scanning
+		splitScanner = new Scanner(true /*comment*/, true /*whitespace*/, false /*nls*/, false /*assert*/, false /*strict comment */, null /*taskTags*/, null/*taskPriorities*/);
 
-		// initialize current line buffer
-		currentLineBuffer = new StringBuffer();
 		this.options = new FormatterOptions(settings);
 	}
 
@@ -178,7 +169,7 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 		}
 	}
 	
-		/** 
+	/** 
 	 * @deprecated backport 1.0 internal functionality
 	 */
 	private static Map convertConfigurableOptions(ConfigurableOption[] settings) {
@@ -215,6 +206,8 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 				
 				} else if(optionName.equals("tabulation.size")) { //$NON-NLS-1$
 					options.put("org.eclipse.jdt.core.formatter.tabulation.size", String.valueOf(valueIndex)); //$NON-NLS-1$ //$NON-NLS-2$
+				} else if (optionName.equals("space.castexpression")) { //$NON-NLS-1$
+					options.put("org.eclipse.jdt.core.formatter.space.castexpression", valueIndex == 0 ? "insert" : "do not insert" ); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 				}
 			}
 		}
@@ -289,12 +282,16 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 			}
 		}
 		updateMappedPositions(scanner.startPosition);
+		
+		updateRemainingMappedPositions();
 	}
 
 	/** 
 	 * Formats the input string.
 	 */
 	private void format() {
+		reset();
+		
 		int token = 0;
 		int previousToken = 0;
 		int previousCompilableToken = 0;
@@ -351,7 +348,7 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 					
 					// Patch for line comment
 					// See PR http://dev.eclipse.org/bugs/show_bug.cgi?id=23096
-					if (token == ITerminalSymbols.TokenNameCOMMENT_LINE) {
+					if (token == TerminalTokens.TokenNameCOMMENT_LINE) {
 						int length = scanner.currentPosition;
 						loop: for (int index = length - 1; index >= 0; index--) {
 							switch(scanner.source[index]) {
@@ -920,8 +917,38 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 							&& (previousToken == TokenNameLBRACE || token == TokenNameRBRACE))
 						&& previousToken != Scanner.TokenNameCOMMENT_LINE) {
 						if ((!(options.compactAssignmentMode && token == TokenNameEQUAL))
-							&& !openAndCloseBrace)
-							space();
+							&& !openAndCloseBrace) {
+								if (previousCompilableToken == TokenNameRPAREN) {
+									switch(token) {
+										case TokenNameIdentifier :
+										case TokenNameDoubleLiteral :
+										case TokenNameIntegerLiteral :
+										case TokenNameFloatingPointLiteral :
+										case TokenNameStringLiteral :
+										case TokenNameCharacterLiteral :
+										case TokenNameLongLiteral :
+										case TokenNamenew :
+										case TokenNamethis :
+										case TokenNamesuper :
+										case TokenNameboolean :
+										case TokenNamebyte :
+										case TokenNamechar :
+										case TokenNameint :
+										case TokenNamelong :
+										case TokenNameshort :
+										case TokenNamedouble :
+										case TokenNamefloat :
+											if (options.isAddindSpaceInCastExpression()) {
+												space();
+											}
+											break;
+										default:
+											space();
+									}
+								} else {
+									space();
+								}
+						}
 					}
 					// Add the next token to the formatted source string.
 					outputCurrentToken(token);
@@ -1086,7 +1113,8 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 			new ConfigurableOption(componentName, "line.split",  locale, options.maxLineLength),//$NON-NLS-1$
 			new ConfigurableOption(componentName, "style.compactAssignment",  locale, options.compactAssignmentMode ? 0 : 1), //$NON-NLS-1$
 			new ConfigurableOption(componentName, "tabulation.char",  locale, options.indentWithTab ? 0 : 1), //$NON-NLS-1$
-			new ConfigurableOption(componentName, "tabulation.size",  locale, options.tabSize)	//$NON-NLS-1$
+			new ConfigurableOption(componentName, "tabulation.size",  locale, options.tabSize),	//$NON-NLS-1$
+			new ConfigurableOption(componentName, "space.castexpression",  locale, options.spaceInCastExpression ? 0 : 1)	//$NON-NLS-1$
 		};
 	}
 
@@ -1779,37 +1807,6 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 	}
 	
 	/**
-	 * Pops the top statement of the stack if it is a <code>BLOCK</code> or a <code>NONINDENT_BLOCK</code>.
-	 */
-	private int popBlock() {
-		int delta = 0;
-		if ((constructionsCount > 0)
-			&& ((constructions[constructionsCount - 1] == BLOCK)
-				|| (constructions[constructionsCount - 1] == NONINDENT_BLOCK))) {
-			if (constructions[constructionsCount - 1] == BLOCK)
-				delta--;
-			constructionsCount--;
-		}
-		return delta;
-	}
-	
-	/**
-	 * Pops elements until the stack is empty or the top element is <code>token</code>.<br>
-	 * Does not remove <code>token</code> from the stack.
-	 * @param token the token to be left as the top of the stack
-	 */
-	private int popExclusiveUntil(int token) {
-		int delta = 0;
-		int startCount = constructionsCount;
-		for (int i = startCount - 1; i >= 0 && constructions[i] != token; i--) {
-			if (constructions[i] != NONINDENT_BLOCK)
-				delta--;
-			constructionsCount--;
-		}
-		return delta;
-	}
-	
-	/**
 	 * Pops elements until the stack is empty or the top element is
 	 * a <code>BLOCK</code> or a <code>NONINDENT_BLOCK</code>.<br>
 	 * Does not remove it from the stack.
@@ -1932,7 +1929,20 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 		constructions[constructionsCount++] = token;
 		return 1;
 	}
-	
+
+	private void reset() {
+		// initialize internal state
+		constructionsCount = 0;
+		if (constructions == null) {
+			constructions = new int[10];		
+		}
+		currentLineIndentationLevel = indentationLevel = initialIndentationLevel;
+		currentCommentOffset = -1;
+
+		// initialize current line buffer
+		currentLineBuffer = new StringBuffer();
+	}
+
 	private static boolean separateFirstArgumentOn(int currentToken) {
 		//return (currentToken == TokenNameCOMMA || currentToken == TokenNameSEMICOLON);
 		return currentToken != TokenNameif
@@ -2519,6 +2529,20 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 			&& indexInMap < indexToMap) {
 			mappedPositions[indexInMap] += splitDelta;
 			indexInMap++;
+		}
+	}
+
+	/**
+	 * Update positions which are beyond the source length
+	 */
+	private void updateRemainingMappedPositions() {
+		if (positionsToMap == null) {
+			return;
+		}
+		int sourceLength = formattedSource.length();
+		while (indexToMap < positionsToMap.length) {
+			mappedPositions[indexToMap] = sourceLength - 1;
+			indexToMap++;
 		}
 	}
 	

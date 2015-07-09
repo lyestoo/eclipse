@@ -16,7 +16,9 @@ import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.LineNumberReader;
 import java.io.PrintWriter;
+import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
 import java.util.Enumeration;
 import java.util.Hashtable;
@@ -42,12 +44,14 @@ import org.eclipse.jdt.internal.compiler.problem.DefaultProblem;
 import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
+import org.eclipse.jdt.internal.compiler.util.Util;
 
 public class Main implements ProblemSeverities {
 
 	public boolean noWarn = false;
 
 	public PrintWriter out;
+	public PrintWriter err;	
 	public boolean systemExitWhenFinished = true;
 	public boolean proceedOnError = false;
 
@@ -86,9 +90,10 @@ public class Main implements ProblemSeverities {
 
 	public boolean proceed = true;
 
-	public Main(PrintWriter writer, boolean systemExitWhenFinished) {
+	public Main(PrintWriter outWriter, PrintWriter errWriter, boolean systemExitWhenFinished) {
 
-		this.out = writer;
+		this.out = outWriter;
+		this.err = errWriter;
 		this.systemExitWhenFinished = systemExitWhenFinished;
 		exportedClassFilesCounter = 0;
 		options = new Hashtable();
@@ -97,10 +102,10 @@ public class Main implements ProblemSeverities {
 			CompilerOptions.DO_NOT_GENERATE);
 		options.put(
 			CompilerOptions.OPTION_LineNumberAttribute,
-			CompilerOptions.DO_NOT_GENERATE);
+			CompilerOptions.GENERATE);
 		options.put(
 			CompilerOptions.OPTION_SourceFileAttribute,
-			CompilerOptions.DO_NOT_GENERATE);
+			CompilerOptions.GENERATE);
 		options.put(
 			CompilerOptions.OPTION_PreserveUnusedLocal,
 			CompilerOptions.OPTIMIZE_OUT);
@@ -140,6 +145,18 @@ public class Main implements ProblemSeverities {
 		options.put(
 			CompilerOptions.OPTION_TargetPlatform,
 			CompilerOptions.VERSION_1_1);
+		options.put(
+			CompilerOptions.OPTION_ReportNoImplicitStringConversion,
+			CompilerOptions.WARNING);
+		options.put(
+			CompilerOptions.OPTION_ReportStaticAccessReceiver,
+			CompilerOptions.WARNING);			
+		options.put(
+			CompilerOptions.OPTION_ReportIncompatibleNonInheritedInterfaceMethod,
+			CompilerOptions.WARNING);
+		options.put(
+			CompilerOptions.OPTION_ReportUnusedPrivateMember,
+			CompilerOptions.IGNORE);
 	}
 
 	/*
@@ -152,7 +169,7 @@ public class Main implements ProblemSeverities {
 			configure(argv);
 			if (proceed) {
 				if (showProgress)
-					out.print(Main.bind("progress.compiling")); //$NON-NLS-1$
+					out.println(Main.bind("progress.compiling")); //$NON-NLS-1$
 				for (int i = 0; i < repetitions; i++) {
 					globalProblemsCount = 0;
 					globalErrorsCount = 0;
@@ -187,39 +204,39 @@ public class Main implements ProblemSeverities {
 					}
 					if (globalProblemsCount > 0) {
 						if (globalProblemsCount == 1) {
-							out.print(Main.bind("compile.oneProblem")); //$NON-NLS-1$
+							err.print(Main.bind("compile.oneProblem")); //$NON-NLS-1$
 						} else {
-							out.print(
+							err.print(
 								Main.bind("compile.severalProblems", String.valueOf(globalProblemsCount))); 	//$NON-NLS-1$
 						}
-						out.print(" ("); //$NON-NLS-1$
+						err.print(" ("); //$NON-NLS-1$
 						if (globalErrorsCount > 0) {
 							if (globalErrorsCount == 1) {
-								out.print(Main.bind("compile.oneError")); //$NON-NLS-1$
+								err.print(Main.bind("compile.oneError")); //$NON-NLS-1$
 							} else {
-								out.print(
+								err.print(
 									Main.bind("compile.severalErrors", String.valueOf(globalErrorsCount))); 	//$NON-NLS-1$
 							}
 						}
 						if (globalWarningsCount > 0) {
 							if (globalErrorsCount > 0) {
-								out.print(", "); //$NON-NLS-1$
+								err.print(", "); //$NON-NLS-1$
 							}
 							if (globalWarningsCount == 1) {
-								out.print(Main.bind("compile.oneWarning")); //$NON-NLS-1$
+								err.print(Main.bind("compile.oneWarning")); //$NON-NLS-1$
 							} else {
-								out.print(
+								err.print(
 									Main.bind("compile.severalWarnings", String.valueOf(globalWarningsCount))); 	//$NON-NLS-1$
 							}
 						}
-						out.println(")"); //$NON-NLS-1$
+						err.println(")"); //$NON-NLS-1$
 					}
 					if (exportedClassFilesCounter != 0
 						&& (this.showProgress || this.timer || this.verbose)) {
 						if (exportedClassFilesCounter == 1) {
-							out.print(Main.bind("compile.oneClassFileGenerated")); //$NON-NLS-1$
+							out.println(Main.bind("compile.oneClassFileGenerated")); //$NON-NLS-1$
 						} else {
-							out.print(
+							out.println(
 								Main.bind(
 									"compile.severalClassFilesGenerated", //$NON-NLS-1$
 									String.valueOf(exportedClassFilesCounter)));
@@ -227,15 +244,16 @@ public class Main implements ProblemSeverities {
 					}
 				}
 				if (showProgress)
-					System.out.println();
+					out.println();
 			}
 			if (systemExitWhenFinished) {
 				out.flush();
+				err.flush();
 				System.exit(globalErrorsCount > 0 ? -1 : 0);
 			}
 		} catch (InvalidInputException e) {
-			out.println(e.getMessage());
-			out.println("------------------------"); //$NON-NLS-1$
+			err.println(e.getMessage());
+			err.println("------------------------"); //$NON-NLS-1$
 			printUsage();
 			if (systemExitWhenFinished) {
 				System.exit(-1);
@@ -245,16 +263,18 @@ public class Main implements ProblemSeverities {
 		} catch (Throwable e) { // internal compiler error
 			if (systemExitWhenFinished) {
 				out.flush();
+				err.flush();
 				if (this.log != null) {
-					out.close();
+					err.close();
 				}
 				System.exit(-1);
 			}
 			//e.printStackTrace();
 		} finally {
 			out.flush();
+			err.flush();
 			if (this.log != null) {
-				out.close();
+				err.close();
 			}
 		}
 		if (globalErrorsCount == 0){
@@ -269,15 +289,15 @@ public class Main implements ProblemSeverities {
 	 */
 	public static boolean compile(String commandLine) {
 
-		return compile(commandLine, new PrintWriter(System.out));
+		return compile(commandLine, new PrintWriter(System.out), new PrintWriter(System.err));
 	}
 
 	/*
 	 * Internal IDE API for test harness purpose
 	 */
-	public static boolean compile(String commandLine, PrintWriter writer) {
+	public static boolean compile(String commandLine, PrintWriter outWriter, PrintWriter errWriter) {
 
-		return new Main(writer, false).compile(tokenize(commandLine));
+		return new Main(outWriter, errWriter, false).compile(tokenize(commandLine));
 	}
 
 	public static String[] tokenize(String commandLine) {
@@ -321,7 +341,10 @@ public class Main implements ProblemSeverities {
 					} else {
 						if (count == arguments.length)
 							System.arraycopy(arguments, 0, (arguments = new String[count * 2]), 0, count);
-						arguments[count++] = token;
+						String trimmedToken = token.trim();
+						if (trimmedToken.length() != 0) {
+							arguments[count++] = trimmedToken;
+						}
 					}
 				}
 				startNewToken = false;
@@ -336,8 +359,10 @@ public class Main implements ProblemSeverities {
 	 */
 	public void configure(String[] argv) throws InvalidInputException {
 		
-		if ((argv == null) || (argv.length == 0))
-			throw new InvalidInputException(Main.bind("configure.noSourceFile")); //$NON-NLS-1$
+		if ((argv == null) || (argv.length == 0)) {
+			printUsage();
+			return;
+		}
 		final int InsideClasspath = 1;
 		final int InsideDestinationPath = 2;
 		final int TargetSetting = 4;
@@ -349,8 +374,6 @@ public class Main implements ProblemSeverities {
 		final int Default = 0;
 		String[] bootclasspaths = null;
 		int DEFAULT_SIZE_CLASSPATH = 4;
-		boolean warnOptionInUse = false;
-		boolean noWarnOptionInUse = false;
 		int pathCount = 0;
 		int bootclasspathCount = 0;
 		int index = -1, filesCount = 0, argCount = argv.length;
@@ -360,13 +383,60 @@ public class Main implements ProblemSeverities {
 		boolean printUsageRequired = false;
 
 		boolean didSpecifyCompliance = false;
-		boolean didSpecifySourceLevel = false;
 		boolean didSpecifyDefaultEncoding = false;
 		boolean didSpecifyTarget = false;
 
 		String customEncoding = null;
 		String currentArg = ""; //$NON-NLS-1$
 
+		// expand the command line if necessary
+		boolean needExpansion = false;
+		loop: for (int i = 0; i < argCount; i++) {
+				if (argv[i].startsWith("@")) { //$NON-NLS-1$
+					needExpansion = true;
+					break loop;
+				}
+		}
+
+		String[] newCommandLineArgs = null;
+		if (needExpansion) {
+			newCommandLineArgs = new String[argCount];
+			index = 0;
+			for (int i = 0; i < argCount; i++) {
+				String[] newArgs = null;
+				String arg = argv[i].trim();
+				if (arg.startsWith("@")) { //$NON-NLS-1$
+					try {
+						LineNumberReader reader = new LineNumberReader(new StringReader(new String(Util.getFileCharContent(new File(arg.substring(1)), null))));
+						StringBuffer buffer = new StringBuffer();
+						String line;
+						while((line = reader.readLine()) != null) {
+							buffer.append(line).append(" "); //$NON-NLS-1$
+						}
+						newArgs = tokenize(buffer.toString());
+					} catch(IOException e) {
+						throw new InvalidInputException(
+							Main.bind("configure.invalidexpansionargumentname", arg)); //$NON-NLS-1$
+					}
+				}
+				if (newArgs != null) {
+					int newCommandLineArgsLength = newCommandLineArgs.length;
+					int newArgsLength = newArgs.length;
+					System.arraycopy(newCommandLineArgs, 0, (newCommandLineArgs = new String[newCommandLineArgsLength + newArgsLength - 1]), 0, index);
+					System.arraycopy(newArgs, 0, newCommandLineArgs, index, newArgsLength);
+					index += newArgsLength;
+				} else {
+					newCommandLineArgs[index++] = arg;
+				}
+			}
+			index = -1;
+		} else {
+			newCommandLineArgs = argv;
+			for (int i = 0; i < argCount; i++) {
+				newCommandLineArgs[i] = newCommandLineArgs[i].trim();
+			}
+		}
+		argCount = newCommandLineArgs.length;
 		while (++index < argCount) {
 
 			if (customEncoding != null) {
@@ -374,7 +444,7 @@ public class Main implements ProblemSeverities {
 					Main.bind("configure.unexpectedCustomEncoding", currentArg, customEncoding)); //$NON-NLS-1$
 			}
 
-			currentArg = argv[index].trim();
+			currentArg = newCommandLineArgs[index];
 
 			customEncoding = null;
 			if (currentArg.endsWith("]")) { //$NON-NLS-1$ 
@@ -436,7 +506,6 @@ public class Main implements ProblemSeverities {
 			}
 			if (currentArg.equals("-source")) { //$NON-NLS-1$
 				mode = InsideSource;
-				didSpecifySourceLevel = true;
 				continue;
 			}
 			if (currentArg.equals("-encoding")) { //$NON-NLS-1$
@@ -473,10 +542,9 @@ public class Main implements ProblemSeverities {
 			}
 			if (currentArg.equals("-classpath") //$NON-NLS-1$
 				|| currentArg.equals("-cp")) { //$NON-NLS-1$ //$NON-NLS-2$
-				if (pathCount > 0)
-					throw new InvalidInputException(
-						Main.bind("configure.duplicateClasspath", currentArg)); //$NON-NLS-1$
-				classpaths = new String[DEFAULT_SIZE_CLASSPATH];
+				if (pathCount == 0) {
+					classpaths = new String[DEFAULT_SIZE_CLASSPATH];
+				}
 				mode = InsideClasspath;
 				continue;
 			}
@@ -509,10 +577,6 @@ public class Main implements ProblemSeverities {
 				continue;
 			}
 			if ("-deprecation".equals(currentArg)) { //$NON-NLS-1$
-				warnOptionInUse = true;
-				if (noWarnOptionInUse)
-					throw new InvalidInputException(
-						Main.bind("configure.duplicateWarningConfiguration")); //$NON-NLS-1$				
 				options.put(CompilerOptions.OPTION_ReportDeprecation, CompilerOptions.WARNING);
 				continue;
 			}
@@ -589,7 +653,6 @@ public class Main implements ProblemSeverities {
 						} else {
 							throw new InvalidInputException(
 								Main.bind("configure.invalidDebugOption", debugOption)); //$NON-NLS-1$
-							//$NON-NLS-1$
 						}
 					}
 					continue;
@@ -598,24 +661,36 @@ public class Main implements ProblemSeverities {
 					Main.bind("configure.invalidDebugOption", debugOption)); //$NON-NLS-1$
 			}
 			if (currentArg.startsWith("-nowarn")) { //$NON-NLS-1$
-				noWarnOptionInUse = true;
-				noWarn = true;
-				if (warnOptionInUse)
-					throw new InvalidInputException(
-						Main.bind("configure.duplicateWarningConfiguration")); //$NON-NLS-1$
+				Object[] entries = options.entrySet().toArray();
+				for (int i = 0, max = entries.length; i < max; i++) {
+					Map.Entry entry = (Map.Entry) entries[i];
+					if (!(entry.getKey() instanceof String))
+						continue;
+					if (!(entry.getValue() instanceof String))
+						continue;
+					if (((String) entry.getValue()).equals(CompilerOptions.WARNING)) {
+						options.put((String) entry.getKey(), CompilerOptions.IGNORE);
+					}
+				}
 				mode = Default;
 				continue;
 			}
 			if (currentArg.startsWith("-warn")) { //$NON-NLS-1$
-				warnOptionInUse = true;
-				if (noWarnOptionInUse)
-					throw new InvalidInputException(
-						Main.bind("configure.duplicateWarningConfiguration")); //$NON-NLS-1$
 				mode = Default;
 				String warningOption = currentArg;
 				int length = currentArg.length();
 				if (length == 10 && warningOption.equals("-warn:none")) { //$NON-NLS-1$
-					noWarn = true;
+					Object[] entries = options.entrySet().toArray();
+					for (int i = 0, max = entries.length; i < max; i++) {
+						Map.Entry entry = (Map.Entry) entries[i];
+						if (!(entry.getKey() instanceof String))
+							continue;
+						if (!(entry.getValue() instanceof String))
+							continue;
+						if (((String) entry.getValue()).equals(CompilerOptions.WARNING)) {
+							options.put((String) entry.getKey(), CompilerOptions.IGNORE);
+						}
+					}
 					continue;
 				}
 				if (length < 6)
@@ -659,6 +734,18 @@ public class Main implements ProblemSeverities {
 					CompilerOptions.OPTION_ReportStaticAccessReceiver,
 					CompilerOptions.IGNORE);
 				options.put(
+					CompilerOptions.OPTION_ReportNoEffectAssignment,
+					CompilerOptions.IGNORE);
+				options.put(
+					CompilerOptions.OPTION_ReportNoImplicitStringConversion,
+					CompilerOptions.IGNORE);				
+				options.put(
+					CompilerOptions.OPTION_ReportIncompatibleNonInheritedInterfaceMethod,
+					CompilerOptions.IGNORE);				
+				options.put(
+					CompilerOptions.OPTION_ReportUnusedPrivateMember,
+					CompilerOptions.IGNORE);
+				options.put(
 					CompilerOptions.OPTION_TaskTags,
 					""); //$NON-NLS-1$
 
@@ -673,7 +760,7 @@ public class Main implements ProblemSeverities {
 						options.put(
 							CompilerOptions.OPTION_ReportOverridingPackageDefaultMethod,
 							CompilerOptions.WARNING);
-					} else if (token.equals("maskedCatchBlocks")) { //$NON-NLS-1$
+					} else if (token.equals("maskedCatchBlock") || token.equals("maskedCatchBlocks")/*backward compatible*/) { //$NON-NLS-1$ //$NON-NLS-2$
 						options.put(
 							CompilerOptions.OPTION_ReportHiddenCatchBlock,
 							CompilerOptions.WARNING);
@@ -691,17 +778,21 @@ public class Main implements ProblemSeverities {
 						options.put(
 							CompilerOptions.OPTION_ReportDeprecationInDeprecatedCode, 
 							CompilerOptions.ENABLED);
-					} else if (token.equals("unusedLocals")) { //$NON-NLS-1$
+					} else if (token.equals("unusedLocal") || token.equals("unusedLocals")/*backward compatible*/) { //$NON-NLS-1$ //$NON-NLS-2$
 						options.put(
 							CompilerOptions.OPTION_ReportUnusedLocal, 
 							CompilerOptions.WARNING);
-					} else if (token.equals("unusedArguments")) { //$NON-NLS-1$
+					} else if (token.equals("unusedArgument") || token.equals("unusedArguments")/*backward compatible*/) { //$NON-NLS-1$ //$NON-NLS-2$
 						options.put(
 							CompilerOptions.OPTION_ReportUnusedParameter,
 							CompilerOptions.WARNING);
-					} else if (token.equals("unusedImports")) { //$NON-NLS-1$
+					} else if (token.equals("unusedImport") || token.equals("unusedImports")/*backward compatible*/) { //$NON-NLS-1$ //$NON-NLS-2$
 						options.put(
 							CompilerOptions.OPTION_ReportUnusedImport,
+							CompilerOptions.WARNING);
+					} else if (token.equals("unusedPrivate")) { //$NON-NLS-1$
+						options.put(
+							CompilerOptions.OPTION_ReportUnusedPrivateMember,
 							CompilerOptions.WARNING);
 					} else if (token.equals("syntheticAccess")) { //$NON-NLS-1$
 						options.put(
@@ -714,6 +805,18 @@ public class Main implements ProblemSeverities {
 					} else if (token.equals("staticReceiver")) { //$NON-NLS-1$
 						options.put(
 							CompilerOptions.OPTION_ReportStaticAccessReceiver,
+							CompilerOptions.WARNING);
+					} else if (token.equals("noEffectAssign")) { //$NON-NLS-1$
+						options.put(
+							CompilerOptions.OPTION_ReportNoEffectAssignment,
+							CompilerOptions.WARNING);
+					} else if (token.equals("interfaceNonInherited")) { //$NON-NLS-1$
+						options.put(
+							CompilerOptions.OPTION_ReportIncompatibleNonInheritedInterfaceMethod,
+							CompilerOptions.WARNING);
+					} else if (token.equals("noImplicitStringConversion")) {//$NON-NLS-1$
+						options.put(
+							CompilerOptions.OPTION_ReportNoImplicitStringConversion,
 							CompilerOptions.WARNING);
 					} else if (token.startsWith("tasks")) { //$NON-NLS-1$
 						String taskTags = ""; //$NON-NLS-1$
@@ -743,7 +846,6 @@ public class Main implements ProblemSeverities {
 				continue;
 			}
 			if (currentArg.equals("-target")) { //$NON-NLS-1$
-				didSpecifyTarget = true;
 				mode = TargetSetting;
 				continue;
 			}
@@ -754,6 +856,7 @@ public class Main implements ProblemSeverities {
 				continue;
 			}
 			if (mode == TargetSetting) {
+				didSpecifyTarget = true;
 				if (currentArg.equals("1.1")) { //$NON-NLS-1$
 					options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_1);
 				} else if (currentArg.equals("1.2")) { //$NON-NLS-1$
@@ -762,6 +865,10 @@ public class Main implements ProblemSeverities {
 					options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_3);
 				} else if (currentArg.equals("1.4")) { //$NON-NLS-1$
 					options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_4);
+					if (didSpecifyCompliance && options.get(CompilerOptions.OPTION_Compliance).equals(CompilerOptions.VERSION_1_3)) {
+						throw new InvalidInputException(Main.bind("configure.incompatibleComplianceForTarget14", (String)options.get(CompilerOptions.OPTION_Compliance))); //$NON-NLS-1$
+					}
+					options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_4);
 				} else {
 					throw new InvalidInputException(Main.bind("configure.targetJDK", currentArg)); //$NON-NLS-1$
 				}
@@ -901,20 +1008,6 @@ public class Main implements ProblemSeverities {
 			continue;
 		}
 
-		if (noWarn) {
-			// filter options which are related to the assist component
-			Object[] entries = options.entrySet().toArray();
-			for (int i = 0, max = entries.length; i < max; i++) {
-				Map.Entry entry = (Map.Entry) entries[i];
-				if (!(entry.getKey() instanceof String))
-					continue;
-				if (!(entry.getValue() instanceof String))
-					continue;
-				if (((String) entry.getValue()).equals(CompilerOptions.WARNING)) {
-					options.put((String) entry.getKey(), CompilerOptions.IGNORE);
-				}
-			}
-		}
 		/*
 		 * Standalone options
 		 */
@@ -942,14 +1035,15 @@ public class Main implements ProblemSeverities {
 			// no user classpath specified.
 			String classProp = System.getProperty("java.class.path"); //$NON-NLS-1$
 			if ((classProp == null) || (classProp.length() == 0)) {
-				out.println(Main.bind("configure.noClasspath")); //$NON-NLS-1$
-				classProp = "."; //$NON-NLS-1$
+				err.println(Main.bind("configure.noClasspath")); //$NON-NLS-1$
+				classProp = System.getProperty("user.dir"); //$NON-NLS-1$
 			}
 			StringTokenizer tokenizer = new StringTokenizer(classProp, File.pathSeparator);
-			classpaths = new String[tokenizer.countTokens()];
+			classpaths = new String[tokenizer.countTokens() + 1];
 			while (tokenizer.hasMoreTokens()) {
 				classpaths[pathCount++] = tokenizer.nextToken();
 			}
+			classpaths[pathCount++] = System.getProperty("user.dir");//$NON-NLS-1$
 		}
 		
 		if (bootclasspathCount == 0) {
@@ -959,7 +1053,7 @@ public class Main implements ProblemSeverities {
 			 */
 			 String javaversion = System.getProperty("java.version");//$NON-NLS-1$
 			 if (javaversion != null && javaversion.equalsIgnoreCase("1.1.8")) { //$NON-NLS-1$
-				out.println(Main.bind("configure.requiresJDK1.2orAbove")); //$NON-NLS-1$
+				err.println(Main.bind("configure.requiresJDK1.2orAbove")); //$NON-NLS-1$
 				proceed = false;
 				return;
 			 } else {
@@ -1048,7 +1142,7 @@ public class Main implements ProblemSeverities {
 		for (int i = 0, max = classpaths.length; i < max; i++) {
 			File file = new File(classpaths[i]);
 			if (!file.exists()) { // signal missing classpath entry file
-				out.println(Main.bind("configure.incorrectClasspath", classpaths[i])); //$NON-NLS-1$
+				err.println(Main.bind("configure.incorrectClasspath", classpaths[i])); //$NON-NLS-1$
 			} /* else {
 				out.println(classpaths[i]);
 			}*/
@@ -1059,58 +1153,46 @@ public class Main implements ProblemSeverities {
 			destinationPath = null;
 		}
 
-		if (filenames == null)
-			throw new InvalidInputException(Main.bind("configure.noSource")); //$NON-NLS-1$
-
-		// check and set compliance/source/target compatibilities
-		if (!didSpecifyCompliance){
-				if (options.get(CompilerOptions.OPTION_Source).equals(CompilerOptions.VERSION_1_4)){
-					options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_4);
-				} else {
-					options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_3);
-				}
+		if (filenames == null) {
+			printUsage();
+			return;
 		}
-		String compliance = (String)options.get(CompilerOptions.OPTION_Compliance);
-		if (CompilerOptions.VERSION_1_4.equals(compliance)){
-			
-			// default 1.4 settings
-			if (!didSpecifySourceLevel){
-				options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_4);
-			}
-			if (!didSpecifyTarget){
-				options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_4);
-			}
-		} else if (CompilerOptions.VERSION_1_3.equals(compliance)){
 
-			// default 1.4 settings
-			if (!didSpecifySourceLevel){
-				options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_3);
-			}
-			if (!didSpecifyTarget){
-				options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_1);
-			}
+		// target must be 1.4 if source is 1.4
+		if (options.get(CompilerOptions.OPTION_Source).equals(CompilerOptions.VERSION_1_4)
+				&& !options.get(CompilerOptions.OPTION_TargetPlatform).equals(CompilerOptions.VERSION_1_4)
+				&& didSpecifyTarget){ 
+				throw new InvalidInputException(Main.bind("configure.incompatibleTargetForSource14", (String)options.get(CompilerOptions.OPTION_TargetPlatform))); //$NON-NLS-1$
+		}
+
+		// target cannot be 1.4 if compliance is 1.3
+		if (options.get(CompilerOptions.OPTION_TargetPlatform).equals(CompilerOptions.VERSION_1_4)
+				&& !options.get(CompilerOptions.OPTION_Compliance).equals(CompilerOptions.VERSION_1_4)
+				&& didSpecifyTarget){ 
+				throw new InvalidInputException(Main.bind("configure.incompatibleComplianceForTarget14", (String)options.get(CompilerOptions.OPTION_Compliance))); //$NON-NLS-1$
+		}
+		
+		// check and set compliance/source/target compatibilities
+		if (options.get(CompilerOptions.OPTION_Source).equals(CompilerOptions.VERSION_1_4)){
+			options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_1_4);
+			options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_4);
+		} else if (options.get(CompilerOptions.OPTION_Compliance).equals(CompilerOptions.VERSION_1_4)
+			  && options.get(CompilerOptions.OPTION_TargetPlatform).equals(CompilerOptions.VERSION_1_1)) {
+			  	if (didSpecifyTarget) {
+					throw new InvalidInputException(Main.bind("configure.incompatibleComplianceForTarget11", (String)options.get(CompilerOptions.OPTION_Compliance))); //$NON-NLS-1$
+			  	} else {
+					options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_1_2);
+			  	}
 		}
 		// compliance must be 1.4 if source is 1.4
 		if (options.get(CompilerOptions.OPTION_Source).equals(CompilerOptions.VERSION_1_4)
 				&& !options.get(CompilerOptions.OPTION_Compliance).equals(CompilerOptions.VERSION_1_4)){ 
 				throw new InvalidInputException(Main.bind("configure.incompatibleComplianceForSource14", (String)options.get(CompilerOptions.OPTION_Compliance))); //$NON-NLS-1$
 		}
-		
-		// target must be 1.4 if source is 1.4
-		if (options.get(CompilerOptions.OPTION_Source).equals(CompilerOptions.VERSION_1_4)
-				&& !options.get(CompilerOptions.OPTION_TargetPlatform).equals(CompilerOptions.VERSION_1_4)){ 
-				throw new InvalidInputException(Main.bind("configure.incompatibleTargetForSource14", (String)options.get(CompilerOptions.OPTION_TargetPlatform))); //$NON-NLS-1$
-		}
 
-		// target cannot be 1.4 if compliance is 1.3
-		if (options.get(CompilerOptions.OPTION_TargetPlatform).equals(CompilerOptions.VERSION_1_4)
-				&& !options.get(CompilerOptions.OPTION_Compliance).equals(CompilerOptions.VERSION_1_4)){ 
-				throw new InvalidInputException(Main.bind("configure.incompatibleComplianceForTarget14", (String)options.get(CompilerOptions.OPTION_Compliance))); //$NON-NLS-1$
-		}
-		
 		if (log != null) {
 			try {
-				out = new PrintWriter(new FileOutputStream(log, false));
+				err = new PrintWriter(new FileOutputStream(log, false));
 			} catch (IOException e) {
 				throw new InvalidInputException(Main.bind("configure.cannotOpenLog")); //$NON-NLS-1$
 			}
@@ -1150,20 +1232,20 @@ public class Main implements ProblemSeverities {
 					lineDelta += unitLineCount;
 					if (showProgress
 						&& lineDelta > 2000) { // in -log mode, dump a dot every 2000 lines compiled
-						System.out.print('.');
+						out.print('.');
 						lineDelta = 0;
 					}
 				}
-				if (compilationResult.hasProblems()) {
-					IProblem[] problems = compilationResult.getProblems();
+				if (compilationResult.hasProblems() || compilationResult.hasTasks()) {
+					IProblem[] problems = compilationResult.getAllProblems();
 					int count = problems.length;
 					int localErrorCount = 0;
 					for (int i = 0; i < count; i++) {
 						if (problems[i] != null) {
 							globalProblemsCount++;
 							if (localErrorCount == 0)
-								out.println("----------"); //$NON-NLS-1$
-							out.print(
+								err.println("----------"); //$NON-NLS-1$
+							err.print(
 								globalProblemsCount
 									+ ". "  //$NON-NLS-1$
 									+ (problems[i].isError()
@@ -1174,25 +1256,26 @@ public class Main implements ProblemSeverities {
 							} else {
 								globalWarningsCount++;
 							}
-							out.print(" "); //$NON-NLS-1$
-							out.print(
+							err.print(" "); //$NON-NLS-1$
+							err.print(
 								Main.bind("requestor.in", new String(problems[i].getOriginatingFileName()))); //$NON-NLS-1$
 							try {
-								out.println(
+								err.println(
 									((DefaultProblem) problems[i]).errorReportSource(
 										compilationResult.compilationUnit));
-								out.println(problems[i].getMessage());
+								err.println(problems[i].getMessage());
 							} catch (Exception e) {
-								out.println(
+								err.println(
 									Main.bind("requestor.notRetrieveErrorMessage", problems[i].toString())); //$NON-NLS-1$
 							}
-							out.println("----------"); //$NON-NLS-1$
+							err.println("----------"); //$NON-NLS-1$
 							if (problems[i].isError())
 								localErrorCount++;
 						}
 					};
 					// exit?
 					if (systemExitWhenFinished && !proceedOnError && (localErrorCount > 0)) {
+						err.flush();
 						out.flush();
 						System.exit(-1);
 					}
@@ -1267,7 +1350,7 @@ public class Main implements ProblemSeverities {
 	 */
 
 	public static void main(String[] argv) {
-		new Main(new PrintWriter(System.out), true).compile(argv);
+		new Main(new PrintWriter(System.out), new PrintWriter(System.err), true).compile(argv);
 	}
 	// Dump classfiles onto disk for all compilation units that where successfull.
 
@@ -1295,7 +1378,7 @@ public class Main implements ProblemSeverities {
 					} catch (IOException e) {
 						String fileName = destinationPath + new String(relativeName);
 						e.printStackTrace();
-						System.out.println(Main.bind("output.noClassFileCreated", fileName));  //$NON-NLS-1$
+						err.println(Main.bind("output.noClassFileCreated", fileName));  //$NON-NLS-1$
 					}
 					exportedClassFilesCounter++;
 				}
@@ -1318,7 +1401,7 @@ public class Main implements ProblemSeverities {
 					} catch (IOException e) {
 						String fileName = destinationPath + new String(relativeName);
 						e.printStackTrace();
-						System.out.println(Main.bind("output.noClassFileCreated", fileName)); //$NON-NLS-1$
+						err.println(Main.bind("output.noClassFileCreated", fileName)); //$NON-NLS-1$
 					}
 					exportedClassFilesCounter++;
 				}
@@ -1351,6 +1434,7 @@ public class Main implements ProblemSeverities {
 	public void printUsage() {
 		out.println(Main.bind("misc.usage", Main.bind("compiler.version"))); //$NON-NLS-1$ //$NON-NLS-2$
 		out.flush();
+		err.flush();
 	}
 
 	/**

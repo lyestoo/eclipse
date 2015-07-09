@@ -1,14 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added support to persist type hierarchies
  ******************************************************************************/
 package org.eclipse.jdt.core;
+
+import java.io.OutputStream;
 
 import org.eclipse.core.runtime.IProgressMonitor;
 
@@ -274,4 +277,23 @@ void refresh(IProgressMonitor monitor) throws JavaModelException;
  * @param listener the listener
  */
 void removeTypeHierarchyChangedListener(ITypeHierarchyChangedListener listener);
+/**
+ * Stores the type hierarchy in an output stream. This stored hierarchy can be load by
+ * IType#loadTypeHierachy(IJavaProject, InputStream, IProgressMonitor).
+ * Listeners of this hierarchy are not stored.
+ * 
+ * Only hierarchies created by the following methods can be store:
+ * <ul>
+ * <li>IType#newSupertypeHierarchy(IProgressMonitor)</li>
+ * <li>IType#newTypeHierarchy(IJavaProject, IProgressMonitor)</li>
+ * <li>IType#newTypeHierarchy(IProgressMonitor)</li>
+ * </u>
+ * 
+ * @param outputStream output stream where the hierarchy will be stored
+ * @param monitor the given progress monitor
+ * @exception JavaModelException if unable to store the hierarchy in the ouput stream
+ * @see IType#loadTypeHierachy(InputStream, IProgressMonitor)
+ * @since 2.1
+ */
+void store(OutputStream outputStream, IProgressMonitor monitor) throws JavaModelException;
 }

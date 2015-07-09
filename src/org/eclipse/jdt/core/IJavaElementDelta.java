@@ -120,7 +120,7 @@ public interface IJavaElementDelta {
 	 * Status constant indicating that the element has been changed,
 	 * as described by the change flags.
 	 * 
-	 * @see getFlags
+	 * @see #getFlags
 	 */
 	public int CHANGED = 4;
 
@@ -243,6 +243,7 @@ public interface IJavaElementDelta {
 
 /**
  * Returns deltas for the children that have been added.
+ * @return deltas for the children that have been added
  */
 public IJavaElementDelta[] getAddedChildren();
 /**

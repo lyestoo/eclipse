@@ -298,16 +298,16 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 				} catch (InvalidInputException e) {
 					return false;
 				}
-				if((token == ITerminalSymbols.TokenNamethis ||
-					token == ITerminalSymbols.TokenNamesuper ||
-					token == ITerminalSymbols.TokenNameIdentifier) &&
+				if((token == TerminalTokens.TokenNamethis ||
+					token == TerminalTokens.TokenNamesuper ||
+					token == TerminalTokens.TokenNameIdentifier) &&
 					scanner.startPosition <= selectionStart &&
 					selectionStart <= scanner.currentPosition) {
 					lastIdentifierStart = scanner.startPosition;
 					lastIdentifierEnd = scanner.currentPosition - 1;
 					lastIdentifier = scanner.getCurrentTokenSource();
 				}
-			} while (token != ITerminalSymbols.TokenNameEOF);
+			} while (token != TerminalTokens.TokenNameEOF);
 		} else {
 			scanner.resetTo(selectionStart, selectionEnd);
 	
@@ -320,9 +320,9 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 					return false;
 				}
 				switch (token) {
-					case ITerminalSymbols.TokenNamethis :
-					case ITerminalSymbols.TokenNamesuper :
-					case ITerminalSymbols.TokenNameIdentifier :
+					case TerminalTokens.TokenNamethis :
+					case TerminalTokens.TokenNamesuper :
+					case TerminalTokens.TokenNameIdentifier :
 						if (!expectingIdentifier)
 							return false;
 						lastIdentifier = scanner.getCurrentTokenSource();
@@ -337,20 +337,20 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 						identCount++;
 						expectingIdentifier = false;
 						break;
-					case ITerminalSymbols.TokenNameDOT :
+					case TerminalTokens.TokenNameDOT :
 						if (expectingIdentifier)
 							return false;
 						entireSelection.append('.');
 						expectingIdentifier = true;
 						break;
-					case ITerminalSymbols.TokenNameEOF :
+					case TerminalTokens.TokenNameEOF :
 						if (expectingIdentifier)
 							return false;
 						break;
 					default :
 						return false;
 				}
-			} while (token != ITerminalSymbols.TokenNameEOF);
+			} while (token != TerminalTokens.TokenNameEOF);
 		}
 		if (lastIdentifierStart > 0) {
 			actualSelectionStart = lastIdentifierStart;
@@ -632,8 +632,7 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 						field.type = new SelectionOnSingleTypeReference(typeName, -1);
 						// position not used
 					} else {
-						qualifiedSelection = typeName;
-						char[][] previousIdentifiers = CharOperation.splitOn('.', typeName, 0, dot - 1);
+						char[][] previousIdentifiers = CharOperation.splitOn('.', typeName, 0, dot);
 						char[] selectionIdentifier =
 							CharOperation.subarray(typeName, dot + 1, typeName.length);
 						this.selectedIdentifier = selectionIdentifier;
@@ -684,7 +683,6 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 			}
 		} catch (AbortCompilation e) { // ignore this exception for now since it typically means we cannot find java.lang.Object
 		} finally {
-			qualifiedSelection = null;
 			reset();
 		}
 	}

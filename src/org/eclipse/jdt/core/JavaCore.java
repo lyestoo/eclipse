@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
@@ -15,6 +15,21 @@
  *                                 CORE_INCOMPLETE_CLASSPATH
  *     IBM Corporation - added run(IWorkspaceRunnable, IProgressMonitor)
  *     IBM Corporation - added exclusion patterns to source classpath entries
+ *     IBM Corporation - added specific output location to source classpath entries
+ *     IBM Corporation - added the following constants:
+ *                                 CORE_JAVA_BUILD_CLEAN_OUTPUT_FOLDER
+ *                                 CLEAN
+ *     IBM Corporation - added getClasspathContainerInitializer(String)
+ *     IBM Corporation - added the following constants:
+ *                                 CODEASSIST_ARGUMENT_PREFIXES
+ *                                 CODEASSIST_ARGUMENT_SUFFIXES
+ *                                 CODEASSIST_FIELD_PREFIXES
+ *                                 CODEASSIST_FIELD_SUFFIXES
+ *                                 CODEASSIST_LOCAL_PREFIXES
+ *                                 CODEASSIST_LOCAL_SUFFIXES
+ *                                 CODEASSIST_STATIC_FIELD_PREFIXES
+ *                                 CODEASSIST_STATIC_FIELD_SUFFIXES
+ *                                 COMPILER_PB_CHAR_ARRAY_IN_STRING_CONCATENATION
  ******************************************************************************/
 package org.eclipse.jdt.core;
 
@@ -183,6 +198,30 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	/**
 	 * Possible  configurable option ID.
 	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String COMPILER_PB_NO_EFFECT_ASSIGNMENT = PLUGIN_ID + ".compiler.problem.noEffectAssignment"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String COMPILER_PB_INCOMPATIBLE_NON_INHERITED_INTERFACE_METHOD = PLUGIN_ID + ".compiler.problem.incompatibleNonInheritedInterfaceMethod"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String COMPILER_PB_UNUSED_PRIVATE_MEMBER = PLUGIN_ID + ".compiler.problem.unusedPrivateMember"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String COMPILER_PB_CHAR_ARRAY_IN_STRING_CONCATENATION = PLUGIN_ID + ".compiler.problem.noImplicitStringConversion"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
 	 * @since 2.0
 	 */
 	public static final String COMPILER_PB_MAX_PER_UNIT = PLUGIN_ID + ".compiler.maxProblemPerUnit"; //$NON-NLS-1$
@@ -250,6 +289,12 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @see #getDefaultOptions
 	 * @since 2.1
 	 */
+	public static final String CORE_JAVA_BUILD_CLEAN_OUTPUT_FOLDER = PLUGIN_ID + ".builder.cleanOutputFolder"; //$NON-NLS-1$	 	
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
 	public static final String CORE_INCOMPLETE_CLASSPATH = PLUGIN_ID + ".incompleteClasspath"; //$NON-NLS-1$
 	/**
 	 * Possible  configurable option ID.
@@ -269,6 +314,16 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @since 2.0
 	 */
 	public static final String CORE_ENCODING = PLUGIN_ID + ".encoding"; //$NON-NLS-1$
+	/**
+	 * Default task tag
+	 * @since 2.1
+	 */
+	public static final String DEFAULT_TASK_TAG = "TODO"; //$NON-NLS-1$
+	/**
+	 * Default task priority
+	 * @since 2.1
+	 */
+	public static final String DEFAULT_TASK_PRIORITY = "NORMAL"; //$NON-NLS-1$
 	/**
 	 * Possible  configurable option ID.
 	 * @see #getDefaultOptions
@@ -324,6 +379,12 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 */
 	public static final String FORMATTER_TAB_SIZE = PLUGIN_ID + ".formatter.tabulation.size"; //$NON-NLS-1$
 	/**
+	 * Possible configurable option ID
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String FORMATTER_SPACE_CASTEXPRESSION = PLUGIN_ID + ".formatter.space.castexpression"; //$NON-NLS-1$
+	/**
 	 * Possible  configurable option ID.
 	 * @see #getDefaultOptions
 	 * @since 2.0
@@ -335,6 +396,54 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @since 2.0
 	 */
 	public static final String CODEASSIST_IMPLICIT_QUALIFICATION = PLUGIN_ID + ".codeComplete.forceImplicitQualification"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String CODEASSIST_FIELD_PREFIXES = PLUGIN_ID + ".codeComplete.fieldPrefixes"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String CODEASSIST_STATIC_FIELD_PREFIXES = PLUGIN_ID + ".codeComplete.staticFieldPrefixes"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String CODEASSIST_LOCAL_PREFIXES = PLUGIN_ID + ".codeComplete.localPrefixes"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String CODEASSIST_ARGUMENT_PREFIXES = PLUGIN_ID + ".codeComplete.argumentPrefixes"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String CODEASSIST_FIELD_SUFFIXES = PLUGIN_ID + ".codeComplete.fieldSuffixes"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String CODEASSIST_STATIC_FIELD_SUFFIXES = PLUGIN_ID + ".codeComplete.staticFieldSuffixes"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String CODEASSIST_LOCAL_SUFFIXES = PLUGIN_ID + ".codeComplete.localSuffixes"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option ID.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String CODEASSIST_ARGUMENT_SUFFIXES = PLUGIN_ID + ".codeComplete.argumentSuffixes"; //$NON-NLS-1$
 
 	// *************** Possible values for configurable options. ********************
 	
@@ -466,9 +575,16 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @since 2.0
 	 */
 	public static final String DISABLED = "disabled"; //$NON-NLS-1$
+	/**
+	 * Possible  configurable option value.
+	 * @see #getDefaultOptions
+	 * @since 2.1
+	 */
+	public static final String CLEAN = "clean"; //$NON-NLS-1$
 	
 	/**
 	 * Creates the Java core plug-in.
+	 * @since 2.1
 	 */
 	public JavaCore(IPluginDescriptor pluginDescriptor) {
 		super(pluginDescriptor);
@@ -636,7 +752,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 *	<li>a <code>.class</code> file - the element returned is the corresponding <code>IClassFile</code></li>
 	 *	<li>a <code>.jar</code> file - the element returned is the corresponding <code>IPackageFragmentRoot</code></li>
 	 *  <li>a folder - the element returned is the corresponding <code>IPackageFragmentRoot</code>
-	 *			or <code>IPackageFragment</code></li>
+	 *    	or <code>IPackageFragment</code></li>
 	 *  <li>the workspace root resource - the element returned is the <code>IJavaModel</code></li>
 	 *	</ul>
 	 * <p>
@@ -734,18 +850,17 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 */
 	public static IClasspathContainer getClasspathContainer(final IPath containerPath, final IJavaProject project) throws JavaModelException {
 
-		Map projectContainers = (Map)JavaModelManager.Containers.get(project);
-		if (projectContainers == null){
-			projectContainers = new HashMap(1);
-			JavaModelManager.Containers.put(project, projectContainers);
-		}
-		IClasspathContainer container = (IClasspathContainer)projectContainers.get(containerPath);
-
+		IClasspathContainer container = JavaModelManager.containerGet(project, containerPath);
 		if (container == JavaModelManager.ContainerInitializationInProgress) return null; // break cycle
+
 		if (container == null){
-			final ClasspathContainerInitializer initializer = JavaModelManager.getClasspathContainerInitializer(containerPath.segment(0));
+			final ClasspathContainerInitializer initializer = JavaCore.getClasspathContainerInitializer(containerPath.segment(0));
 			if (initializer != null){
-				projectContainers.put(containerPath, JavaModelManager.ContainerInitializationInProgress); // avoid initialization cycles
+				if (JavaModelManager.CP_RESOLVE_VERBOSE){
+					System.out.println("CPContainer INIT - triggering initialization of: ["+project.getElementName()+"] " + containerPath + " using initializer: "+ initializer); //$NON-NLS-1$ //$NON-NLS-2$//$NON-NLS-3$
+					new Exception("FAKE exception for dumping current CPContainer (["+project.getElementName()+"] "+ containerPath+ ")INIT invocation stack trace").printStackTrace(); //$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$
+				}
+				JavaModelManager.containerPut(project, containerPath, JavaModelManager.ContainerInitializationInProgress); // avoid initialization cycles
 				boolean ok = false;
 				try {
 					// wrap initializer call with Safe runnable in case initializer would be causing some grief
@@ -759,17 +874,14 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 					});
 					
 					// retrieve value (if initialization was successful)
-					container = (IClasspathContainer)projectContainers.get(containerPath);
+					container = JavaModelManager.containerGet(project, containerPath);
 					if (container == JavaModelManager.ContainerInitializationInProgress) return null; // break cycle
 					ok = true;
 				} finally {
-					if (!ok) JavaModelManager.Containers.put(project, null); // flush cache
-				}
-				if (container != null){
-					projectContainers.put(containerPath, container);
+					if (!ok) JavaModelManager.containerPut(project, containerPath, null); // flush cache
 				}
 				if (JavaModelManager.CP_RESOLVE_VERBOSE){
-					System.out.print("CPContainer INIT - after resolution: " + containerPath + " --> "); //$NON-NLS-2$//$NON-NLS-1$
+					System.out.print("CPContainer INIT - after resolution: ["+project.getElementName()+"] " + containerPath + " --> "); //$NON-NLS-2$//$NON-NLS-1$//$NON-NLS-3$
 					if (container != null){
 						System.out.print("container: "+container.getDescription()+" {"); //$NON-NLS-2$//$NON-NLS-1$
 						IClasspathEntry[] entries = container.getClasspathEntries();
@@ -784,10 +896,56 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 						System.out.println("{unbound}");//$NON-NLS-1$
 					}
 				}
+			} else {
+				if (JavaModelManager.CP_RESOLVE_VERBOSE){
+					System.out.println("CPContainer INIT - no initializer found for: "+project.getElementName()+"] " + containerPath); //$NON-NLS-1$ //$NON-NLS-2$
+				}
 			}
 		}
 		return container;			
 	}
+
+	/**
+	 * Helper method finding the classpath container initializer registered for a given classpath container ID 
+	 * or <code>null</code> if none was found while iterating over the contributions to extension point to
+	 * the extension point "org.eclipse.jdt.core.classpathContainerInitializer".
+	 * <p>
+	 * A containerID is the first segment of any container path, used to identify the registered container initializer.
+	 * <p>
+	 * @param String - a containerID identifying a registered initializer
+	 * @return ClasspathContainerInitializer - the registered classpath container initializer or <code>null</code> if 
+	 * none was found.
+	 * @since 2.1
+	 */
+	public static ClasspathContainerInitializer getClasspathContainerInitializer(String containerID){
+		
+		Plugin jdtCorePlugin = JavaCore.getPlugin();
+		if (jdtCorePlugin == null) return null;
+
+		IExtensionPoint extension = jdtCorePlugin.getDescriptor().getExtensionPoint(JavaModelManager.CPCONTAINER_INITIALIZER_EXTPOINT_ID);
+		if (extension != null) {
+			IExtension[] extensions =  extension.getExtensions();
+			for(int i = 0; i < extensions.length; i++){
+				IConfigurationElement [] configElements = extensions[i].getConfigurationElements();
+				for(int j = 0; j < configElements.length; j++){
+					String initializerID = configElements[j].getAttribute("id"); //$NON-NLS-1$
+					if (initializerID != null && initializerID.equals(containerID)){
+						if (JavaModelManager.CP_RESOLVE_VERBOSE) {
+							System.out.println("CPContainer INIT - found initializer: "+containerID +" --> " + configElements[j].getAttribute("class"));//$NON-NLS-3$//$NON-NLS-2$//$NON-NLS-1$
+						}						
+						try {
+							Object execExt = configElements[j].createExecutableExtension("class"); //$NON-NLS-1$
+							if (execExt instanceof ClasspathContainerInitializer){
+								return (ClasspathContainerInitializer)execExt;
+							}
+						} catch(CoreException e) {
+						}
+					}
+				}
+			}	
+		}
+		return null;
+	}		
 
 	/**
 	 * Returns the path held in the given classpath variable.
@@ -807,42 +965,61 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @see #setClasspathVariable
 	 */
 	public static IPath getClasspathVariable(final String variableName) {
-
+	
 		IPath variablePath = JavaModelManager.variableGet(variableName);
 		if (variablePath == JavaModelManager.VariableInitializationInProgress) return null; // break cycle
 		
 		if (variablePath != null) {
 			return variablePath;
 		}
+
 		// even if persisted value exists, initializer is given priority, only if no initializer is found the persisted value is reused
-		final ClasspathVariableInitializer initializer = getClasspathVariableInitializer(variableName);
+		final ClasspathVariableInitializer initializer = JavaCore.getClasspathVariableInitializer(variableName);
 		if (initializer != null){
-			JavaModelManager.variablePut(variableName, JavaModelManager.VariableInitializationInProgress); // avoid initialization cycles
-			// wrap initializer call with Safe runnable in case initializer would be causing some grief
-			Platform.run(new ISafeRunnable() {
-				public void handleException(Throwable exception) {
-					Util.log(exception, "Exception occurred in classpath variable initializer: "+initializer); //$NON-NLS-1$
-				}
-				public void run() throws Exception {
-					initializer.initialize(variableName);
-				}
-			});
-			variablePath = (IPath) JavaModelManager.variableGet(variableName); // retry
-			if (variablePath == JavaModelManager.VariableInitializationInProgress) return null; // break cycle
 			if (JavaModelManager.CP_RESOLVE_VERBOSE){
-				System.out.println("CPVariable INIT - after initialization: " + variableName + " --> " + variablePath); //$NON-NLS-2$//$NON-NLS-1$
+				System.out.println("CPVariable INIT - triggering initialization of: " + variableName+ " using initializer: "+ initializer); //$NON-NLS-1$ //$NON-NLS-2$
+				new Exception("FAKE exception for dumping current CPVariable ("+variableName+ ")INIT invocation stack trace").printStackTrace(); //$NON-NLS-1$//$NON-NLS-2$
+			}
+			JavaModelManager.variablePut(variableName, JavaModelManager.VariableInitializationInProgress); // avoid initialization cycles
+			boolean ok = false;
+			try {
+				// wrap initializer call with Safe runnable in case initializer would be causing some grief
+				Platform.run(new ISafeRunnable() {
+					public void handleException(Throwable exception) {
+						Util.log(exception, "Exception occurred in classpath variable initializer: "+initializer+" while initializing variable: "+variableName); //$NON-NLS-1$ //$NON-NLS-2$
+					}
+					public void run() throws Exception {
+						initializer.initialize(variableName);
+					}
+				});
+				variablePath = (IPath) JavaModelManager.variableGet(variableName); // initializer should have performed side-effect
+				if (variablePath == JavaModelManager.VariableInitializationInProgress) return null; // break cycle (initializer did not init or reentering call)
+				if (JavaModelManager.CP_RESOLVE_VERBOSE){
+					System.out.println("CPVariable INIT - after initialization: " + variableName + " --> " + variablePath); //$NON-NLS-2$//$NON-NLS-1$
+				}
+				ok = true;
+			} finally {
+				if (!ok) JavaModelManager.variablePut(variableName, null); // flush cache
+			}
+		} else {
+			if (JavaModelManager.CP_RESOLVE_VERBOSE){
+				System.out.println("CPVariable INIT - no initializer found for: " + variableName); //$NON-NLS-1$
 			}
 		}
 		return variablePath;
 	}
 
 	/**
- 	 * Retrieve the client classpath variable initializer registered for a given variable if any
- 	 * 
+	 * Helper method finding the classpath variable initializer registered for a given classpath variable name 
+	 * or <code>null</code> if none was found while iterating over the contributions to extension point to
+	 * the extension point "org.eclipse.jdt.core.classpathVariableInitializer".
+	 * <p>
  	 * @param the given variable
- 	 * @return the client classpath variable initializer registered for a given variable, <code>null</code> if none
+ 	 * @return ClasspathVariableInitializer - the registered classpath variable initializer or <code>null</code> if 
+	 * none was found.
+	 * @since 2.1
  	 */
-	private static ClasspathVariableInitializer getClasspathVariableInitializer(String variable){
+	public static ClasspathVariableInitializer getClasspathVariableInitializer(String variable){
 		
 		Plugin jdtCorePlugin = JavaCore.getPlugin();
 		if (jdtCorePlugin == null) return null;
@@ -898,299 +1075,396 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * Note: more options might be added in further releases.
 	 * <pre>
 	 * RECOGNIZED OPTIONS:
-	 *	COMPILER / Generating Local Variable Debug Attribute
- 	 *		When generated, this attribute will enable local variable names 
-	 *		to be displayed in debugger, only in place where variables are 
-	 *		definitely assigned (.class file is then bigger)
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.debug.localVariable"
-	 *     		- possible values:	{ "generate", "do not generate" }
-	 *     		- default:			"generate"
+	 * COMPILER / Generating Local Variable Debug Attribute
+ 	 *    When generated, this attribute will enable local variable names 
+	 *    to be displayed in debugger, only in place where variables are 
+	 *    definitely assigned (.class file is then bigger)
+	 *     - option id:         "org.eclipse.jdt.core.compiler.debug.localVariable"
+	 *     - possible values:   { "generate", "do not generate" }
+	 *     - default:           "generate"
 	 *
-	 *	COMPILER / Generating Line Number Debug Attribute 
-	 *		When generated, this attribute will enable source code highlighting in debugger 
-	 *		(.class file is then bigger).
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.debug.lineNumber"
-	 *     		- possible values:	{ "generate", "do not generate" }
-	 *     		- default:			"generate"
-	 *		
-	 *	COMPILER / Generating Source Debug Attribute 
-	 *		When generated, this attribute will enable the debugger to present the 
-	 *		corresponding source code.
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.debug.sourceFile"
-	 *     		- possible values:	{ "generate", "do not generate" }
-	 *     		- default:			"generate"
-	 *		
-	 *	COMPILER / Preserving Unused Local Variables
-	 *		Unless requested to preserve unused local variables (i.e. never read), the 
-	 *		compiler will optimize them out, potentially altering debugging
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.codegen.unusedLocal"
-	 *     		- possible values:	{ "preserve", "optimize out" }
-	 *     		- default:			"preserve"
+	 * COMPILER / Generating Line Number Debug Attribute 
+	 *    When generated, this attribute will enable source code highlighting in debugger 
+	 *    (.class file is then bigger).
+	 *     - option id:         "org.eclipse.jdt.core.compiler.debug.lineNumber"
+	 *     - possible values:   { "generate", "do not generate" }
+	 *     - default:           "generate"
+	 *    
+	 * COMPILER / Generating Source Debug Attribute 
+	 *    When generated, this attribute will enable the debugger to present the 
+	 *    corresponding source code.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.debug.sourceFile"
+	 *     - possible values:   { "generate", "do not generate" }
+	 *     - default:           "generate"
+	 *    
+	 * COMPILER / Preserving Unused Local Variables
+	 *    Unless requested to preserve unused local variables (i.e. never read), the 
+	 *    compiler will optimize them out, potentially altering debugging
+	 *     - option id:         "org.eclipse.jdt.core.compiler.codegen.unusedLocal"
+	 *     - possible values:   { "preserve", "optimize out" }
+	 *     - default:           "preserve"
 	 * 
-	 *	COMPILER / Defining Target Java Platform
-	 *		For binary compatibility reason, .class files can be tagged to with certain VM versions and later.
-	 *		Note that "1.4" target require to toggle compliance mode to "1.4" too.
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.codegen.targetPlatform"
-	 *     		- possible values:	{ "1.1", "1.2", "1.3", "1.4" }
-	 *     		- default:			"1.1"
+	 * COMPILER / Defining Target Java Platform
+	 *    For binary compatibility reason, .class files can be tagged to with certain VM versions and later.
+	 *    Note that "1.4" target require to toggle compliance mode to "1.4" too.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.codegen.targetPlatform"
+	 *     - possible values:   { "1.1", "1.2", "1.3", "1.4" }
+	 *     - default:           "1.1"
 	 *
-	 *	COMPILER / Reporting Unreachable Code
-	 *		Unreachable code can optionally be reported as an error, warning or simply 
-	 *		ignored. The bytecode generation will always optimized it out.
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.unreachableCode"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"error"
+	 * COMPILER / Reporting Unreachable Code
+	 *    Unreachable code can optionally be reported as an error, warning or simply 
+	 *    ignored. The bytecode generation will always optimized it out.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.unreachableCode"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "error"
 	 *
-	 *	COMPILER / Reporting Invalid Import
-	 *		An import statement that cannot be resolved might optionally be reported 
-	 *		as an error, as a warning or ignored.
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.invalidImport"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"error"
+	 * COMPILER / Reporting Invalid Import
+	 *    An import statement that cannot be resolved might optionally be reported 
+	 *    as an error, as a warning or ignored.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.invalidImport"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "error"
 	 *
-	 *	COMPILER / Reporting Attempt to Override Package-Default Method
-	 *		A package default method is not visible in a different package, and thus 
-	 *		cannot be overridden. When enabling this option, the compiler will signal 
-	 *		such scenarii either as an error or a warning.
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.overridingPackageDefaultMethod"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"warning"
+	 * COMPILER / Reporting Attempt to Override Package-Default Method
+	 *    A package default method is not visible in a different package, and thus 
+	 *    cannot be overridden. When enabling this option, the compiler will signal 
+	 *    such scenarii either as an error or a warning.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.overridingPackageDefaultMethod"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "warning"
 	 *
-	 *	COMPILER / Reporting Method With Constructor Name
-	 *		Naming a method with a constructor name is generally considered poor 
-	 *		style programming. When enabling this option, the compiler will signal such 
-	 *		scenarii either as an error or a warning.
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.methodWithConstructorName"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"warning"
+	 * COMPILER / Reporting Method With Constructor Name
+	 *    Naming a method with a constructor name is generally considered poor 
+	 *    style programming. When enabling this option, the compiler will signal such 
+	 *    scenarii either as an error or a warning.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.methodWithConstructorName"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "warning"
 	 *
-	 *	COMPILER / Reporting Deprecation
-	 *		When enabled, the compiler will signal use of deprecated API either as an 
-	 *		error or a warning.
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.deprecation"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"warning"
+	 * COMPILER / Reporting Deprecation
+	 *    When enabled, the compiler will signal use of deprecated API either as an 
+	 *    error or a warning.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.deprecation"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "warning"
 	 *
-	 *	COMPILER / Reporting Deprecation Inside Deprecated Code
-	 *		When enabled, the compiler will signal use of deprecated API inside deprecated code.
-	 *     The severity of the problem is controlled with option "org.eclipse.jdt.core.compiler.problem.deprecation".
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.deprecationInDeprecatedCode"
-	 *     		- possible values:	{ "enabled", "disabled" }
-	 *     		- default:			"disabled"
+	 * COMPILER / Reporting Deprecation Inside Deprecated Code
+	 *    When enabled, the compiler will signal use of deprecated API inside deprecated code.
+	 *    The severity of the problem is controlled with option "org.eclipse.jdt.core.compiler.problem.deprecation".
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.deprecationInDeprecatedCode"
+	 *     - possible values:   { "enabled", "disabled" }
+	 *     - default:           "disabled"
 	 *
-	 *	COMPILER / Reporting Hidden Catch Block
-	 *		Locally to a try statement, some catch blocks may hide others , e.g.
-	 *			try {	throw new java.io.CharConversionException();
-	 *			} catch (java.io.CharConversionException e) {
-	 *  	    } catch (java.io.IOException e) {}. 
-	 *		When enabling this option, the compiler will issue an error or a warning for hidden 
-	 *		catch blocks corresponding to checked exceptions
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.hiddenCatchBlock"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"warning"
+	 * COMPILER / Reporting Hidden Catch Block
+	 *    Locally to a try statement, some catch blocks may hide others , e.g.
+	 *      try {  throw new java.io.CharConversionException();
+	 *      } catch (java.io.CharConversionException e) {
+	 *      } catch (java.io.IOException e) {}. 
+	 *    When enabling this option, the compiler will issue an error or a warning for hidden 
+	 *    catch blocks corresponding to checked exceptions
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.hiddenCatchBlock"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "warning"
 	 *
-	 *	COMPILER / Reporting Unused Local
-	 *		When enabled, the compiler will issue an error or a warning for unused local 
-	 *		variables (i.e. variables never read from)
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.unusedLocal"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"ignore"
+	 * COMPILER / Reporting Unused Local
+	 *    When enabled, the compiler will issue an error or a warning for unused local 
+	 *    variables (i.e. variables never read from)
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.unusedLocal"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "ignore"
 	 *
-	 *	COMPILER / Reporting Unused Parameter
-	 *		When enabled, the compiler will issue an error or a warning for unused method 
-	 *		parameters (i.e. parameters never read from)
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.unusedParameter"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"ignore"
+	 * COMPILER / Reporting Unused Parameter
+	 *    When enabled, the compiler will issue an error or a warning for unused method 
+	 *    parameters (i.e. parameters never read from)
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.unusedParameter"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "ignore"
 	 *
-	 *	COMPILER / Reporting Unused Import
-	 *		When enabled, the compiler will issue an error or a warning for unused import 
-	 *		reference 
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.unusedImport"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"warning"
+	 * COMPILER / Reporting Unused Import
+	 *    When enabled, the compiler will issue an error or a warning for unused import 
+	 *    reference 
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.unusedImport"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "warning"
 	 *
-	 *	COMPILER / Reporting Synthetic Access Emulation
-	 *		When enabled, the compiler will issue an error or a warning whenever it emulates 
-	 *		access to a non-accessible member of an enclosing type. Such access can have
-	 *		performance implications.
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.syntheticAccessEmulation"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"ignore"
+	 * COMPILER / Reporting Unused Private Members
+	 *    When enabled, the compiler will issue an error or a warning whenever a private 
+	 *    method or field is declared but never used within the same unit.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.unusedPrivateMember"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "ignore"
 	 *
-	 *	COMPILER / Reporting Non-Externalized String Literal
-	 *		When enabled, the compiler will issue an error or a warning for non externalized 
-	 *		String literal (i.e. non tagged with //$NON-NLS-<n>$). 
-	 *     		- option id:		"org.eclipse.jdt.core.compiler.problem.nonExternalizedStringLiteral"
-	 *     		- possible values:	{ "error", "warning", "ignore" }
-	 *     		- default:			"ignore"
+	 * COMPILER / Reporting Synthetic Access Emulation
+	 *    When enabled, the compiler will issue an error or a warning whenever it emulates 
+	 *    access to a non-accessible member of an enclosing type. Such access can have
+	 *    performance implications.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.syntheticAccessEmulation"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "ignore"
+	 *
+	 * COMPILER / Reporting Non-Externalized String Literal
+	 *    When enabled, the compiler will issue an error or a warning for non externalized 
+	 *    String literal (i.e. non tagged with //$NON-NLS-<n>$). 
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.nonExternalizedStringLiteral"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "ignore"
 	 * 
 	 * COMPILER / Reporting Usage of 'assert' Identifier
 	 *    When enabled, the compiler will issue an error or a warning whenever 'assert' is 
 	 *    used as an identifier (reserved keyword in 1.4)
-	 *     - option id:			"org.eclipse.jdt.core.compiler.problem.assertIdentifier"
-	 *     - possible values:	{ "error", "warning", "ignore" }
-	 *     - default:			"ignore"
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.assertIdentifier"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "ignore"
 	 * 
-	 * COMPILER / Reporting Usage of expression receiver on static invocation/field access
+	 * COMPILER / Reporting Non-Static Reference to a Static Member
 	 *    When enabled, the compiler will issue an error or a warning whenever a static field
 	 *    or method is accessed with an expression receiver.
-	 *     - option id:			"org.eclipse.jdt.core.compiler.problem.staticAccessReceiver"
-	 *     - possible values:	{ "error", "warning", "ignore" }
-	 *     - default:			"warning"
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.staticAccessReceiver"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "warning"
 	 * 
+	 * COMPILER / Reporting Assignment with no Effect
+	 *    When enabled, the compiler will issue an error or a warning whenever an assignment
+	 *    has no effect (e.g 'x = x').
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.noEffectAssignment"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "warning"
+	 * 
+	 * COMPILER / Reporting Interface Method not Compatible with non-Inherited Methods
+	 *    When enabled, the compiler will issue an error or a warning whenever an interface
+	 *    defines a method incompatible with a non-inherited Object one.
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.incompatibleNonInheritedInterfaceMethod"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "warning"
+	 * 
+	 * COMPILER / Reporting Usage of char[] Expressions in String Concatenations
+	 *    When enabled, the compiler will issue an error or a warning whenever a char[] expression
+	 *    is used in String concatenations (e.g. "hello" + new char[]{'w','o','r','l','d'}).
+	 *     - option id:         "org.eclipse.jdt.core.compiler.problem.noImplicitStringConversion"
+	 *     - possible values:   { "error", "warning", "ignore" }
+	 *     - default:           "warning"
+	 *
 	 * COMPILER / Setting Source Compatibility Mode
 	 *    Specify whether source is 1.3 or 1.4 compatible. From 1.4 on, 'assert' is a keyword
 	 *    reserved for assertion support. Also note, than when toggling to 1.4 mode, the target VM
 	 *   level should be set to "1.4" and the compliance mode should be "1.4".
-	 *     - option id:			"org.eclipse.jdt.core.compiler.source"
-	 *     - possible values:	{ "1.3", "1.4" }
-	 *     - default:			"1.3"
+	 *     - option id:         "org.eclipse.jdt.core.compiler.source"
+	 *     - possible values:   { "1.3", "1.4" }
+	 *     - default:           "1.3"
 	 * 
 	 * COMPILER / Setting Compliance Level
 	 *    Select the compliance level for the compiler. In "1.3" mode, source and target settings
 	 *    should not go beyond "1.3" level.
-	 *     - option id:			"org.eclipse.jdt.core.compiler.compliance"
-	 *     - possible values:	{ "1.3", "1.4" }
-	 *     - default:			"1.3"
+	 *     - option id:         "org.eclipse.jdt.core.compiler.compliance"
+	 *     - possible values:   { "1.3", "1.4" }
+	 *     - default:           "1.3"
 	 * 
 	 * COMPILER / Maximum number of problems reported per compilation unit
 	 *    Specify the maximum number of problems reported on each compilation unit.
-	 *     - option id:			"org.eclipse.jdt.core.compiler.maxProblemPerUnit"
+	 *     - option id:         "org.eclipse.jdt.core.compiler.maxProblemPerUnit"
 	 *     - possible values:	"<n>" where <n> is zero or a positive integer (if zero then all problems are reported).
-	 *     - default:			"100"
+	 *     - default:           "100"
 	 * 
 	 * COMPILER / Define the Automatic Task Tags
 	 *    When the tag is non empty, the compiler will issue a task marker whenever it encounters
 	 *    one of the corresponding tag inside any comment in Java source code.
 	 *    Generated task messages will include the tag, and range until the next line separator or comment ending, and will be trimmed.
-	 *     - option id:			"org.eclipse.jdt.core.compiler.taskTags"
-	 *     - possible values:	{ "<tag>[,<tag>]*" } where <tag> is a String without any wild-card 
-	 *     - default:			""
+	 *     - option id:         "org.eclipse.jdt.core.compiler.taskTags"
+	 *     - possible values:   { "<tag>[,<tag>]*" } where <tag> is a String without any wild-card 
+	 *     - default:           ""
 	 * 
 	 * COMPILER / Define the Automatic Task Priorities
 	 *    In parallel with the Automatic Task Tags, this list defines the priorities (high, normal or low)
 	 *    of the task markers issued by the compiler.
 	 *    If the default is specified, the priority of each task marker is "NORMAL".
-	 *     - option id:			"org.eclipse.jdt.core.compiler.taskPriorities"
-	 *     - possible values:	{ "<priority>[,<priority>]*" } where <priority> is one of "HIGH", "NORMAL" or "LOW"
-	 *     - default:			""
-	 * 
+	 *     - option id:         "org.eclipse.jdt.core.compiler.taskPriorities"
+	 *     - possible values:   { "<priority>[,<priority>]*" } where <priority> is one of "HIGH", "NORMAL" or "LOW"
+	 *     - default:           ""
+	 *
 	 * BUILDER / Specifying Filters for Resource Copying Control
 	 *    Allow to specify some filters to control the resource copy process.
-	 *     - option id:			"org.eclipse.jdt.core.builder.resourceCopyExclusionFilter"
-	 *     - possible values:	{ "<name>[,<name>]* } where <name> is a file name pattern (* and ? wild-cards allowed)
+	 *     - option id:         "org.eclipse.jdt.core.builder.resourceCopyExclusionFilter"
+	 *     - possible values:   { "<name>[,<name>]* } where <name> is a file name pattern (* and ? wild-cards allowed)
 	 *       or the name of a folder which ends with '/'
-	 *     - default:			""
+	 *     - default:           ""
 	 * 
 	 * BUILDER / Abort if Invalid Classpath
 	 *    Allow to toggle the builder to abort if the classpath is invalid
-	 *     - option id:			"org.eclipse.jdt.core.builder.invalidClasspath"
-	 *     - possible values:	{ "abort", "ignore" }
-	 *     - default:			"ignore"
+	 *     - option id:         "org.eclipse.jdt.core.builder.invalidClasspath"
+	 *     - possible values:   { "abort", "ignore" }
+	 *     - default:           "ignore"
 	 * 
-	 *	JAVACORE / Computing Project Build Order
+	 * BUILDER / Cleaning Output Folder(s)
+	 *    Indicate whether the JavaBuilder is allowed to clean the output folders
+	 *    when performing full build operations.
+	 *     - option id:         "org.eclipse.jdt.core.builder.cleanOutputFolder"
+	 *     - possible values:   { "clean", "ignore" }
+	 *     - default:           "clean"
+	 * 
+	 * JAVACORE / Computing Project Build Order
 	 *    Indicate whether JavaCore should enforce the project build order to be based on
 	 *    the classpath prerequisite chain. When requesting to compute, this takes over
 	 *    the platform default order (based on project references).
-	 *     - option id:			"org.eclipse.jdt.core.computeJavaBuildOrder"
-	 *     - possible values:	{ "compute", "ignore" }
-	 *     - default:			"ignore"	 
+	 *     - option id:         "org.eclipse.jdt.core.computeJavaBuildOrder"
+	 *     - possible values:   { "compute", "ignore" }
+	 *     - default:           "ignore"	 
 	 * 
 	 * JAVACORE / Specify Default Source Encoding Format
 	 *    Get the encoding format for compiled sources. This setting is read-only, it is equivalent
 	 *    to 'ResourcesPlugin.getEncoding()'.
-	 *     - option id:			"org.eclipse.jdt.core.encoding"
-	 *     - possible values:	{ any of the supported encoding name}.
-	 *     - default:			<platform default>
+	 *     - option id:         "org.eclipse.jdt.core.encoding"
+	 *     - possible values:   { any of the supported encoding name}.
+	 *     - default:           <platform default>
 	 * 
 	 * JAVACORE / Reporting Incomplete Classpath
 	 *    An entry on the classpath doesn't exist or is not visible (e.g. a referenced project is closed).
-	 *     - option id:			"org.eclipse.jdt.core.incompleteClasspath"
-	 *     - possible values:	{ "error", "warning"}
-	 *     - default:			"error"
+	 *     - option id:         "org.eclipse.jdt.core.incompleteClasspath"
+	 *     - possible values:   { "error", "warning"}
+	 *     - default:           "error"
 	 * 
 	 * JAVACORE / Reporting Classpath Cycle
 	 *    A project is involved in a cycle.
-	 *     - option id:			"org.eclipse.jdt.core.circularClasspath"
-	 *     - possible values:	{ "error", "warning" }
-	 *     - default:			"error"
+	 *     - option id:         "org.eclipse.jdt.core.circularClasspath"
+	 *     - possible values:   { "error", "warning" }
+	 *     - default:           "error"
 	 * 
 	 *	FORMATTER / Inserting New Line Before Opening Brace
 	 *    When Insert, a new line is inserted before an opening brace, otherwise nothing
 	 *    is inserted
-	 *     - option id:			"org.eclipse.jdt.core.formatter.newline.openingBrace"
-	 *     - possible values:	{ "insert", "do not insert" }
-	 *     - default:			"do not insert"
+	 *     - option id:         "org.eclipse.jdt.core.formatter.newline.openingBrace"
+	 *     - possible values:   { "insert", "do not insert" }
+	 *     - default:           "do not insert"
 	 * 
 	 *	FORMATTER / Inserting New Line Inside Control Statement
 	 *    When Insert, a new line is inserted between } and following else, catch, finally
-	 *     - option id:			"org.eclipse.jdt.core.formatter.newline.controlStatement"
-	 *     - possible values:	{ "insert", "do not insert" }
-	 *     - default:			"do not insert"
+	 *     - option id:         "org.eclipse.jdt.core.formatter.newline.controlStatement"
+	 *     - possible values:   { "insert", "do not insert" }
+	 *     - default:           "do not insert"
 	 * 
 	 *	FORMATTER / Clearing Blank Lines
 	 *    When Clear all, all blank lines are removed. When Preserve one, only one is kept
 	 *    and all others removed.
-	 *     - option id:			"org.eclipse.jdt.core.formatter.newline.clearAll"
-	 *     - possible values:	{ "clear all", "preserve one" }
-	 *     - default:			"preserve one"
+	 *     - option id:         "org.eclipse.jdt.core.formatter.newline.clearAll"
+	 *     - possible values:   { "clear all", "preserve one" }
+	 *     - default:           "preserve one"
 	 * 
 	 *	FORMATTER / Inserting New Line Between Else/If 
 	 *    When Insert, a blank line is inserted between an else and an if when they are 
 	 *    contiguous. When choosing to not insert, else-if will be kept on the same
 	 *    line when possible.
-	 *     - option id:			"org.eclipse.jdt.core.formatter.newline.elseIf"
-	 *     - possible values:	{ "insert", "do not insert" }
-	 *     - default:			"do not insert"
+	 *     - option id:         "org.eclipse.jdt.core.formatter.newline.elseIf"
+	 *     - possible values:   { "insert", "do not insert" }
+	 *     - default:           "do not insert"
 	 * 
 	 *	FORMATTER / Inserting New Line In Empty Block
 	 *    When insert, a line break is inserted between contiguous { and }, if } is not followed
 	 *    by a keyword.
-	 *     - option id:			"org.eclipse.jdt.core.formatter.newline.emptyBlock"
-	 *     - possible values:	{ "insert", "do not insert" }
-	 *     - default:			"insert"
+	 *     - option id:         "org.eclipse.jdt.core.formatter.newline.emptyBlock"
+	 *     - possible values:   { "insert", "do not insert" }
+	 *     - default:           "insert"
 	 * 
 	 *	FORMATTER / Splitting Lines Exceeding Length
 	 *    Enable splitting of long lines (exceeding the configurable length). Length of 0 will
 	 *    disable line splitting
-	 *     - option id:			"org.eclipse.jdt.core.formatter.lineSplit"
+	 *     - option id:         "org.eclipse.jdt.core.formatter.lineSplit"
 	 *     - possible values:	"<n>", where n is zero or a positive integer
-	 *     - default:			"80"
+	 *     - default:           "80"
 	 * 
 	 *	FORMATTER / Compacting Assignment
 	 *    Assignments can be formatted asymmetrically, e.g. 'int x= 2;', when Normal, a space
 	 *    is inserted before the assignment operator
-	 *     - option id:			"org.eclipse.jdt.core.formatter.style.assignment"
-	 *     - possible values:	{ "compact", "normal" }
-	 *     - default:			"normal"
+	 *     - option id:         "org.eclipse.jdt.core.formatter.style.assignment"
+	 *     - possible values:   { "compact", "normal" }
+	 *     - default:           "normal"
 	 * 
 	 *	FORMATTER / Defining Indentation Character
 	 *    Either choose to indent with tab characters or spaces
-	 *     - option id:			"org.eclipse.jdt.core.formatter.tabulation.char"
-	 *     - possible values:	{ "tab", "space" }
-	 *     - default:			"tab"
+	 *     - option id:         "org.eclipse.jdt.core.formatter.tabulation.char"
+	 *     - possible values:   { "tab", "space" }
+	 *     - default:           "tab"
 	 * 
 	 *	FORMATTER / Defining Space Indentation Length
 	 *    When using spaces, set the amount of space characters to use for each 
 	 *    indentation mark.
-	 *     - option id:			"org.eclipse.jdt.core.formatter.tabulation.size"
+	 *     - option id:         "org.eclipse.jdt.core.formatter.tabulation.size"
 	 *     - possible values:	"<n>", where n is a positive integer
-	 *     - default:			"4"
+	 *     - default:           "4"
+	 * 
+	 *	FORMATTER / Inserting space in cast expression
+	 *    When Insert, a space is added between the type and the expression in a cast expression.
+	 *     - option id:         "org.eclipse.jdt.core.formatter.space.castexpression"
+	 *     - possible values:   { "insert", "do not insert" }
+	 *     - default:           "insert"
 	 * 
 	 *	CODEASSIST / Activate Visibility Sensitive Completion
 	 *    When active, completion doesn't show that you can not see
 	 *    (e.g. you can not see private methods of a super class).
-	 *     - option id:			"org.eclipse.jdt.core.codeComplete.visibilityCheck"
-	 *     - possible values:	{ "enabled", "disabled" }
-	 *     - default:			"disabled"
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.visibilityCheck"
+	 *     - possible values:   { "enabled", "disabled" }
+	 *     - default:           "disabled"
 	 * 
 	 *	CODEASSIST / Automatic Qualification of Implicit Members
 	 *    When active, completion automatically qualifies completion on implicit
 	 *    field references and message expressions.
-	 *     - option id:			"org.eclipse.jdt.core.codeComplete.forceImplicitQualification"
-	 *     - possible values:	{ "enabled", "disabled" }
-	 *     - default:			"disabled"
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.forceImplicitQualification"
+	 *     - possible values:   { "enabled", "disabled" }
+	 *     - default:           "disabled"
+	 * 
+	 *  CODEASSIST / Define the Prefixes for Field Name
+	 *    When the prefixes is non empty, completion for field name will begin with
+	 *    one of the proposed prefixes.
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.fieldPrefixes"
+	 *     - possible values:   { "<prefix>[,<prefix>]*" } where <prefix> is a String without any wild-card 
+	 *     - default:           ""
+	 * 
+	 *  CODEASSIST / Define the Prefixes for Static Field Name
+	 *    When the prefixes is non empty, completion for static field name will begin with
+	 *    one of the proposed prefixes.
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.staticFieldPrefixes"
+	 *     - possible values:   { "<prefix>[,<prefix>]*" } where <prefix> is a String without any wild-card 
+	 *     - default:           ""
+	 * 
+	 *  CODEASSIST / Define the Prefixes for Local Variable Name
+	 *    When the prefixes is non empty, completion for local variable name will begin with
+	 *    one of the proposed prefixes.
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.localPrefixes"
+	 *     - possible values:   { "<prefix>[,<prefix>]*" } where <prefix> is a String without any wild-card 
+	 *     - default:           ""
+	 * 
+	 *  CODEASSIST / Define the Prefixes for Argument Name
+	 *    When the prefixes is non empty, completion for argument name will begin with
+	 *    one of the proposed prefixes.
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.argumentPrefixes"
+	 *     - possible values:   { "<prefix>[,<prefix>]*" } where <prefix> is a String without any wild-card 
+	 *     - default:           ""
+	 * 
+	 *  CODEASSIST / Define the Suffixes for Field Name
+	 *    When the suffixes is non empty, completion for field name will end with
+	 *    one of the proposed suffixes.
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.fieldSuffixes"
+	 *     - possible values:   { "<suffix>[,<suffix>]*" } where <suffix> is a String without any wild-card 
+	 *     - default:           ""
+	 * 
+	 *  CODEASSIST / Define the Suffixes for Static Field Name
+	 *    When the suffixes is non empty, completion for static field name will end with
+	 *    one of the proposed suffixes.
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.staticFieldSuffixes"
+	 *     - possible values:   { "<suffix>[,<suffix>]*" } where <suffix> is a String without any wild-card 
+	 *     - default:           ""
+	 * 
+	 *  CODEASSIST / Define the Suffixes for Local Variable Name
+	 *    When the suffixes is non empty, completion for local variable name will end with
+	 *    one of the proposed suffixes.
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.localSuffixes"
+	 *     - possible values:   { "<suffix>[,<suffix>]*" } where <suffix> is a String without any wild-card 
+	 *     - default:           ""
+	 * 
+	 *  CODEASSIST / Define the Suffixes for Argument Name
+	 *    When the suffixes is non empty, completion for argument name will end with
+	 *    one of the proposed suffixes.
+	 *     - option id:         "org.eclipse.jdt.core.codeComplete.argumentSuffixes"
+	 *     - possible values:   { "<suffix>[,<suffix>]*" } where <prefix> is a String without any wild-card 
+	 *     - default:           ""
 	 * </pre>
 	 * 
 	 * @return a mutable table containing the default settings of all known options
@@ -1235,28 +1509,6 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 */
 	public static JavaCore getJavaCore() {
 		return (JavaCore) getPlugin();
-	}
-	/**
-	 * Returns the <code>IJavaProject</code> associated with the
-	 * given <code>IProject</code>, or <code>null</code> if the
-	 * project does not have a Java nature.
-	 * 
-	 * @param the given <code>IProject</code>
-	 * @return the <code>IJavaProject</code> associated with the
-	 * given <code>IProject</code>, or <code>null</code> if the
-	 * project does not have a Java nature
-	 */
-	private IJavaProject getJavaProject(IProject project) {
-		try {
-			if (project.hasNature(NATURE_ID)) {
-				JavaModel model = JavaModelManager.getJavaModelManager().getJavaModel();
-				if (model != null) {
-					return model.getJavaProject(project);
-				}
-			}
-		} catch (CoreException e) {
-		}
-		return null;
 	}
 	
 	/**
@@ -1358,19 +1610,19 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 *   if the given variable entry could not be resolved to a valid classpath entry
 	 */
 	public static IClasspathEntry getResolvedClasspathEntry(IClasspathEntry entry) {
-
+	
 		if (entry.getEntryKind() != IClasspathEntry.CPE_VARIABLE)
 			return entry;
-
+	
 		IWorkspaceRoot workspaceRoot = ResourcesPlugin.getWorkspace().getRoot();
 		IPath resolvedPath = JavaCore.getResolvedVariablePath(entry.getPath());
 		if (resolvedPath == null)
 			return null;
-
+	
 		Object target = JavaModel.getTarget(workspaceRoot, resolvedPath, false);
 		if (target == null)
 			return null;
-
+	
 		// inside the workspace
 		if (target instanceof IResource) {
 			IResource resolvedResource = (IResource) target;
@@ -1382,9 +1634,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 						return JavaCore.newProjectEntry(resolvedPath, entry.isExported());
 						
 					case IResource.FILE : 
-						String extension = resolvedResource.getFileExtension();
-						if ("jar".equalsIgnoreCase(extension)  //$NON-NLS-1$
-							 || "zip".equalsIgnoreCase(extension)) {  //$NON-NLS-1$
+						if (Util.isArchiveFileName(resolvedResource.getName())) {
 							// internal binary archive
 							return JavaCore.newLibraryEntry(
 									resolvedPath,
@@ -1439,19 +1689,19 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @return the resolved variable path or <code>null</code> if none
 	 */
 	public static IPath getResolvedVariablePath(IPath variablePath) {
-
+	
 		if (variablePath == null)
 			return null;
 		int count = variablePath.segmentCount();
 		if (count == 0)
 			return null;
-
+	
 		// lookup variable	
 		String variableName = variablePath.segment(0);
 		IPath resolvedPath = JavaCore.getClasspathVariable(variableName);
 		if (resolvedPath == null)
 			return null;
-
+	
 		// append path suffix
 		if (count > 1) {
 			resolvedPath = resolvedPath.append(variablePath.removeFirstSegments(1));
@@ -1537,6 +1787,9 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 		preferences.setDefault(COMPILER_PB_UNUSED_IMPORT, WARNING); 
 		optionNames.add(COMPILER_PB_UNUSED_IMPORT);
 
+		preferences.setDefault(COMPILER_PB_UNUSED_PRIVATE_MEMBER, IGNORE); 
+		optionNames.add(COMPILER_PB_UNUSED_PRIVATE_MEMBER);
+
 		preferences.setDefault(COMPILER_PB_SYNTHETIC_ACCESS_EMULATION, IGNORE); 
 		optionNames.add(COMPILER_PB_SYNTHETIC_ACCESS_EMULATION);
 
@@ -1549,10 +1802,19 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 		preferences.setDefault(COMPILER_PB_STATIC_ACCESS_RECEIVER, WARNING); 
 		optionNames.add(COMPILER_PB_STATIC_ACCESS_RECEIVER);
 
-		preferences.setDefault(COMPILER_TASK_TAGS, ""); //$NON-NLS-1$
+		preferences.setDefault(COMPILER_PB_NO_EFFECT_ASSIGNMENT, WARNING); 
+		optionNames.add(COMPILER_PB_NO_EFFECT_ASSIGNMENT);
+
+		preferences.setDefault(COMPILER_PB_INCOMPATIBLE_NON_INHERITED_INTERFACE_METHOD, WARNING); 
+		optionNames.add(COMPILER_PB_INCOMPATIBLE_NON_INHERITED_INTERFACE_METHOD);
+
+		preferences.setDefault(COMPILER_PB_CHAR_ARRAY_IN_STRING_CONCATENATION, WARNING); 
+		optionNames.add(COMPILER_PB_CHAR_ARRAY_IN_STRING_CONCATENATION);
+
+		preferences.setDefault(COMPILER_TASK_TAGS, DEFAULT_TASK_TAG); //$NON-NLS-1$
 		optionNames.add(COMPILER_TASK_TAGS);
 
-		preferences.setDefault(COMPILER_TASK_PRIORITIES, ""); //$NON-NLS-1$
+		preferences.setDefault(COMPILER_TASK_PRIORITIES, DEFAULT_TASK_PRIORITY); //$NON-NLS-1$
 		optionNames.add(COMPILER_TASK_PRIORITIES);
 
 		preferences.setDefault(COMPILER_SOURCE, VERSION_1_3);
@@ -1574,6 +1836,9 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 		preferences.setDefault(CORE_JAVA_BUILD_DUPLICATE_RESOURCE, WARNING); 
 		optionNames.add(CORE_JAVA_BUILD_DUPLICATE_RESOURCE);
 		
+		preferences.setDefault(CORE_JAVA_BUILD_CLEAN_OUTPUT_FOLDER, CLEAN); 
+		optionNames.add(CORE_JAVA_BUILD_CLEAN_OUTPUT_FOLDER);
+
 		// JavaCore settings
 		preferences.setDefault(CORE_JAVA_BUILD_ORDER, IGNORE); 
 		optionNames.add(CORE_JAVA_BUILD_ORDER);
@@ -1615,6 +1880,9 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 		preferences.setDefault(FORMATTER_TAB_SIZE, "4"); //$NON-NLS-1$ 
 		optionNames.add(FORMATTER_TAB_SIZE);
 		
+		preferences.setDefault(FORMATTER_SPACE_CASTEXPRESSION, INSERT); //$NON-NLS-1$ 
+		optionNames.add(FORMATTER_SPACE_CASTEXPRESSION);
+
 		// CodeAssist settings
 		preferences.setDefault(CODEASSIST_VISIBILITY_CHECK, DISABLED); //$NON-NLS-1$
 		optionNames.add(CODEASSIST_VISIBILITY_CHECK);
@@ -1622,6 +1890,29 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 		preferences.setDefault(CODEASSIST_IMPLICIT_QUALIFICATION, DISABLED); //$NON-NLS-1$
 		optionNames.add(CODEASSIST_IMPLICIT_QUALIFICATION);
 		
+		preferences.setDefault(CODEASSIST_FIELD_PREFIXES, ""); //$NON-NLS-1$
+		optionNames.add(CODEASSIST_FIELD_PREFIXES);
+		
+		preferences.setDefault(CODEASSIST_STATIC_FIELD_PREFIXES, ""); //$NON-NLS-1$
+		optionNames.add(CODEASSIST_STATIC_FIELD_PREFIXES);
+		
+		preferences.setDefault(CODEASSIST_LOCAL_PREFIXES, ""); //$NON-NLS-1$
+		optionNames.add(CODEASSIST_LOCAL_PREFIXES);
+		
+		preferences.setDefault(CODEASSIST_ARGUMENT_PREFIXES, ""); //$NON-NLS-1$
+		optionNames.add(CODEASSIST_ARGUMENT_PREFIXES);
+		
+		preferences.setDefault(CODEASSIST_FIELD_SUFFIXES, ""); //$NON-NLS-1$
+		optionNames.add(CODEASSIST_FIELD_SUFFIXES);
+		
+		preferences.setDefault(CODEASSIST_STATIC_FIELD_SUFFIXES, ""); //$NON-NLS-1$
+		optionNames.add(CODEASSIST_STATIC_FIELD_SUFFIXES);
+		
+		preferences.setDefault(CODEASSIST_LOCAL_SUFFIXES, ""); //$NON-NLS-1$
+		optionNames.add(CODEASSIST_LOCAL_SUFFIXES);
+		
+		preferences.setDefault(CODEASSIST_ARGUMENT_SUFFIXES, ""); //$NON-NLS-1$
+		optionNames.add(CODEASSIST_ARGUMENT_SUFFIXES);
 	}
 	
 	/**
@@ -1795,7 +2086,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @param containerPath the path identifying the container, it must be formed of at least
 	 * 	one segment (ID+hints)
 	 * @param isExported a boolean indicating whether this entry is contributed to dependent
-	 *		projects in addition to the output location
+	 *    projects in addition to the output location
 	 * @return a new container classpath entry
 	 * 
 	 * @see JavaCore#getClasspathContainer(IPath, IJavaProject)
@@ -1816,6 +2107,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 			ClasspathEntry.NO_EXCLUSION_PATTERNS, 
 			null, // source attachment
 			null, // source attachment root
+			null, // specific output folder
 			isExported);
 	}
 
@@ -1841,10 +2133,10 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * <p>
 	 * 
 	 * @param path the absolute path of the binary archive
-	 * @param sourceAttachmentPath the absolute path of the corresponding source archive, 
+	 * @param sourceAttachmentPath the absolute path of the corresponding source archive or folder, 
 	 *    or <code>null</code> if none
-	 * @param sourceAttachmentRootPath the location of the root within the source archive
-	 *    or <code>null</code> if <code>archivePath</code> is also <code>null</code>
+	 * @param sourceAttachmentRootPath the location of the root within the source archive or folder
+	 *    or <code>null</code> if this location should be automatically detected.
 	 * @return a new library classpath entry
 	 * 
 	 * @see #newLibraryEntry(IPath, IPath, IPath, boolean)
@@ -1876,10 +2168,10 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * <p>
 	 * 
 	 * @param path the absolute path of the binary archive
-	 * @param sourceAttachmentPath the absolute path of the corresponding source archive, 
+	 * @param sourceAttachmentPath the absolute path of the corresponding source archive or folder, 
 	 *    or <code>null</code> if none
-	 * @param sourceAttachmentRootPath the location of the root within the source archive
-	 *    or <code>null</code> if <code>archivePath</code> is also <code>null</code>
+	 * @param sourceAttachmentRootPath the location of the root within the source archive or folder
+	 *    or <code>null</code> if this location should be automatically detected.
 	 * @param isExported indicates whether this entry is contributed to dependent
 	 * 	  projects in addition to the output location
 	 * @return a new library classpath entry
@@ -1902,6 +2194,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 			ClasspathEntry.NO_EXCLUSION_PATTERNS, 
 			sourceAttachmentPath,
 			sourceAttachmentRootPath,
+			null, // specific output folder
 			isExported);
 	}
 
@@ -1962,6 +2255,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 			ClasspathEntry.NO_EXCLUSION_PATTERNS, 
 			null, // source attachment
 			null, // source attachment root
+			null, // specific output folder
 			isExported);
 	}
 
@@ -2005,7 +2299,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 */
 	public static IClasspathEntry newSourceEntry(IPath path) {
 
-		return newSourceEntry(path, ClasspathEntry.NO_EXCLUSION_PATTERNS);
+		return newSourceEntry(path, ClasspathEntry.NO_EXCLUSION_PATTERNS, null /*output location*/);
 	}
 	
 	/**
@@ -2060,6 +2354,75 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @since 2.1
 	 */
 	public static IClasspathEntry newSourceEntry(IPath path, IPath[] exclusionPatterns) {
+
+		return newSourceEntry(path, exclusionPatterns, null /*output location*/); 
+	}
+
+	/**
+	 * Creates and returns a new classpath entry of kind <code>CPE_SOURCE</code>
+	 * for the project's source folder identified by the given absolute 
+	 * workspace-relative path but excluding all source files with paths
+	 * matching any of the given patterns, and associated with a specific output location
+	 * (i.e. ".class" files are not going to the project default output location). 
+	 * All package fragments within the root will have children of type 
+	 * <code>ICompilationUnit</code>.
+	 * <p>
+	 * The source folder is referred to using an absolute path relative to the
+	 * workspace root, e.g. <code>/Project/src</code>. A project's source 
+	 * folders are located with that project. That is, a source classpath
+	 * entry specifying the path <code>/P1/src</code> is only usable for
+	 * project <code>P1</code>.
+	 * </p>
+	 * <p>
+	 * The source classpath entry created by this method includes all source
+	 * files below the given workspace-relative path except for those matched
+	 * by one (or more) of the given exclusion patterns. Each exclusion pattern
+	 * is represented by a relative path, which is interpreted as relative to
+	 * the source folder. For example, if the source folder path is 
+	 * <code>/Project/src</code> and the exclusion pattern is 
+	 * <code>com/xyz/tests/&#42;&#42;</code>, then source files
+	 * like <code>/Project/src/com/xyz/Foo.java</code>
+	 * and <code>/Project/src/com/xyz/utils/Bar.java</code> would be included,
+	 * whereas <code>/Project/src/com/xyz/tests/T1.java</code>
+	 * and <code>/Project/src/com/xyz/tests/quick/T2.java</code> would be
+	 * excluded. Exclusion patterns can contain can contain '**', '*' or '?'
+	 * wildcards; see <code>IClasspathEntry.getExclusionPatterns</code>
+	 * for the full description of the syntax and semantics of exclusion
+	 * patterns.
+	 * </p>
+	 * If the empty list of exclusion patterns is specified, the source folder
+	 * will automatically include all resources located inside the source
+	 * folder. In that case, the result is entirely equivalent to using the
+	 * factory method <code>JavaCore.newSourceEntry(IPath)</code>. 
+	 * </p>
+	 * <p>
+	 * Additionally, a source entry can be associated with a specific output location. 
+	 * By doing so, the Java builder will ensure that the generated ".class" files will 
+	 * be issued inside this output location, as opposed to be generated into the 
+	 * project default output location (when output location is <code>null</code>). 
+	 * Note that multiple source entries may target the same output location.
+	 * The output location is referred to using an absolute path relative to the 
+	 * workspace root, e.g. <code>"/Project/bin"</code>, it must be located inside 
+	 * the same project as the source folder.
+	 * </p>
+	 * <p>
+	 * Also note that all sources/binaries inside a project are contributed as a whole through
+	 * a project entry (see <code>JavaCore.newProjectEntry</code>). Particular
+	 * source entries cannot be selectively exported.
+	 * </p>
+	 *
+	 * @param path the absolute workspace-relative path of a source folder
+	 * @param exclusionPatterns the possibly empty list of exclusion patterns
+	 *    represented as relative paths
+	 * @param outputLocation the specific output location for this source entry (<code>null</code> if using project default ouput location)
+	 * @return a new source classpath entry with the given exclusion patterns
+	 * @see #newSourceEntry(org.eclipse.core.runtime.IPath)
+	 * @see IClasspathEntry#getExclusionPatterns
+	 * @see IClasspathEntry#getOutputLocation()
+	 * 
+	 * @since 2.1
+	 */
+	public static IClasspathEntry newSourceEntry(IPath path, IPath[] exclusionPatterns, IPath specificOutputLocation) {
 		
 		Assert.isTrue(path.isAbsolute(), Util.bind("classpath.needAbsolutePath" )); //$NON-NLS-1$
 		Assert.isTrue(exclusionPatterns != null, Util.bind("classpath.nullExclusionPattern" )); //$NON-NLS-1$
@@ -2071,9 +2434,10 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 			exclusionPatterns,
 			null, // source attachment
 			null, // source attachment root
+			specificOutputLocation, // custom output location
 			false);
 	}
-
+		
 	/**
 	 * Creates and returns a new non-exported classpath entry of kind <code>CPE_VARIABLE</code>
 	 * for the given path. The first segment of the path is the name of a classpath variable.
@@ -2177,6 +2541,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 			ClasspathEntry.NO_EXCLUSION_PATTERNS, 
 			variableSourceAttachmentPath, // source attachment
 			variableSourceAttachmentRootPath, // source attachment root			
+			null, // specific output folder
 			isExported);
 	}
 
@@ -2260,8 +2625,13 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @exception CoreException if the operation failed.
 	 */
 	public static void run(IWorkspaceRunnable action, IProgressMonitor monitor) throws CoreException {
-		// use IWorkspace.run(...) to ensure that a build will be done in autobuild mode
-		ResourcesPlugin.getWorkspace().run(new BatchOperation(action), monitor);
+		IWorkspace workspace = ResourcesPlugin.getWorkspace();
+		if (workspace.isTreeLocked()) {
+			new BatchOperation(action).run(monitor);
+		} else {
+			// use IWorkspace.run(...) to ensure that a build will be done in autobuild mode
+			workspace.run(new BatchOperation(action), monitor);
+		}
 	}
 	/** 
 	 * Bind a container reference path to some actual containers (<code>IClasspathContainer</code>).
@@ -2292,7 +2662,10 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * <code>ClasspathContainerInitializer</code> for each referenced container 
 	 * (through the extension point "org.eclipse.jdt.core.ClasspathContainerInitializer").
 	 * <p>
-	 * 
+	 * Note: setting a container to <code>null</code> will cause it to be lazily resolved again whenever
+	 * its value is required. In particular, this will cause a registered initializer to be invoked
+	 * again.
+	 * <p>
 	 * @param containerPath - the name of the container reference, which is being updated
 	 * @param affectedProjects - the set of projects for which this container is being bound
 	 * @param respectiveContainers - the set of respective containers for the affected projects
@@ -2303,15 +2676,17 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	 * @see IClasspathContainer
 	 * @since 2.0
 	 */
-	public static void setClasspathContainer(IPath containerPath, final IJavaProject[] affectedProjects, IClasspathContainer[] respectiveContainers, IProgressMonitor monitor) throws JavaModelException {
-	
+	public static void setClasspathContainer(IPath containerPath, IJavaProject[] affectedProjects, IClasspathContainer[] respectiveContainers, IProgressMonitor monitor) throws JavaModelException {
+
 		Assert.isTrue(affectedProjects.length == respectiveContainers.length, Util.bind("classpath.mismatchProjectsContainers" )); //$NON-NLS-1$
 	
 		if (monitor != null && monitor.isCanceled()) return;
 	
 		final int projectLength = affectedProjects.length;
+		final IJavaProject[] modifiedProjects;
+		System.arraycopy(affectedProjects, 0, modifiedProjects = new IJavaProject[projectLength], 0, projectLength);
 		final IClasspathEntry[][] oldResolvedPaths = new IClasspathEntry[projectLength][];
-	
+			
 		// filter out unmodified project containers
 		int remaining = 0;
 		for (int i = 0; i < projectLength; i++){
@@ -2320,9 +2695,9 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 	
 			IJavaProject affectedProject = affectedProjects[i];
 			IClasspathContainer newContainer = respectiveContainers[i];
-			
+			if (newContainer == null) newContainer = JavaModelManager.ContainerInitializationInProgress; // 30920 - prevent infinite loop
 			boolean found = false;
-			if (affectedProject.getProject().exists()){
+			if (JavaProject.hasJavaNature(affectedProject.getProject())){
 				IClasspathEntry[] rawClasspath = affectedProject.getRawClasspath();
 				for (int j = 0, cpLength = rawClasspath.length; j <cpLength; j++) {
 					IClasspathEntry entry = rawClasspath[j];
@@ -2333,25 +2708,33 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 				}
 			}
 			if (!found){
-				affectedProjects[i] = null; // filter out this project - does not reference the container path
+				modifiedProjects[i] = null; // filter out this project - does not reference the container path, or isnt't yet Java project
+				JavaModelManager.containerPut(affectedProject, containerPath, newContainer);
+				continue;
 			}
-			
-			Map perProjectContainers = (Map)JavaModelManager.Containers.get(affectedProject);
-			if (perProjectContainers == null){
-				perProjectContainers = new HashMap();
-				JavaModelManager.Containers.put(affectedProject, perProjectContainers);
-			} else {
-				IClasspathContainer oldContainer = (IClasspathContainer) perProjectContainers.get(containerPath);
-				if (oldContainer != null && oldContainer.equals(respectiveContainers[i])){
-					affectedProjects[i] = null; // filter out this project - container did not change
-					continue;
+			IClasspathContainer oldContainer = JavaModelManager.containerGet(affectedProject, containerPath);
+			if (oldContainer == JavaModelManager.ContainerInitializationInProgress) {
+				Map previousContainerValues = (Map)JavaModelManager.PreviousSessionContainers.get(affectedProject);
+				if (previousContainerValues != null){
+					IClasspathContainer previousContainer = (IClasspathContainer)previousContainerValues.get(containerPath);
+					if (previousContainer != null) {
+						if (JavaModelManager.CP_RESOLVE_VERBOSE){
+							System.out.println("CPContainer INIT - reentering access to project container: ["+affectedProject.getElementName()+"] " + containerPath + " during its initialization, will see previous value: "+ previousContainer.getDescription()); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+						}
+						JavaModelManager.containerPut(affectedProject, containerPath, previousContainer); 
+					}
+					oldContainer = previousContainer;
+				} else {
+					oldContainer = null;
 				}
 			}
-			if (found){
-				remaining++;
-				oldResolvedPaths[i] = affectedProject.getResolvedClasspath(true);
+			if (oldContainer != null && oldContainer.equals(respectiveContainers[i])){// TODO: could improve to only compare entries
+				modifiedProjects[i] = null; // filter out this project - container did not change
+				continue;
 			}
-			perProjectContainers.put(containerPath, newContainer);
+			remaining++; 
+			oldResolvedPaths[i] = affectedProject.getResolvedClasspath(true);
+			JavaModelManager.containerPut(affectedProject, containerPath, newContainer);
 		}
 		
 		if (remaining == 0) return;
@@ -2364,7 +2747,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 		
 						if (monitor != null && monitor.isCanceled()) return;
 		
-						JavaProject affectedProject = (JavaProject)affectedProjects[i];
+						JavaProject affectedProject = (JavaProject)modifiedProjects[i];
 						if (affectedProject == null) continue; // was filtered out
 						
 						// force a refresh of the affected project (will compute deltas)
@@ -2372,7 +2755,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 								affectedProject.getRawClasspath(),
 								SetClasspathOperation.ReuseOutputLocation,
 								monitor,
-								!JavaModelManager.isResourceTreeLocked(), // can save resources
+								!ResourcesPlugin.getWorkspace().isTreeLocked(), // can save resources
 								oldResolvedPaths[i],
 								false, // updating - no validation
 								false); // updating - no need to save
@@ -2389,6 +2772,12 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 				throw (JavaModelException)e;
 			} else {
 				throw new JavaModelException(e);
+			}
+		} finally {
+			for (int i = 0; i < projectLength; i++) {
+				if (respectiveContainers[i] == null) {
+					JavaModelManager.containerPut(affectedProjects[i], containerPath, null); // reset init in progress marker
+				}
 			}
 		}
 					
@@ -2559,7 +2948,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 
 			// retrieve variable values
 			JavaCore.getPlugin().getPluginPreferences().addPropertyChangeListener(new JavaModelManager.PluginPreferencesListener());
-			manager.loadVariables();
+			manager.loadVariablesAndContainers();
 
 			IWorkspace workspace = ResourcesPlugin.getWorkspace();
 			workspace.addResourceChangeListener(
@@ -2600,8 +2989,18 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 		// filter out unmodified variables
 		int discardCount = 0;
 		for (int i = 0; i < varLength; i++){
-			IPath oldPath = (IPath)JavaModelManager.variableGet(variableNames[i]);
-			if (oldPath == JavaModelManager.VariableInitializationInProgress) oldPath = null;
+			String variableName = variableNames[i];
+			IPath oldPath = (IPath)JavaModelManager.variableGet(variableName); // if reentering will provide previous session value 
+			if (oldPath == JavaModelManager.VariableInitializationInProgress){
+				IPath previousPath = (IPath)JavaModelManager.PreviousSessionVariables.get(variableName);
+				if (previousPath != null){
+					if (JavaModelManager.CP_RESOLVE_VERBOSE){
+						System.out.println("CPVariable INIT - reentering access to variable: " + variableName+ " during its initialization, will see previous value: "+ previousPath); //$NON-NLS-1$ //$NON-NLS-2$
+					}
+					JavaModelManager.variablePut(variableName, previousPath); // replace value so reentering calls are seeing old value
+				}
+				oldPath = previousPath;
+			}
 			if (oldPath != null && oldPath.equals(variablePaths[i])){
 				variableNames[i] = null;
 				discardCount++;
@@ -2642,14 +3041,14 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 						if (entry.getEntryKind() ==  IClasspathEntry.CPE_VARIABLE){
 	
 							if (variableName.equals(entry.getPath().segment(0))){
-								affectedProjects.put(project, ((JavaProject)project).getResolvedClasspath(true));
+								affectedProjects.put(project, project.getResolvedClasspath(true));
 								continue nextProject;
 							}
 							IPath sourcePath, sourceRootPath;
 							if (((sourcePath = entry.getSourceAttachmentPath()) != null	&& variableName.equals(sourcePath.segment(0)))
 								|| ((sourceRootPath = entry.getSourceAttachmentRootPath()) != null	&& variableName.equals(sourceRootPath.segment(0)))) {
 	
-								affectedProjects.put(project, ((JavaProject)project).getResolvedClasspath(true));
+								affectedProjects.put(project, project.getResolvedClasspath(true));
 								continue nextProject;
 							}
 						}												
@@ -2659,8 +3058,7 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 		}
 		// update variables
 		for (int i = 0; i < varLength; i++){
-			IPath path = variablePaths[i];
-			JavaModelManager.variablePut(variableNames[i], path);
+			JavaModelManager.variablePut(variableNames[i], variablePaths[i]);
 		}
 				
 		// update affected project classpaths
@@ -2681,8 +3079,8 @@ public final class JavaCore extends Plugin implements IExecutableExtension {
 									.setRawClasspath(
 										project.getRawClasspath(),
 										SetClasspathOperation.ReuseOutputLocation,
-										monitor,
-										!JavaModelManager.isResourceTreeLocked(), // can change resources
+										null, // don't call beginTask on the monitor (see http://bugs.eclipse.org/bugs/show_bug.cgi?id=3717)
+										!ResourcesPlugin.getWorkspace().isTreeLocked(), // can change resources
 										(IClasspathEntry[]) affectedProjects.get(project),
 										false, // updating - no validation
 										false); // updating - no need to save

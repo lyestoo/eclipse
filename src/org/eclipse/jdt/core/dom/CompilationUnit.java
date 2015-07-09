@@ -19,8 +19,10 @@ import org.eclipse.jdt.core.compiler.IProblem;
 
 /**
  * Java compilation unit AST node type. This is the type of the root of an AST.
- *
- * Range 0: first character through last character of the source file.
+ * <p>
+ * The source range for this type of node is ordinarily the entire source file,
+ * including leading and trailing whitespace and comments.
+ * </p>
  *
  * <pre>
  * CompilationUnit:
@@ -301,7 +303,7 @@ public class CompilationUnit extends ASTNode {
 	 * last character of the end-of-line delimiter. The very last line extends
 	 * through the end of the source string and has no line delimiter.
 	 * For example, the source string <code>class A\n{\n}</code> has 3 lines
-	 * corresponding to inclusive character ranges [0,8], [8,9], and [10,10].
+	 * corresponding to inclusive character ranges [0,7], [8,9], and [10,10].
 	 * Returns 1 for a character position that does not correspond to any
 	 * source line, or if no line number information is available for this
 	 * compilation unit.

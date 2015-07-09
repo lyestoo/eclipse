@@ -1,9 +1,9 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
@@ -112,8 +112,23 @@ public interface IJavaElement extends IAdaptable {
 
 	/**
 	 * Returns whether this Java element exists in the model.
+	 * <p>
+	 * Java elements are handle objects that may or may not be backed by an
+	 * actual element. Java elements that are backed by an actual element are
+	 * said to "exist", and this method returns <code>true</code>. For Java
+	 * elements that are not working copies, it is always the case that if the
+	 * element exists, then its parent also exists (provided it has one) and
+	 * includes the element as one of its children. It is therefore possible
+	 * to navigated to any existing Java element from the root of the Java model
+	 * along a chain of existing Java elements. On the other hand, working
+	 * copies are said to exist until they are destroyed (with
+	 * <code>IWorkingCopy.destroy</code>). Unlike regular Java elements, a
+	 * working copy never shows up among the children of its parent element
+	 * (which may or may not exist).
+	 * </p>
 	 *
-	 * @return <code>true</code> if this element exists in the Java model
+	 * @return <code>true</code> if this element exists in the Java model, and
+	 * <code>false</code> if this element does not exist
 	 */
 	boolean exists();
 	

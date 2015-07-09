@@ -266,6 +266,11 @@ public FieldBinding findFieldForCodeSnippet(TypeBinding receiverType, char[] fie
 	if (receiverType.isBaseType())
 		return null;
 	if (receiverType.isArrayType()) {
+		TypeBinding leafType = receiverType.leafComponentType();
+		if (leafType instanceof ReferenceBinding)
+		if (!((ReferenceBinding)leafType).canBeSeenBy(this)) {
+			return new ProblemFieldBinding((ReferenceBinding)leafType, fieldName, ReceiverTypeNotVisible);
+		}
 		if (CharOperation.equals(fieldName, LENGTH))
 			return ArrayBinding.LengthField;
 		return null;
@@ -273,7 +278,7 @@ public FieldBinding findFieldForCodeSnippet(TypeBinding receiverType, char[] fie
 
 	ReferenceBinding currentType = (ReferenceBinding) receiverType;
 	if (!currentType.canBeSeenBy(this))
-		return new ProblemFieldBinding(currentType, fieldName, NotVisible); // *** Need a new problem id - TypeNotVisible?
+		return new ProblemFieldBinding(currentType, fieldName, ReceiverTypeNotVisible);
 
 	FieldBinding field = currentType.getField(fieldName);
 	if (field != null) {
@@ -465,7 +470,7 @@ public MethodBinding findMethod(
 			if (interfaceMethod != null) return interfaceMethod;
 			return new ProblemMethodBinding(
 				candidates[0].selector,
-				argumentTypes,
+				candidates[0].parameters,
 				candidates[0].declaringClass,
 				NotVisible);
 		}	
@@ -496,7 +501,7 @@ public MethodBinding findMethodForArray(ArrayBinding receiverType, char[] select
 		if (!areParametersAssignable(methodBinding.parameters, argumentTypes))
 			return new ProblemMethodBinding(methodBinding, selector, argumentTypes, NotFound);
 		if (!canBeSeenByForCodeSnippet(methodBinding, receiverType, invocationSite, this))
-			return new ProblemMethodBinding(selector, argumentTypes, methodBinding.declaringClass, NotVisible);
+			return new ProblemMethodBinding(selector, methodBinding.parameters, methodBinding.declaringClass, NotVisible);
 	}
 	return methodBinding;
 }
@@ -633,7 +638,7 @@ public MethodBinding getConstructor(ReferenceBinding receiverType, TypeBinding[]
 	if (visibleIndex == 1)
 		return visible[0];
 	if (visibleIndex == 0)
-		return new ProblemMethodBinding(ConstructorDeclaration.ConstantPoolName, argumentTypes, NotVisible);
+		return new ProblemMethodBinding(ConstructorDeclaration.ConstantPoolName, compatible[0].parameters, NotVisible);
 	return mostSpecificClassMethodBinding(visible, visibleIndex);
 }
 /* API
@@ -697,7 +702,7 @@ public MethodBinding getImplicitMethod(ReferenceBinding receiverType, char[] sel
 				return methodBinding;
 			else
 				// make the user qualify the method, likely wants the first inherited method (javac generates an ambiguous error instead)
-				return new ProblemMethodBinding(selector, argumentTypes, InheritedNameHidesEnclosingName);
+				return new ProblemMethodBinding(selector, methodBinding.parameters, InheritedNameHidesEnclosingName);
 		}
 
 		ProblemMethodBinding fuzzyProblem = null;
@@ -711,6 +716,7 @@ public MethodBinding getImplicitMethod(ReferenceBinding receiverType, char[] sel
 					fuzzyProblem = new ProblemMethodBinding(selector, argumentTypes, methodBinding.declaringClass, NotVisible);
 				}
 			}
+			//TODO: (philippe) should set closest match
 			if (fuzzyProblem == null && !methodBinding.isStatic()) {
 				if (insideConstructorCall) {
 					insideProblem = new ProblemMethodBinding(methodBinding.selector, methodBinding.parameters, NonStaticReferenceInConstructorInvocation);

@@ -1,15 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added getNonJavaResources()
+ *     IBM Corporation - added contains(IResource)
  ******************************************************************************/
 package org.eclipse.jdt.core;
 
+import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.runtime.IProgressMonitor;
 
@@ -33,6 +36,22 @@ import org.eclipse.core.runtime.IProgressMonitor;
  * @see JavaCore#create(org.eclipse.core.resources.IWorkspaceRoot)
  */
 public interface IJavaModel extends IJavaElement, IOpenable, IParent {
+/**
+ * Returns whether this Java model contains an <code>IJavaElement</code> whose
+ * resource is the given resource or a non-Java resource which is the given resource.
+ * <p>
+ * Note: no existency check is performed on the argument resource. If it is not accessible 
+ * (see <code>IResource.isAccessible()</code>) yet but would be located in Java model 
+ * range, then it will return <code>true</code>.
+ * </p><p>
+ * If the resource is accessible, it can be reached by navigating the Java model down using the
+ * <code>getChildren()</code> and/or <code>getNonJavaResources()</code> methods.
+ * </p>
+ * @param resource the resource to check
+ * @return true if the resource is accessible through the Java model
+ * @since 2.1
+ */
+boolean contains(IResource resource);
 /**
  * Copies the given elements to the specified container(s).
  * If one container is specified, all elements are copied to that
@@ -110,6 +129,20 @@ IJavaProject getJavaProject(String name);
  * @exception JavaModelException if this request fails.
  */
 IJavaProject[] getJavaProjects() throws JavaModelException;
+/**
+ * Returns an array of non-Java resources (i.e. non-Java projects) in
+ * the workspace.
+ * <p>
+ * Non-Java projects include all projects that are closed (even if they have the
+ * Java nature).
+ * </p>
+ * 
+ * @return an array of non-Java projects contained in the workspace.
+ * @throws JavaModelException if this element does not exist or if an
+ *		exception occurs while accessing its corresponding resource
+ * @since 2.1
+ */
+Object[] getNonJavaResources() throws JavaModelException;
 /**
  * Returns the workspace associated with this Java model.
  * 

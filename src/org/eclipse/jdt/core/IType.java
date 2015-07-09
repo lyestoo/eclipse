@@ -1,14 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added support for restoring previously saved hierarchy
  ******************************************************************************/
 package org.eclipse.jdt.core;
+
+import java.io.InputStream;
 
 import org.eclipse.core.runtime.IProgressMonitor;
 
@@ -473,7 +476,27 @@ public interface IType extends IMember, IParent {
 	 * @since 2.0
 	 */
 	boolean isMember() throws JavaModelException;
-
+	/**
+	 * Loads a previously saved ITypeHierarchy from an input stream. A type hierarchy can
+	 * be stored using ITypeHierachy#store(OutputStream).
+	 * 
+	 * Only hierarchies originally created by the following methods can be load:
+	 * <ul>
+	 * <li>IType#newSupertypeHierarchy(IProgressMonitor)</li>
+	 * <li>IType#newTypeHierarchy(IJavaProject, IProgressMonitor)</li>
+	 * <li>IType#newTypeHierarchy(IProgressMonitor)</li>
+	 * </u>
+	 * 
+	 * @param input stream where hierarchy will be read
+	 * @param monitor the given progress monitor
+	 * @return the stored hierarchy
+	 * @exception JavaModelException if the hierarchy could not be restored, reasons include:
+	 *      - type is not the focus of the hierarchy or 
+	 *		- unable to read the input stream (wrong format, IOException during reading, ...)
+	 * @see ITypeHierarchy#store(OutputStream, IProgressMonitor)
+	 * @since 2.1
+	 */
+	ITypeHierarchy loadTypeHierachy(InputStream input, IProgressMonitor monitor) throws JavaModelException;
 	/**
 	 * Creates and returns a type hierarchy for this type containing
 	 * this type and all of its supertypes.

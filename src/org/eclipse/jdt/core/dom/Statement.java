@@ -1,9 +1,9 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
+ * Copyright (c) 2001, 2003 International Business Machines Corp. and others. All
+ * rights reserved. This program and the accompanying materials are made
+ * available under the terms of the Common Public License v1.0 which accompanies
+ * this distribution, and is available at http://www.eclipse.org/legal/cpl-v10.
+ * html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
@@ -11,10 +11,9 @@
 
 package org.eclipse.jdt.core.dom;
 
-import org.eclipse.jdt.core.ToolFactory;
-import org.eclipse.jdt.core.compiler.IScanner;
-import org.eclipse.jdt.core.compiler.ITerminalSymbols;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
+import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
 
 /**
  * Abstract base class of AST nodes that represent statements.
@@ -53,6 +52,8 @@ public abstract class Statement extends ASTNode {
 	/**
 	 * The leading comment, or <code>null</code> if none.
 	 * Defaults to none.
+	 * 
+	 * @deprecated The leading comment feature was removed in 2.1.
 	 */
 	private String optionalLeadingComment = null;
 	
@@ -81,6 +82,13 @@ public abstract class Statement extends ASTNode {
 	 * </p>
 	 * 
 	 * @return the comment string, or <code>null</code> if none
+	 * @deprecated This feature was removed in the 2.1 release because it was
+	 * only a partial, and inadequate, solution to the issue of associating
+	 * comments with statements. Furthermore, AST.parseCompilationUnit did not
+	 * associate leading comments, making this moot. Clients that need to access
+	 * comments preceding a statement should use a scanner to reanalyze the
+	 * source text immediately preceding the statement's source range. Clients
+	 * that need to associate a comment with a statement should use a property.
 	 */
 	public String getLeadingComment() {
 		return optionalLeadingComment;
@@ -115,21 +123,25 @@ public abstract class Statement extends ASTNode {
 	 * 
 	 * @param comment the comment string, or <code>null</code> if none
 	 * @exception IllegalArgumentException if the comment string is invalid
+	 * @deprecated This feature was removed in the 2.1 release because it was
+	 * only a partial, and inadequate, solution to the issue of associating
+	 * comments with statements. Clients that need to associate a comment with
+	 * a statement should use a property.
 	 */
 	public void setLeadingComment(String comment) {
 		if (comment != null) {
 			char[] source = comment.toCharArray();
-			IScanner scanner = ToolFactory.createScanner(true, true, false, false, true);
+			Scanner scanner = this.getAST().scanner;
 			scanner.resetTo(0, source.length);
 			scanner.setSource(source);
 			try {
 				int token;
 				boolean onlyOneComment = false;
-				while ((token = scanner.getNextToken()) != ITerminalSymbols.TokenNameEOF) {
+				while ((token = scanner.getNextToken()) != TerminalTokens.TokenNameEOF) {
 					switch(token) {
-						case ITerminalSymbols.TokenNameCOMMENT_BLOCK :
-						case ITerminalSymbols.TokenNameCOMMENT_JAVADOC :
-						case ITerminalSymbols.TokenNameCOMMENT_LINE :
+						case TerminalTokens.TokenNameCOMMENT_BLOCK :
+						case TerminalTokens.TokenNameCOMMENT_JAVADOC :
+						case TerminalTokens.TokenNameCOMMENT_LINE :
 							if (onlyOneComment) {
 								throw new IllegalArgumentException();
 							}
@@ -148,6 +160,16 @@ public abstract class Statement extends ASTNode {
 		}
 		modifying();
 		this.optionalLeadingComment = comment;
+	}
+
+	/**
+	 * Copies the leading comment from the given statement.
+	 * 
+	 * @param source the statement that supplies the leading comment
+	 * @since 2.1
+	 */
+	void copyLeadingComment(Statement source) {
+		setLeadingComment(source.getLeadingComment());
 	}
 	
 	/* (omit javadoc for this method)

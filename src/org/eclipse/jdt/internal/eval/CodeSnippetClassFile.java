@@ -18,7 +18,6 @@ import org.eclipse.jdt.internal.compiler.ast.FieldReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
-import org.eclipse.jdt.internal.compiler.lookup.LocalTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding;
@@ -86,16 +85,6 @@ public CodeSnippetClassFile(
 	accessFlags &= ~AccStrictfp;
 
 	this.enclosingClassFile = enclosingClassFile;
-	// innerclasses get their names computed at code gen time
-	if (aType.isLocalType()) {
-		((LocalTypeBinding) aType).constantPoolName(
-			computeConstantPoolName((LocalTypeBinding) aType));
-		ReferenceBinding[] memberTypes = aType.memberTypes();
-		for (int i = 0, max = memberTypes.length; i < max; i++) {
-			((LocalTypeBinding) memberTypes[i]).constantPoolName(
-				computeConstantPoolName((LocalTypeBinding) memberTypes[i]));
-		}
-	}
 	contents = new byte[INITIAL_CONTENTS_SIZE];
 	// now we continue to generate the bytes inside the contents array
 	contents[contentsOffset++] = (byte) (accessFlags >> 8);
@@ -162,7 +151,7 @@ public static void createProblemType(TypeDeclaration typeDeclaration, Compilatio
 	if ((fields != null) && (fields != NoFields)) {
 		for (int i = 0, max = fields.length; i < max; i++) {
 			if (fields[i].constant == null) {
-				FieldReference.getConstantFor(fields[i], false, null, null, 0);
+				FieldReference.getConstantFor(fields[i], null, false, null);
 			}
 		}
 		classFile.addFieldInfos();

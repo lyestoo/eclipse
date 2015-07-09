@@ -30,8 +30,6 @@ class TypeBinding implements ITypeBinding {
 	
 	private org.eclipse.jdt.internal.compiler.lookup.TypeBinding binding;
 	private BindingResolver resolver;
-	private IVariableBinding[] fields;
-	private IMethodBinding[] methods;
 	
 	public TypeBinding(BindingResolver resolver, org.eclipse.jdt.internal.compiler.lookup.TypeBinding binding) {
 		this.binding = binding;
@@ -264,7 +262,7 @@ class TypeBinding implements ITypeBinding {
 	public boolean isLocal() {
 		if (this.binding.isClass() || this.binding.isInterface()) {
 			ReferenceBinding referenceBinding = (ReferenceBinding) this.binding;
-			return referenceBinding.isLocalType();
+			return referenceBinding.isLocalType() && !referenceBinding.isMemberType();
 		}
 		return false;
 	}

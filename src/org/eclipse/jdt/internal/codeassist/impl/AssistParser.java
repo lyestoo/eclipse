@@ -33,6 +33,7 @@ import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.parser.RecoveredElement;
+import org.eclipse.jdt.internal.compiler.parser.RecoveredField;
 import org.eclipse.jdt.internal.compiler.parser.RecoveredInitializer;
 import org.eclipse.jdt.internal.compiler.parser.RecoveredMethod;
 import org.eclipse.jdt.internal.compiler.parser.RecoveredType;
@@ -57,6 +58,8 @@ public abstract class AssistParser extends Parser {
 	protected int elementPtr;
 	protected int[] elementKindStack = new int[ElementStackIncrement];
 	protected int[] elementInfoStack = new int[ElementStackIncrement];
+	protected int previousKind;
+	protected int previousInfo;
 	
 	// OWNER
 	protected static final int ASSIST_PARSER = 512;
@@ -70,6 +73,8 @@ public abstract class AssistParser extends Parser {
 	// selector constants
 	protected static final int THIS_CONSTRUCTOR = -1;
 	protected static final int SUPER_CONSTRUCTOR = -2;
+	
+	protected boolean isFirst = false;
 
 public AssistParser(ProblemReporter problemReporter, boolean assertMode) {
 	super(problemReporter, true, assertMode);
@@ -90,7 +95,7 @@ public RecoveredElement buildInitialRecoveryState(){
 	if (referenceContext instanceof CompilationUnitDeclaration){
 		RecoveredElement element = super.buildInitialRecoveryState();
 		flushAssistState();
-		elementPtr = -1;
+		flushElementStack();
 		return element;
 	}
 
@@ -230,6 +235,10 @@ public RecoveredElement buildInitialRecoveryState(){
 	}
 	
 	return element;
+}
+protected void consumeClassBodyDeclaration() {
+	popElement(K_METHOD_DELIMITER);
+	super.consumeClassBodyDeclaration();
 }
 protected void consumeClassBodyopt() {
 	super.consumeClassBodyopt();
@@ -436,6 +445,11 @@ protected void consumeStaticOnly() {
 }
 protected void consumeToken(int token) {
 	super.consumeToken(token);
+	
+	if(isFirst) {
+		isFirst = false;
+		return;
+	}
 	// register message send selector only if inside a method or if looking at a field initializer 
 	// and if the current token is an open parenthesis
 	if (isInsideMethod() || isInsideFieldInitialization()) {
@@ -534,6 +548,11 @@ public void flushAssistState(){
 	this.isOrphanCompletionNode = false;
 	this.setAssistIdentifier(null);
 }
+protected void flushElementStack() {
+	this.elementPtr = -1;
+	this.previousKind = 0;
+	this.previousInfo = 0;
+}
 /*
  * Build specific type reference nodes in case the cursor is located inside the type reference
  */
@@ -628,12 +647,28 @@ public void goForBlockStatementsopt() {
 
 	firstToken = TokenNameTWIDDLE;
 	scanner.recordLineSeparator = false;
+	
+	isFirst = true;
 }
 public void goForConstructorBlockStatementsopt() {
 	//tells the scanner to go for constructor block statements opt parsing
 
 	firstToken = TokenNameNOT;
 	scanner.recordLineSeparator = false;
+	
+	isFirst = true;
+}
+public void goForHeaders(){
+	super.goForHeaders();
+	isFirst = true;
+}
+public void goForCompilationUnit(){
+	super.goForCompilationUnit();
+	isFirst = true;
+}
+public void goForBlockStatementsOrMethodHeaders() {
+	super.goForBlockStatementsOrMethodHeaders();
+	isFirst = true;
 }
 /*
  * Retrieve a partial subset of a qualified name reference up to the completion point.
@@ -684,7 +719,7 @@ protected int indexOfAssistIdentifier(){
 public void initialize() {
 	super.initialize();
 	this.flushAssistState();
-	this.elementPtr = -1;
+	this.flushElementStack();
 	this.previousIdentifierPtr = -1;
 }
 
@@ -861,6 +896,10 @@ public void parseBlockStatements(MethodDeclaration md, CompilationUnitDeclaratio
 }
 protected void popElement(int kind){
 	if(elementPtr < 0 || elementKindStack[elementPtr] != kind) return;
+	
+	previousKind = elementKindStack[elementPtr];
+	previousInfo = elementInfoStack[elementPtr];
+	
 	switch (kind) {
 		default :
 			elementPtr--;
@@ -874,6 +913,10 @@ protected void popUntilElement(int kind){
 		i--;
 	}
 	if(i > 0) {
+		if(i < elementPtr) {
+			previousKind = elementKindStack[i+1];
+			previousInfo = elementInfoStack[i+1];
+		}
 		elementPtr = i;	
 	}
 }
@@ -890,7 +933,7 @@ protected void prepareForBlockStatements() {
 	int methodIndex = lastIndexOfElement(K_METHOD_DELIMITER);
 	if(methodIndex == fieldInitializerIndex) {
 		// there is no method and no field initializer
-		elementPtr = -1;
+		flushElementStack();
 	} else if(methodIndex > fieldInitializerIndex) {
 		popUntilElement(K_METHOD_DELIMITER);
 	} else {
@@ -912,6 +955,10 @@ protected void pushOnElementStack(int kind){
 }
 protected void pushOnElementStack(int kind, int info){
 	if (this.elementPtr < -1) return;
+	
+	this.previousKind = 0;
+	this.previousInfo = 0;
+	
 	try {
 		this.elementPtr++;
 		this.elementKindStack[this.elementPtr] = kind;
@@ -926,6 +973,52 @@ protected void pushOnElementStack(int kind, int info){
 		System.arraycopy(oldElementInfoStack, 0, this.elementInfoStack, 0, oldStackLength);
 		this.elementKindStack[this.elementPtr] = kind;
 		this.elementInfoStack[this.elementPtr] = info;
+	}
+}
+public void recoveryExitFromVariable() {
+	if(currentElement != null && currentElement instanceof RecoveredField
+		&& !(currentElement instanceof RecoveredInitializer)) {
+		RecoveredElement oldElement = currentElement;
+		super.recoveryExitFromVariable();
+		if(oldElement != currentElement) {
+			popElement(K_FIELD_INITIALIZER_DELIMITER);
+		}
+	} else {
+		super.recoveryExitFromVariable();
+	}
+}
+public void recoveryTokenCheck() {
+	RecoveredElement oldElement = currentElement;
+	switch (currentToken) {
+		case TokenNameLBRACE :
+			super.recoveryTokenCheck();
+			if(currentElement instanceof RecoveredInitializer) {
+				if(oldElement instanceof RecoveredField) {
+					popUntilElement(K_FIELD_INITIALIZER_DELIMITER);
+					popElement(K_FIELD_INITIALIZER_DELIMITER);
+				}
+				if(currentElement != oldElement
+					&& topKnownElementKind(ASSIST_PARSER) != K_METHOD_DELIMITER) {
+					pushOnElementStack(K_METHOD_DELIMITER);
+				}
+			}
+			break;
+		case TokenNameRBRACE :
+			super.recoveryTokenCheck();
+			if(currentElement != oldElement) {
+				if(oldElement instanceof RecoveredInitializer
+					|| oldElement instanceof RecoveredMethod) {
+					popUntilElement(K_METHOD_DELIMITER);
+					popElement(K_METHOD_DELIMITER);
+				} else if(oldElement instanceof RecoveredType) {
+					popUntilElement(K_TYPE_DELIMITER);
+					popElement(K_TYPE_DELIMITER);
+				}
+			}
+			break;
+		default :
+			super.recoveryTokenCheck();
+			break;
 	}
 }
 public void reset(){
