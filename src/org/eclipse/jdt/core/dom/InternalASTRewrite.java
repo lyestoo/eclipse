@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2004, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -20,6 +20,7 @@ import org.eclipse.jface.text.IDocument;
 
 import org.eclipse.jdt.core.dom.SimplePropertyDescriptor;
 import org.eclipse.jdt.core.dom.StructuralPropertyDescriptor;
+import org.eclipse.jdt.core.dom.rewrite.TargetSourceRangeComputer;
 import org.eclipse.jdt.internal.core.dom.rewrite.ASTRewriteAnalyzer;
 import org.eclipse.jdt.internal.core.dom.rewrite.ListRewriteEvent;
 import org.eclipse.jdt.internal.core.dom.rewrite.NodeInfoStore;
@@ -65,9 +66,23 @@ class InternalASTRewrite extends NodeEventHandler {
 	public TextEdit rewriteAST(IDocument document, Map options) {
 		TextEdit result = new MultiTextEdit();
 		
-		CompilationUnit rootNode = getRootNode();
+		final CompilationUnit rootNode = getRootNode();
 		if (rootNode != null) {
-			ASTRewriteAnalyzer visitor = new ASTRewriteAnalyzer(document, rootNode, result, this.eventStore, this.nodeStore, options);
+			TargetSourceRangeComputer xsrComputer = new TargetSourceRangeComputer() {
+				/** 
+				 * This implementation of
+				 * {@link TargetSourceRangeComputer#computeSourceRange(ASTNode)}
+				 * is specialized to work in the case of internal AST rewriting, where the
+				 * original AST has been modified from its original form. This means that
+				 * one cannot trust that the root of the given node is the compilation unit.
+				 */
+				public SourceRange computeSourceRange(ASTNode node) {
+					int extendedStartPosition = rootNode.getExtendedStartPosition(node);
+					int extendedLength = rootNode.getExtendedLength(node);
+					return new SourceRange(extendedStartPosition, extendedLength);
+				}
+			};
+			ASTRewriteAnalyzer visitor = new ASTRewriteAnalyzer(document, result, this.eventStore, this.nodeStore, options, xsrComputer);
 			rootNode.accept(visitor);
 		}
 		return result;
@@ -194,7 +209,17 @@ class InternalASTRewrite extends NodeEventHandler {
 	
 	
 	void postCloneNodeEvent(ASTNode node, ASTNode clone) {
-		this.clonedNodes.put(clone, node);
+		if(node.ast == root.ast && clone.ast == root.ast) {
+			if((node.getFlags() & ASTNode.ORIGINAL) != 0) {
+				this.clonedNodes.put(clone, node);
+			} else {
+				// node can be a cloned node
+				Object original = this.clonedNodes.get(node);
+				if(original != null) {
+					this.clonedNodes.put(clone, original);
+				}
+			}
+		}
 		this.cloneDepth--;
 	}
 	

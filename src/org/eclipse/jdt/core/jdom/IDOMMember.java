@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -21,6 +21,9 @@ package org.eclipse.jdt.core.jdom;
  * @see IDOMMethod
  * @see IDOMField
  * @see IDOMInitializer
+ * @deprecated The JDOM was made obsolete by the addition in 2.0 of the more
+ * powerful, fine-grained DOM/AST API found in the 
+ * org.eclipse.jdt.core.dom package.
  */
 public interface IDOMMember extends IDOMNode {
 /**
@@ -47,7 +50,7 @@ public int getFlags();
  *
  * @param comment the comment, including comment delimiters, or 
  *   <code>null</code> indicating this member should have no associated comment
- * @see #setFlags
+ * @see #setFlags(int)
  */
 public void setComment(String comment);
 /**

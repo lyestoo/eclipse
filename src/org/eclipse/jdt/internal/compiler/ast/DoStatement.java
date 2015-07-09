@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -59,11 +59,12 @@ public class DoStatement extends Statement {
 
 		int previousMode = flowInfo.reachMode();
 				
+		FlowInfo actionInfo = flowInfo.copy().unconditionalInits().discardNullRelatedInitializations();
 		if ((action != null) && !action.isEmptyBlock()) {
-			flowInfo = action.analyseCode(currentScope, loopingContext, flowInfo);
+			actionInfo = action.analyseCode(currentScope, loopingContext, actionInfo);
 
 			// code generation can be optimized when no need to continue in the loop
-			if (!flowInfo.isReachable() && !loopingContext.initsOnContinue.isReachable()) {
+			if (!actionInfo.isReachable() && !loopingContext.initsOnContinue.isReachable()) {
 				continueLabel = null;
 			}
 		}
@@ -72,24 +73,24 @@ public class DoStatement extends Statement {
 		 *   do { if (true) break; else blank = 0; } while(false);
 		 *   blank = 1; // may be initialized already 
 		 */
-		flowInfo.setReachMode(previousMode);
+		actionInfo.setReachMode(previousMode);
 		
-		flowInfo =
+		actionInfo =
 			condition.analyseCode(
 				currentScope,
 				loopingContext,
 				(action == null
-					? flowInfo
-					: (flowInfo.mergedWith(loopingContext.initsOnContinue))));
+					? actionInfo
+					: (actionInfo.mergedWith(loopingContext.initsOnContinue))));
 		if (!isConditionOptimizedFalse && continueLabel != null) {
-			loopingContext.complainOnFinalAssignmentsInLoop(currentScope, flowInfo);
+			loopingContext.complainOnDeferredChecks(currentScope, actionInfo);
 		}
 
 		// end of loop
 		FlowInfo mergedInfo = FlowInfo.mergedOptimizedBranches(
 				loopingContext.initsOnBreak, 
 				isConditionOptimizedTrue, 
-				flowInfo.initsWhenFalse(), 
+				actionInfo.initsWhenFalse().addInitializationsFrom(flowInfo), // recover null inits from before condition analysis
 				false, // never consider opt false case for DO loop, since break can always occur (47776)
 				!isConditionTrue /*do{}while(true); unreachable(); */);
 		mergedInitStateIndex = currentScope.methodScope().recordInitializationStates(mergedInfo);

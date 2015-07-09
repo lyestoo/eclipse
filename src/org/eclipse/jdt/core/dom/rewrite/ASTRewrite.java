@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2004, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -13,24 +13,26 @@ package org.eclipse.jdt.core.dom.rewrite;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.eclipse.text.edits.MultiTextEdit;
+import org.eclipse.text.edits.TextEdit;
+import org.eclipse.text.edits.TextEditGroup;
+
+import org.eclipse.jface.text.IDocument;
+
 import org.eclipse.jdt.core.JavaCore;
+
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.ChildListPropertyDescriptor;
-import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.StructuralPropertyDescriptor;
+
 import org.eclipse.jdt.internal.core.dom.rewrite.ASTRewriteAnalyzer;
 import org.eclipse.jdt.internal.core.dom.rewrite.NodeInfoStore;
 import org.eclipse.jdt.internal.core.dom.rewrite.NodeRewriteEvent;
 import org.eclipse.jdt.internal.core.dom.rewrite.RewriteEventStore;
 import org.eclipse.jdt.internal.core.dom.rewrite.TrackedNodePosition;
 import org.eclipse.jdt.internal.core.dom.rewrite.RewriteEventStore.CopySourceInfo;
-
-import org.eclipse.jface.text.IDocument;
-
-import org.eclipse.text.edits.MultiTextEdit;
-import org.eclipse.text.edits.TextEdit;
-import org.eclipse.text.edits.TextEditGroup;
 
 /**
  * Infrastucture for modifying code by describing changes to AST nodes.
@@ -49,7 +51,7 @@ import org.eclipse.text.edits.TextEditGroup;
  * </p>
  * <pre>
  * Document doc = new Document("import java.util.List;\nclass X {}\n");
- * ASTParser parser = ASTParser.newParser(AST.JLS2);
+ * ASTParser parser = ASTParser.newParser(AST.JLS3);
  * parser.setSource(doc.get().toCharArray());
  * CompilationUnit cu = (CompilationUnit) parser.createAST(null);
  * AST ast = cu.getAST();
@@ -80,6 +82,13 @@ public class ASTRewrite {
 
 	private final RewriteEventStore eventStore;
 	private final NodeInfoStore nodeStore;
+	
+	/**
+	 * Target source range computer; null means uninitialized;
+	 * lazy initialized to <code>new TargetSourceRangeComputer()</code>.
+	 * @since 3.1
+	 */
+	private TargetSourceRangeComputer targetSourceRangeComputer = null;
 	
 	/**
 	 * Creates a new instance for describing manipulations of
@@ -137,6 +146,11 @@ public class ASTRewrite {
 	 * edits to the given document containing the original source
 	 * code. The document itself is not modified.
 	 * <p>
+	 * For nodes in the original that are being replaced or deleted,
+	 * this rewriter computes the adjusted source ranges
+	 * by calling <code>getTargetSourceRangeComputer().computeSourceRange(node)</code>.
+	 * </p>
+	 * <p>
 	 * Calling this methods does not discard the modifications
 	 * on record. Subsequence modifications are added to the ones
 	 * already on record. If this method is called again later,
@@ -164,11 +178,14 @@ public class ASTRewrite {
 		if (rootNode != null) {
 			//validateASTNotModified(rootNode);
 			
-			getRewriteEventStore().markMovedNodesRemoved();
+			TargetSourceRangeComputer sourceRangeComputer= getExtendedSourceRangeComputer();
+			
+			this.eventStore.prepareMovedNodes(sourceRangeComputer);
 
-			CompilationUnit astRoot= (CompilationUnit) rootNode.getRoot();
-			ASTRewriteAnalyzer visitor= new ASTRewriteAnalyzer(document, astRoot, result, this.eventStore, this.nodeStore, options);
+			ASTRewriteAnalyzer visitor= new ASTRewriteAnalyzer(document, result, this.eventStore, this.nodeStore, options, sourceRangeComputer);
 			rootNode.accept(visitor); // throws IllegalArgumentException
+			
+			this.eventStore.revertMovedNodes();
 		}
 		return result;
 	}
@@ -382,12 +399,12 @@ public class ASTRewrite {
 		}
 //		if (node == null) {
 //			if (prop.isSimpleProperty() || (prop.isChildProperty() && ((ChildPropertyDescriptor) prop).isMandatory())) {
-//				String message= "Can not remove property " + prop.getId(); //$NON-NLS-1$
+//				String message= "Can not remove property " + prop.getId();
 //				throw new IllegalArgumentException(message);
 //			}
 //		} else {
 //			if (!prop.getNodeClass().isInstance(node)) {
-//				String message= node.getClass().getName() +  " is not a valid type for property " + prop.getId(); //$NON-NLS-1$
+//				String message= node.getClass().getName() +  " is not a valid type for property " + prop.getId();
 //				throw new IllegalArgumentException(message);
 //			}
 //		}
@@ -418,6 +435,35 @@ public class ASTRewrite {
 		getNodeStore().markAsStringPlaceholder(placeholder, code);
 		return placeholder;
 	}
+	
+	/**
+	 * Creates and returns a node that represents a sequence of nodes. 
+	 * Each of the given nodes must be either be brand new (not part of the original AST), or
+	 * a placeholder node (for example, one created by {@link #createCopyTarget(ASTNode)}
+	 * or {@link #createStringPlaceholder(String, int)}), or another group node.
+	 * The type of the returned node is unspecified. The returned node can be used
+	 * to replace an existing node (or as an element of another group node).
+	 * When the document is rewritten, the source code for each of the given nodes is
+	 * inserted, in order, into the output document at the position corresponding to the
+	 * group (indentation is adjusted).
+	 * 
+	 * @param targetNodes the nodes to go in the group
+	 * @return the new group node
+	 * @throws IllegalArgumentException if the targetNodes is <code>null</code> or empty
+	 * @since 3.1
+	 */
+	public final ASTNode createGroupNode(ASTNode[] targetNodes) {
+		if (targetNodes == null || targetNodes.length == 0) {
+			throw new IllegalArgumentException();
+		}
+		Block res= getNodeStore().createCollapsePlaceholder();
+		ListRewrite listRewrite= getListRewrite(res, Block.STATEMENTS_PROPERTY);
+		for (int i= 0; i < targetNodes.length; i++) {
+			listRewrite.insertLast(targetNodes[i], null);
+		}
+		return res;
+	}
+	
 	
 	private ASTNode createTargetNode(ASTNode node, boolean isMove) {
 		if (node == null) {
@@ -467,6 +513,35 @@ public class ASTRewrite {
 	public final ASTNode createMoveTarget(ASTNode node) {
 		return createTargetNode(node, true);
 	}	
+
+	/**
+	 * Returns the extended source range computer for this AST rewriter.
+	 * The default value is a <code>new ExtendedSourceRangeComputer()</code>.
+	 * 
+	 * @return an extended source range computer
+	 * @since 3.1
+	 */
+	public final TargetSourceRangeComputer getExtendedSourceRangeComputer() {
+		if (this.targetSourceRangeComputer == null) {
+			// lazy initialize
+			this.targetSourceRangeComputer = new TargetSourceRangeComputer(); 
+		}
+		return this.targetSourceRangeComputer;
+	}
+	
+	/**
+	 * Sets a custom target source range computer for this AST rewriter. This is advanced feature to modify how
+	 * comments are assotiated with nodes, which should be done only in special cases.
+	 * 
+	 * @param computer a target source range computer,
+	 * or <code>null</code> to restore the default value of
+	 * <code>new TargetSourceRangeComputer()</code>
+	 * @since 3.1
+	 */
+	public final void setTargetSourceRangeComputer(TargetSourceRangeComputer computer) {
+		// if computer==null, rely on lazy init code in getTargetSourceRangeComputer()
+		this.targetSourceRangeComputer = computer;
+	}
 	
 	/**
 	 * Returns a string suitable for debugging purposes (only).

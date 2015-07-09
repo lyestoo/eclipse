@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -23,6 +23,13 @@ public final class BaseTypeBinding extends TypeBinding {
 		this.constantPoolName = constantPoolName;
 	}
 
+	/**
+	 * int -> I
+	 */
+	public char[] computeUniqueKey(boolean isLeaf) {
+		return constantPoolName();
+	}
+	
 	/* Answer the receiver's constant pool name.
 	*/
 	public char[] constantPoolName() {
@@ -129,7 +136,13 @@ public final class BaseTypeBinding extends TypeBinding {
 				return false;
 		}
 	}
-
+	/**
+	 * T_null is acting as an unchecked exception
+	 * @see org.eclipse.jdt.internal.compiler.lookup.TypeBinding#isUncheckedException(boolean)
+	 */
+	public boolean isUncheckedException(boolean includeSupertype) {
+		return this == NullBinding;
+	}
 	public static final boolean isWidening(int left, int right) {
 
 		//can "left" store a "right" using some widening conversion
@@ -163,7 +176,12 @@ public final class BaseTypeBinding extends TypeBinding {
 				return false;
 		}
 	}
-
+	/**
+	 * @see org.eclipse.jdt.internal.compiler.lookup.Binding#kind()
+	 */
+	public int kind() {
+		return Binding.BASE_TYPE;
+	}
 	public char[] qualifiedSourceName() {
 		return simpleName;
 	}

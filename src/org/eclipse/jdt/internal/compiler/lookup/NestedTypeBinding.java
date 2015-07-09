@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -91,7 +91,7 @@ public class NestedTypeBinding extends SourceTypeBinding {
 		if (synthLocal == null) return null;
 	
 		if (synthLocal.matchingField == null)
-			synthLocal.matchingField = addSyntheticField(actualOuterLocalVariable);
+			synthLocal.matchingField = addSyntheticFieldForInnerclass(actualOuterLocalVariable);
 		return synthLocal;
 	}
 
@@ -103,7 +103,7 @@ public class NestedTypeBinding extends SourceTypeBinding {
 		if (synthLocal == null) return null;
 	
 		if (synthLocal.matchingField == null)
-			synthLocal.matchingField = addSyntheticField(targetEnclosingType);
+			synthLocal.matchingField = addSyntheticFieldForInnerclass(targetEnclosingType);
 		return synthLocal;
 	}
 
@@ -209,7 +209,7 @@ public class NestedTypeBinding extends SourceTypeBinding {
 		if (!onlyExactMatch){
 			for (int i = enclosingInstances.length; --i >= 0;)
 				if (enclosingInstances[i].actualOuterLocalVariable == null)
-					if (((ReferenceBinding)enclosingInstances[i].type).findSuperTypeErasingTo(targetEnclosingType) != null)
+					if (((ReferenceBinding)enclosingInstances[i].type).findSuperTypeWithSameErasure(targetEnclosingType) != null)
 						return enclosingInstances[i];
 		}
 		return null;

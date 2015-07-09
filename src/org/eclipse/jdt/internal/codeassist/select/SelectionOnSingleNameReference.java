@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -30,6 +30,7 @@ package org.eclipse.jdt.internal.codeassist.select;
  */
 
 import org.eclipse.jdt.internal.compiler.ast.SingleNameReference;
+import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemFieldBinding;
@@ -42,8 +43,14 @@ public SelectionOnSingleNameReference(char[] source, long pos) {
 	super(source, pos);
 }
 public TypeBinding resolveType(BlockScope scope) {
+	if (this.actualReceiverType != null) {
+		this.binding = scope.getField(this.actualReceiverType, token, this);
+		if (this.binding != null && this.binding.isValidBinding()) {
+			throw new SelectionNodeFound(binding);
+		}
+	} 
 	// it can be a package, type, member type, local variable or field
-	binding = scope.getBinding(token, VARIABLE | TYPE | PACKAGE, this, true /*resolve*/);
+	binding = scope.getBinding(token, Binding.VARIABLE | Binding.TYPE | Binding.PACKAGE, this, true /*resolve*/);
 	if (!binding.isValidBinding()) {
 		if (binding instanceof ProblemFieldBinding) {
 			// tolerate some error cases

@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2004, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -49,12 +49,34 @@ public abstract class AbstractTypeDeclaration extends BodyDeclaration {
 	abstract ChildListPropertyDescriptor internalBodyDeclarationsProperty();
 
 	/**
+	 * Returns structural property descriptor for the "bodyDeclarations" property
+	 * of this node.
+	 * 
+	 * @return the property descriptor
+	 * @since 3.1
+	 */
+	public final ChildListPropertyDescriptor getBodyDeclarationsProperty() {
+		return internalBodyDeclarationsProperty();
+	}
+
+	/**
 	 * Returns structural property descriptor for the "name" property
 	 * of this node.
 	 * 
 	 * @return the property descriptor
 	 */
 	abstract ChildPropertyDescriptor internalNameProperty();
+	
+	/**
+	 * Returns structural property descriptor for the "name" property
+	 * of this node.
+	 * 
+	 * @return the property descriptor
+	 * @since 3.1
+	 */
+	public final ChildPropertyDescriptor getNameProperty() {
+		return internalNameProperty();
+	}
 	
 	/**
 	 * Creates and returns a structural property descriptor for the
@@ -168,20 +190,19 @@ public abstract class AbstractTypeDeclaration extends BodyDeclaration {
 	 * Returns whether this type declaration is a type member.
 	 * <p>
 	 * Note that this is a convenience method that simply checks whether
-	 * this node's parent is a type declaration node, an anonymous 
-	 * class declaration, or an enumeration constant declaration.
+	 * this node's parent is a type declaration node or an anonymous 
+	 * class declaration.
 	 * </p>
 	 * 
 	 * @return <code>true</code> if this type declaration is a child of
-	 *   a type declaration node, a class instance creation node, or an
-	 *   enum constant declaration, and <code>false</code> otherwise
+	 *   a type declaration node or an anonymous class declaration node,
+	 *   and <code>false</code> otherwise
 	 * @since 2.0 (originally declared on <code>TypeDeclaration</code>)
 	 */
 	public boolean isMemberTypeDeclaration() {
 		ASTNode parent = getParent();
 		return (parent instanceof AbstractTypeDeclaration)
-			|| (parent instanceof AnonymousClassDeclaration)
-			|| (parent instanceof EnumConstantDeclaration);
+			|| (parent instanceof AnonymousClassDeclaration);
 	}
 
 	/**

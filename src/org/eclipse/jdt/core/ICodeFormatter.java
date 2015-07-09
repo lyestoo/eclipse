@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -16,8 +16,9 @@ package org.eclipse.jdt.core;
  * In case none is found, a default formatter can be provided through the ToolFactory.
  * 
  * @see ToolFactory#createCodeFormatter()
- * @see ToolFactory#createDefaultCodeFormatter(Map options)
+ * @see ToolFactory#createDefaultCodeFormatter(java.util.Map options)
  * @since 2.0
+ * @deprecated - should use org.eclipse.jdt.core.formatter.CodeFormatter instead (note: options have changed)
  */
 public interface ICodeFormatter {
 

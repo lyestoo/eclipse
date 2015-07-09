@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -25,12 +25,26 @@ package org.eclipse.jdt.core.dom;
 public interface IVariableBinding extends IBinding {
 	
 	/**
-	 * Returns whether this binding is for a field or for a local variable.
+	 * Returns whether this binding is for a field.
+	 * Note that this method returns <code>true</code> for constants,
+	 * including enum constants. This method returns <code>false</code>
+	 * for local variables.
 	 * 
 	 * @return <code>true</code> if this is the binding for a field,
-	 *    and <code>false</code> if this is the binding for a local variable
+	 *    and <code>false</code> otherwise
 	 */ 
 	public boolean isField();
+	
+	/**
+	 * Returns whether this binding is for an enum constant.
+	 * Note that this method returns <code>false</code> for local variables
+	 * and for fields other than enum constants.
+	 * 
+	 * @return <code>true</code> if this is the binding for an enum constant,
+	 *    and <code>false</code> otherwise
+	 * @since 3.1
+	 */ 
+	public boolean isEnumConstant();
 	
 	/**
 	 * Returns the name of the field or local variable declared in this binding.
@@ -98,10 +112,43 @@ public interface IVariableBinding extends IBinding {
 	 * <code>String</code>, the result is the string itself. If the variable has
 	 * no compile-time computed value, the result is <code>null</code>.
 	 * (Note: compile-time constant expressions cannot denote <code>null</code>;
-	 * JLS2 15.28.)
+	 * JLS2 15.28.). The result is always <code>null</code> for enum constants.
 	 * 
 	 * @return the constant value, or <code>null</code> if none
 	 * @since 3.0
 	 */
 	public Object getConstantValue();
+	
+	/**
+	 * Returns the method binding representing the method containing the scope
+	 * in which this local variable is declared.
+	 * <p>
+	 * The declaring method of a method formal parameter is the method itself.
+	 * For a local variable declared somewhere within the body of a method,
+	 * the declaring method is the enclosing method. When local or anonymous
+	 * classes are involved, the declaring method is the innermost such method.
+	 * There is no declaring method for a field, or for a local variable
+	 * declared in a static or instance initializer; this method returns
+	 * <code>null</code> in those cases.
+	 * </p>
+	 * 
+	 * @return the binding of the method or constructor that declares this
+	 * local variable, or <code>null</code> if none
+	 * @since 3.1
+	 */
+	public IMethodBinding getDeclaringMethod();
+	
+	/**
+	 * Returns the binding for the variable declaration corresponding to this
+	 * variable binding. For a binding for a field declaration in an instance
+	 * of a generic type, this method returns the binding for the corresponding
+	 * field declaration in the generic type. For other variable bindings,
+	 * including all ones for local variables and parameters, this method
+	 * returns the same binding.
+	 *
+	 * @return the variable binding for the originating declaration
+	 * @since 3.1
+	 */
+	public IVariableBinding getVariableDeclaration();
+
 }

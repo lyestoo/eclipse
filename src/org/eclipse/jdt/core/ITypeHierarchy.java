@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -121,11 +121,13 @@ IType[] getAllSuperclasses(IType type);
 IType[] getAllSuperInterfaces(IType type);
 /**
  * Returns all resolved supertypes of the
- * given class, in bottom-up order. An empty array
+ * given type, in bottom-up order. An empty array
  * is returned if there are no resolved supertypes for the
- * given class.
- *
- * <p>NOTE: once a type hierarchy has been created, it is more efficient to
+ * given type.
+ * <p>
+ * Note that <code>java.lang.Object</code> is NOT considered to be a supertype 
+ * of any interface type.
+ * </p><p>NOTE: once a type hierarchy has been created, it is more efficient to
  * query the hierarchy for supertypes than to query a type recursively up
  * the supertype chain. Querying an element performs a dynamic resolution,
  * whereas the hierarchy returns a pre-computed result.
@@ -145,9 +147,10 @@ IType[] getAllSupertypes(IType type);
 IType[] getAllTypes();
 
 /**
- * Return the flags associated with this type (would be equivalent to <code>IMember.getFlags()</code>),
+ * Return the flags associated with the given type (would be equivalent to <code>IMember.getFlags()</code>),
  * or <code>-1</code> if this information wasn't cached on the hierarchy during its computation.
  * 
+ * @param type the given type
  * @return the modifier flags for this member
  * @see Flags
  * @since 2.0
@@ -248,7 +251,9 @@ IType[] getSuperInterfaces(IType type);
  * in no particular order, limited to the types in this
  * type hierarchy's graph.
  * For classes, this returns its superclass and the interfaces that the class implements.
- * For interfaces, this returns the interfaces that the interface extends.
+ * For interfaces, this returns the interfaces that the interface extends. As a consequence 
+ * <code>java.lang.Object</code> is NOT considered to be a supertype of any interface 
+ * type.
  * 
  * @param type the given type
  * @return the resolved supertypes of the given type limited to the types in this
@@ -265,8 +270,8 @@ IType getType();
 /**
  * Re-computes the type hierarchy reporting progress.
  *
- * @exception JavaModelException if unable to refresh the hierarchy
  * @param monitor the given progress monitor
+ * @exception JavaModelException if unable to refresh the hierarchy
  */
 void refresh(IProgressMonitor monitor) throws JavaModelException;
 /**
@@ -291,7 +296,7 @@ void removeTypeHierarchyChangedListener(ITypeHierarchyChangedListener listener);
  * @param outputStream output stream where the hierarchy will be stored
  * @param monitor the given progress monitor
  * @exception JavaModelException if unable to store the hierarchy in the ouput stream
- * @see IType#loadTypeHierachy(InputStream, IProgressMonitor)
+ * @see IType#loadTypeHierachy(java.io.InputStream, IProgressMonitor)
  * @since 2.1
  */
 void store(OutputStream outputStream, IProgressMonitor monitor) throws JavaModelException;

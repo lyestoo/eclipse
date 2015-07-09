@@ -1,24 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
-import org.eclipse.jdt.internal.compiler.lookup.Binding;
-import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
-import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
-import org.eclipse.jdt.internal.compiler.lookup.PackageBinding;
-import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
-import org.eclipse.jdt.internal.compiler.lookup.Scope;
-import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
-
+import org.eclipse.jdt.internal.compiler.lookup.*;
 
 
 public class JavadocQualifiedTypeReference extends QualifiedTypeReference {
@@ -34,10 +27,10 @@ public class JavadocQualifiedTypeReference extends QualifiedTypeReference {
 	}
 
 	protected void reportInvalidType(Scope scope) {
-		scope.problemReporter().javadocInvalidType(this, this.resolvedType, scope.getDeclarationModifiers());
+		scope.problemReporter().javadocInvalidType(this, resolvedType, scope.getDeclarationModifiers());
 	}
 	protected void reportDeprecatedType(Scope scope) {
-		scope.problemReporter().javadocDeprecatedType(this.resolvedType, this, scope.getDeclarationModifiers());
+		scope.problemReporter().javadocDeprecatedType(resolvedType, this, scope.getDeclarationModifiers());
 	}
 
 	/* (non-Javadoc)
@@ -54,54 +47,37 @@ public class JavadocQualifiedTypeReference extends QualifiedTypeReference {
 	}
 
 	/*
-	 *
+	 * We need to modify resolving behavior to handle package references
 	 */
-	private TypeBinding internalResolveType(Scope scope) {
+	private TypeBinding internalResolveType(Scope scope, boolean checkBounds) {
 		// handle the error here
-		this.constant = NotAConstant;
-		if (this.resolvedType != null) { // is a shared type reference which was already resolved
-			if (!this.resolvedType.isValidBinding())
-				return null; // already reported error
-		} else {
-			this.resolvedType = getTypeBinding(scope);
-			if (!this.resolvedType.isValidBinding()) {
-				Binding binding = scope.getTypeOrPackage(this.tokens);
-				if (binding instanceof PackageBinding) {
-					this.packageBinding = (PackageBinding) binding;
-				} else {
-					reportInvalidType(scope);
-				}
-				return null;
+		constant = NotAConstant;
+		if (resolvedType != null) // is a shared type reference which was already resolved
+			return resolvedType.isValidBinding() ? resolvedType : null; // already reported error
+
+		resolvedType = getTypeBinding(scope);
+		if (!resolvedType.isValidBinding()) {
+			Binding binding = scope.getTypeOrPackage(tokens);
+			if (binding instanceof PackageBinding) {
+				packageBinding = (PackageBinding) binding;
+			} else {
+				reportInvalidType(scope);
 			}
-			if (isTypeUseDeprecated(this.resolvedType, scope)) {
-				reportDeprecatedType(scope);
-			}
-			// check raw type
-			if (this.resolvedType.isArrayType()) {
-			    TypeBinding leafComponentType = this.resolvedType.leafComponentType();
-			    if (leafComponentType.isGenericType()) { // raw type
-			        return this.resolvedType = scope.createArrayType(scope.environment().createRawType((ReferenceBinding)leafComponentType, null), this.resolvedType.dimensions());
-			    }
-			} else if (this.resolvedType.isGenericType()) {
-		        return this.resolvedType = scope.environment().createRawType((ReferenceBinding)this.resolvedType, null); // raw type
-			}		
+			return null;
 		}
-		return this.resolvedType;
+		if (isTypeUseDeprecated(resolvedType, scope))
+			reportDeprecatedType(scope);
+		if (resolvedType instanceof ParameterizedTypeBinding) {
+			resolvedType = ((ParameterizedTypeBinding)resolvedType).type;
+		}
+		return resolvedType;
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.jdt.internal.compiler.ast.Expression#resolveType(org.eclipse.jdt.internal.compiler.lookup.BlockScope)
-	 * We need to override to handle package references
-	 */
-	public TypeBinding resolveType(BlockScope blockScope) {
-		return internalResolveType(blockScope);
+	public TypeBinding resolveType(BlockScope blockScope, boolean checkBounds) {
+		return internalResolveType(blockScope, checkBounds);
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.jdt.internal.compiler.ast.Expression#resolveType(org.eclipse.jdt.internal.compiler.lookup.ClassScope)
-	 * We need to override to handle package references
-	 */
 	public TypeBinding resolveType(ClassScope classScope) {
-		return internalResolveType(classScope);
+		return internalResolveType(classScope, false);
 	}
 }

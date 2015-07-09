@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -28,9 +28,9 @@ import org.eclipse.core.runtime.IPath;
  * 		the project is built. The classpath entry must specify the
  *		absolute path to the root folder. Entries of this kind are 
  *		associated with the <code>CPE_SOURCE</code> constant.
- *      Source classpath entries can carry patterns to exclude selected files.
- *      Excluded <code>.java</code> source files do not appear as compilation
- *      units and are not compiled when the project is built.
+ *      Source classpath entries can carry inclusion and exclusion patterns for
+ *      selecting which <code>.java</code> source files appear as compilation
+ *      units and get compiled when the project is built.
  *  </li>
  * 
  *	<li>A binary library in the current project, in another project, or in the external
@@ -103,11 +103,11 @@ import org.eclipse.core.runtime.IPath;
  * Classpath entries can be created via methods on <code>JavaCore</code>.
  * </p>
  *
- * @see JavaCore#newLibraryEntry
- * @see JavaCore#newProjectEntry
- * @see JavaCore#newSourceEntry
- * @see JavaCore#newVariableEntry
- * @see JavaCore#newContainerEntry
+ * @see JavaCore#newLibraryEntry(org.eclipse.core.runtime.IPath, org.eclipse.core.runtime.IPath, org.eclipse.core.runtime.IPath)
+ * @see JavaCore#newProjectEntry(org.eclipse.core.runtime.IPath)
+ * @see JavaCore#newSourceEntry(org.eclipse.core.runtime.IPath)
+ * @see JavaCore#newVariableEntry(org.eclipse.core.runtime.IPath, org.eclipse.core.runtime.IPath, org.eclipse.core.runtime.IPath)
+ * @see JavaCore#newContainerEntry(org.eclipse.core.runtime.IPath)
  * @see ClasspathVariableInitializer
  * @see ClasspathContainerInitializer
  */
@@ -146,7 +146,24 @@ public interface IClasspathEntry {
 	 * @since 2.0
 	 */
 	int CPE_CONTAINER = 5;
+	
+	/**
+	 * Returns whether the access rules of the project's exported entries should be combined with this entry's access rules.
+	 * Returns true for container entries.
+	 * Returns false otherwise.
+	 * 
+	 * @return whether the access rules of the project's exported entries should be combined with this entry's access rules
+	 * @since 3.1
+	 */
+	boolean combineAccessRules();
 
+	/**
+	 * Returns the possibly empty list of access rules for this entry.
+	 * 
+	 * @return the possibly empty list of access rules for this entry
+	 * @since 3.1
+	 */
+	IAccessRule[] getAccessRules();
 	/**
 	 * Returns the kind of files found in the package fragments identified by this
 	 * classpath entry.
@@ -180,16 +197,20 @@ public interface IClasspathEntry {
 	int getEntryKind();
 
 	/**
-	 * Returns the set of patterns used to exclude resources associated with
-	 * this source entry.
+	 * Returns the set of patterns used to exclude resources or classes associated with
+	 * this classpath entry.
 	 * <p>
-	 * Exclusion patterns allow specified portions of the resource tree rooted
+	 * For source classpath entries,
+	 * exclusion patterns allow specified portions of the resource tree rooted
 	 * at this source entry's path to be filtered out. If no exclusion patterns
 	 * are specified, this source entry includes all relevent files. Each path
 	 * specified must be a relative path, and will be interpreted relative
 	 * to this source entry's path. File patterns are case-sensitive. A file
 	 * matched by one or more of these patterns is excluded from the 
 	 * corresponding package fragment root.
+	 * Exclusion patterns have higher precedence than inclusion patterns;
+	 * in other words, exclusion patterns can remove files for the ones that 
+	 * are to be included, not the other way around.
 	 * </p>
 	 * <p>
 	 * Note that there is no need to supply a pattern to exclude ".class" files
@@ -216,13 +237,13 @@ public interface IClasspathEntry {
 	 * Combinations of *'s and ?'s are allowed.
 	 * </p>
 	 * <p>
-	 * The special pattern '**' matches zero or more segments. A path 
-	 * like <code>tests/</code> that ends in a trailing separator is interpreted
-	 * as <code>tests/&#42;&#42;</code>, and would match all files under the 
+	 * The special pattern '**' matches zero or more segments. In a source enry,
+	 * a path like <code>tests/</code> that ends in a trailing separator is interpreted
+	 * as <code>tests/&#42;&#42;</code>, and would match everything under
 	 * the folder named <code>tests</code>.
 	 * </p>
 	 * <p>
-	 * Examples:
+	 * Example patterns in source entries:
 	 * <ul>
 	 * <li>
 	 * <code>tests/&#42;&#42;</code> (or simply <code>tests/</code>) 
@@ -252,12 +273,72 @@ public interface IClasspathEntry {
 	 * </p>
 	 * 
 	 * @return the possibly empty list of resource exclusion patterns 
-	 *   associated with this source entry, and <code>null</code> for other
-	 *   kinds of classpath entries
+	 *   associated with this classpath entry, or <code>null</code> if this kind
+	 *   of classpath entry does not support exclusion patterns
 	 * @since 2.1
 	 */
 	IPath[] getExclusionPatterns();
 	
+	/**
+	 * Returns the extra classpath attributes for this classpath entry. Returns an empty array if this entry
+	 * has no extra attributes.
+	 * 
+	 * @return the possibly empty list of extra classpath attributes for this classpath entry
+	 * @since 3.1
+	 */
+	IClasspathAttribute[] getExtraAttributes();
+	
+	/**
+	 * Returns the set of patterns used to explicitly define resources or classes
+	 * to be included with this classpath entry.
+	 * <p>
+	 * For source classpath entries,
+	 * when no inclusion patterns are specified, the source entry includes all
+	 * relevent files in the resource tree rooted at this source entry's path.
+	 * Specifying one or more inclusion patterns means that only the specified
+	 * portions of the resource tree are to be included. Each path specified
+	 * must be a relative path, and will be interpreted relative to this source
+	 * entry's path. File patterns are case-sensitive. A file matched by one or
+	 * more of these patterns is included in the corresponding package fragment
+	 * root unless it is excluded by one or more of this entrie's exclusion
+	 * patterns. Exclusion patterns have higher precedence than inclusion
+	 * patterns; in other words, exclusion patterns can remove files for the
+	 * ones that are to be included, not the other way around.
+	 * </p>
+	 * <p>
+	 * See {@link #getExclusionPatterns()} for a discussion of the syntax and
+	 * semantics of path patterns. The absence of any inclusion patterns is
+	 * semantically equivalent to the explicit inclusion pattern
+	 * <code>&#42;&#42;</code>.
+	 * </p>
+	 * <p>
+	 * Example patterns in source entries:
+	 * <ul>
+	 * <li>
+	 * The inclusion pattern <code>src/&#42;&#42;</code> by itself includes all
+	 * files under a root folder named <code>src</code>.
+	 * </li>
+	 * <li>
+	 * The inclusion patterns <code>src/&#42;&#42;</code> and
+	 * <code>tests/&#42;&#42;</code> includes all files under the root folders
+	 * named <code>src</code> and <code>tests</code>.
+	 * </li>
+	 * <li>
+	 * The inclusion pattern <code>src/&#42;&#42;</code> together with the
+	 * exclusion pattern <code>src/&#42;&#42;/Foo.java</code> includes all
+	 * files under a root folder named <code>src</code> except for ones
+	 * named <code>Foo.java</code>.
+	 * </li>
+	 * </ul>
+	 * </p>
+	 * 
+	 * @return the possibly empty list of resource inclusion patterns 
+	 *   associated with this classpath entry, or <code>null</code> if this kind
+	 *   of classpath entry does not support inclusion patterns
+	 * @since 3.0
+	 */
+	IPath[] getInclusionPatterns();
+
 	/**
 	 * Returns the full path to the specific location where the builder writes 
 	 * <code>.class</code> files generated for this source entry 

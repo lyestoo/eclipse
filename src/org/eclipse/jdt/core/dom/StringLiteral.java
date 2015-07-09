@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -165,6 +165,7 @@ public class StringLiteral extends Expression {
 	 * @exception IllegalArgumentException if the argument is incorrect
 	 */ 
 	public void setEscapedValue(String token) {
+		// update internalSetEscapedValue(String) if this is changed
 		if (token == null) {
 			throw new IllegalArgumentException("Token cannot be null"); //$NON-NLS-1$
 		}
@@ -183,6 +184,15 @@ public class StringLiteral extends Expression {
 		} catch(InvalidInputException e) {
 			throw new IllegalArgumentException("Invalid string literal : >" + token + "<");//$NON-NLS-1$//$NON-NLS-2$
 		}
+		preValueChange(ESCAPED_VALUE_PROPERTY);
+		this.escapedValue = token;
+		postValueChange(ESCAPED_VALUE_PROPERTY);
+	}
+
+	/* (omit javadoc for this method)
+	 * This method is a copy of setEscapedValue(String) that doesn't do any validation.
+	 */
+	void internalSetEscapedValue(String token) {
 		preValueChange(ESCAPED_VALUE_PROPERTY);
 		this.escapedValue = token;
 		postValueChange(ESCAPED_VALUE_PROPERTY);
@@ -222,7 +232,7 @@ public class StringLiteral extends Expression {
 			int tokenType = scanner.getNextToken();
 			switch(tokenType) {
 				case TerminalTokens.TokenNameStringLiteral:
-					return new String(scanner.getCurrentTokenSourceString());
+					return scanner.getCurrentStringLiteral();
 				default:
 					throw new IllegalArgumentException();
 			}

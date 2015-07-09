@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -71,7 +71,7 @@ public class UnaryExpression extends OperatorExpression {
 		}
 		switch ((bits & OperatorMASK) >> OperatorSHIFT) {
 			case NOT :
-				switch (this.expression.implicitConversion >> 4) /* runtime type */ {
+				switch ((this.expression.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4) /* runtime type */ {
 					case T_boolean :
 						// ! <boolean>
 						// Generate code for the condition
@@ -97,8 +97,7 @@ public class UnaryExpression extends OperatorExpression {
 				}
 				break;
 			case TWIDDLE :
-				switch (this.expression.implicitConversion >> 4 /* runtime */
-					) {
+				switch ((this.expression.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4 /* runtime */) {
 					case T_int :
 						// ~int
 						this.expression.generateCode(currentScope, codeStream, valueRequired);
@@ -119,7 +118,7 @@ public class UnaryExpression extends OperatorExpression {
 				// - <num>
 				if (this.constant != NotAConstant) {
 					if (valueRequired) {
-						switch (this.expression.implicitConversion >> 4){ /* runtime */
+						switch ((this.expression.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4){ /* runtime */
 							case T_int :
 								codeStream.generateInlinedValue(this.constant.intValue() * -1);
 								break;
@@ -136,7 +135,7 @@ public class UnaryExpression extends OperatorExpression {
 				} else {
 					this.expression.generateCode(currentScope, codeStream, valueRequired);
 					if (valueRequired) {
-						switch (expression.implicitConversion >> 4){ /* runtime type */
+						switch ((expression.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4){ /* runtime type */
 							case T_int :
 								codeStream.ineg();
 								break;
@@ -213,8 +212,15 @@ public class UnaryExpression extends OperatorExpression {
 			this.constant = NotAConstant;
 			return null;
 		}
-		int expressionTypeId = expressionType.id;
-		if (expressionTypeId > 15) {
+		int expressionTypeID = expressionType.id;
+		// autoboxing support
+		boolean use15specifics = scope.compilerOptions().sourceLevel >= JDK1_5;
+		if (use15specifics) {
+			if (!expressionType.isBaseType()) {
+				expressionTypeID = scope.environment().computeBoxingType(expressionType).id;
+			}
+		}		
+		if (expressionTypeID > 15) {
 			this.constant = NotAConstant;
 			scope.problemReporter().invalidOperator(this, expressionType);
 			return null;
@@ -236,8 +242,8 @@ public class UnaryExpression extends OperatorExpression {
 		// (cast)  left   Op (cast)  rigth --> result
 		//  0000   0000       0000   0000      0000
 		//  <<16   <<12       <<8    <<4       <<0
-		int operatorSignature = OperatorSignatures[tableId][(expressionTypeId << 4) + expressionTypeId];
-		this.expression.implicitConversion = operatorSignature >>> 12;
+		int operatorSignature = OperatorSignatures[tableId][(expressionTypeID << 4) + expressionTypeID];
+		this.expression.computeConversion(scope, TypeBinding.wellKnownType(scope, (operatorSignature >>> 16) & 0x0000F), expressionType);
 		this.bits |= operatorSignature & 0xF;
 		switch (operatorSignature & 0xF) { // only switch on possible result type.....
 			case T_boolean :
@@ -263,7 +269,7 @@ public class UnaryExpression extends OperatorExpression {
 				break;
 			default : //error........
 				this.constant = Constant.NotAConstant;
-				if (expressionTypeId != T_undefined)
+				if (expressionTypeID != T_undefined)
 					scope.problemReporter().invalidOperator(this, expressionType);
 				return null;
 		}
@@ -272,7 +278,7 @@ public class UnaryExpression extends OperatorExpression {
 			this.constant =
 				Constant.computeConstantOperation(
 					this.expression.constant,
-					expressionTypeId,
+					expressionTypeID,
 					(bits & OperatorMASK) >> OperatorSHIFT);
 		} else {
 			this.constant = Constant.NotAConstant;
@@ -284,7 +290,7 @@ public class UnaryExpression extends OperatorExpression {
 		}
 		if (expressionIsCast) {
 		// check need for operand cast
-			CastExpression.checkNeedForArgumentCast(scope, tableId, operatorSignature, this.expression, expressionTypeId);
+			CastExpression.checkNeedForArgumentCast(scope, tableId, operatorSignature, this.expression, expressionTypeID);
 		}
 		return this.resolvedType;
 	}

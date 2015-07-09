@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -43,7 +43,7 @@ public class QualifiedTypeReference extends TypeReference {
 					ProblemReferenceBinding problemBinding = (ProblemReferenceBinding) this.resolvedType;
 					this.resolvedType = new ProblemReferenceBinding(
 						org.eclipse.jdt.core.compiler.CharOperation.subarray(this.tokens, 0, tokenIndex + 1),
-						problemBinding.original,
+						problemBinding.closestMatch,
 						this.resolvedType.problemId());
 				}
 			}
@@ -65,15 +65,32 @@ public class QualifiedTypeReference extends TypeReference {
 
 	    PackageBinding packageBinding = binding == null ? null : (PackageBinding) binding;
 	    boolean isClassScope = scope.kind == Scope.CLASS_SCOPE;
+	    ReferenceBinding qualifiedType = null;
 		for (int i = packageBinding == null ? 0 : packageBinding.compoundName.length, max = this.tokens.length; i < max; i++) {
 			findNextTypeBinding(i, scope, packageBinding);
 			if (!this.resolvedType.isValidBinding())
 				return this.resolvedType;
-
+			
 			if (isClassScope)
-				if (((ClassScope) scope).detectCycle(this.resolvedType, this, null)) // must connect hierarchy to find inherited member types
+				if (((ClassScope) scope).detectHierarchyCycle(this.resolvedType, this, null)) // must connect hierarchy to find inherited member types
 					return null;
+			ReferenceBinding currentType = (ReferenceBinding) this.resolvedType;
+			if (qualifiedType != null) {
+				boolean rawQualified;
+				if (currentType.isGenericType()) {
+					qualifiedType = scope.environment().createRawType(currentType, qualifiedType);
+				} else if ((rawQualified = qualifiedType.isRawType()) && !currentType.isStatic()) {
+					qualifiedType = scope.environment().createRawType((ReferenceBinding)currentType.erasure(), qualifiedType);
+				} else if (rawQualified || qualifiedType.isParameterizedType()) {
+					qualifiedType = scope.environment().createParameterizedType((ReferenceBinding)currentType.erasure(), null, qualifiedType);
+				} else {
+					qualifiedType = currentType;
+				}
+			} else {
+				qualifiedType = currentType.isGenericType() ? (ReferenceBinding)scope.environment().convertToRawType(currentType) : currentType;
+			}			
 		}
+		this.resolvedType = qualifiedType;
 		return this.resolvedType;
 	}
 	

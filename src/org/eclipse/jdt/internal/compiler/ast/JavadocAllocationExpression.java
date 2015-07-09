@@ -1,35 +1,34 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
-import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
 public class JavadocAllocationExpression extends AllocationExpression {
 
 	public int tagSourceStart, tagSourceEnd;
+	public int tagValue;
 	public boolean superAccess = false;
 	
-	public JavadocAllocationExpression(long pos) {
-		this.sourceStart = (int) (pos >>> 32);
-		this.sourceEnd = (int) pos;
+	public JavadocAllocationExpression(int start, int end) {
+		this.sourceStart = start;
+		this.sourceEnd = end;
 		this.bits |= InsideJavadoc;
 	}
+	public JavadocAllocationExpression(long pos) {
+		this((int) (pos >>> 32), (int) pos);
+	}
 
-	/*
-	 * Resolves type on a Block or Class scope.
-	 */
 	private TypeBinding internalResolveType(Scope scope) {
-
+	
 		// Propagate the type checking to the arguments, and check if the constructor is defined.
 		this.constant = NotAConstant;
 		if (this.type == null) {
@@ -37,11 +36,12 @@ public class JavadocAllocationExpression extends AllocationExpression {
 		} else if (scope.kind == Scope.CLASS_SCOPE) {
 			this.resolvedType = this.type.resolveType((ClassScope)scope);
 		} else {
-			this.resolvedType = this.type.resolveType((BlockScope)scope);
+			this.resolvedType = this.type.resolveType((BlockScope)scope, true /* check bounds*/);
 		}
-
+	
 		// buffering the arguments' types
 		TypeBinding[] argumentTypes = NoParameters;
+		boolean hasTypeVarArgs = false;
 		if (this.arguments != null) {
 			boolean argHasError = false;
 			int length = this.arguments.length;
@@ -55,22 +55,38 @@ public class JavadocAllocationExpression extends AllocationExpression {
 				}
 				if (argumentTypes[i] == null) {
 					argHasError = true;
+				} else if (!hasTypeVarArgs) {
+					hasTypeVarArgs = argumentTypes[i].isTypeVariable();
 				}
 			}
 			if (argHasError) {
 				return null;
 			}
 		}
-
+	
 		// check resolved type
 		if (this.resolvedType == null) {
 			return null;
 		}
-		this.superAccess = scope.enclosingSourceType().isCompatibleWith(this.resolvedType);
-
+		this.resolvedType = scope.environment().convertToRawType(this.type.resolvedType);
+		SourceTypeBinding enclosingType = scope.enclosingSourceType();
+		this.superAccess = enclosingType==null ? false : enclosingType.isCompatibleWith(this.resolvedType);
+	
 		ReferenceBinding allocationType = (ReferenceBinding) this.resolvedType;
 		this.binding = scope.getConstructor(allocationType, argumentTypes, this);
 		if (!this.binding.isValidBinding()) {
+			ReferenceBinding enclosingTypeBinding = allocationType;
+			MethodBinding contructorBinding = this.binding;
+			while (!contructorBinding.isValidBinding() && (enclosingTypeBinding.isMemberType() || enclosingTypeBinding.isLocalType())) {
+				enclosingTypeBinding = enclosingTypeBinding.enclosingType();
+				contructorBinding = scope.getConstructor(enclosingTypeBinding, argumentTypes, this);
+			}
+			if (contructorBinding.isValidBinding()) {
+				this.binding = contructorBinding;
+			}
+		}
+		if (!this.binding.isValidBinding()) {
+			// First try to search a method instead
 			MethodBinding methodBinding = scope.getMethod(this.resolvedType, this.resolvedType.sourceName(), argumentTypes, this);
 			if (methodBinding.isValidBinding()) {
 				this.binding = methodBinding;
@@ -81,31 +97,43 @@ public class JavadocAllocationExpression extends AllocationExpression {
 				scope.problemReporter().javadocInvalidConstructor(this, this.binding, scope.getDeclarationModifiers());
 			}
 			return this.resolvedType;
+		} else if (binding.isVarargs()) {
+			int length = argumentTypes.length;
+			if (!(binding.parameters.length == length && argumentTypes[length-1].isArrayType())) {
+				MethodBinding problem = new ProblemMethodBinding(this.binding, this.binding.selector, argumentTypes, ProblemReasons.NotFound);
+				scope.problemReporter().javadocInvalidConstructor(this, problem, scope.getDeclarationModifiers());
+			}
+		} else if (hasTypeVarArgs) {
+			MethodBinding problem = new ProblemMethodBinding(this.binding, this.binding.selector, argumentTypes, ProblemReasons.NotFound);
+			scope.problemReporter().javadocInvalidConstructor(this, problem, scope.getDeclarationModifiers());
+		} else if (this.binding instanceof ParameterizedMethodBinding) {
+			ParameterizedMethodBinding paramMethodBinding = (ParameterizedMethodBinding) this.binding;
+			if (paramMethodBinding.hasSubstitutedParameters()) {
+				int length = argumentTypes.length;
+				for (int i=0; i<length; i++) {
+					if (paramMethodBinding.parameters[i] != argumentTypes[i] &&
+							paramMethodBinding.parameters[i].erasure() != argumentTypes[i].erasure()) {
+						MethodBinding problem = new ProblemMethodBinding(this.binding, this.binding.selector, argumentTypes, ProblemReasons.NotFound);
+						scope.problemReporter().javadocInvalidConstructor(this, problem, scope.getDeclarationModifiers());
+						break;
+					}
+				}
+			}
 		}
 		if (isMethodUseDeprecated(this.binding, scope)) {
 			scope.problemReporter().javadocDeprecatedMethod(this.binding, this, scope.getDeclarationModifiers());
 		}
-		// TODO (frederic) add support for unsafe type operation warning
 		return allocationType;
 	}
-	
-	/* (non-Javadoc)
-	 * @see org.eclipse.jdt.internal.compiler.lookup.InvocationSite#isSuperAccess()
-	 */
+
 	public boolean isSuperAccess() {
 		return this.superAccess;
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.jdt.internal.compiler.ast.Expression#resolveType(org.eclipse.jdt.internal.compiler.lookup.BlockScope)
-	 */
 	public TypeBinding resolveType(BlockScope scope) {
 		return internalResolveType(scope);
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.jdt.internal.compiler.ast.Expression#resolveType(org.eclipse.jdt.internal.compiler.lookup.BlockScope)
-	 */
 	public TypeBinding resolveType(ClassScope scope) {
 		return internalResolveType(scope);
 	}

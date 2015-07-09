@@ -1,12 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added J2SE 1.5 support
  *******************************************************************************/
 package org.eclipse.jdt.core;
 
@@ -94,12 +95,47 @@ public Object getConstant() throws JavaModelException;
  */
 String getElementName();
 /**
- * Returns the type signature of this field.
+ * Returns the binding key for this field. A binding key is a key that uniquely
+ * identifies this field. It allows access to generic info for parameterized
+ * fields.
+ * 
+ * @return the binding key for this field
+ * @see org.eclipse.jdt.core.dom.IBinding#getKey()
+ * @see BindingKey
+ * @since 3.1
+ */
+String getKey();
+/**
+ * Returns the type signature of this field. For enum constants,
+ * this returns the signature of the declaring enum class.
+ * <p>
+ * The type signature may be either unresolved (for source types)
+ * or resolved (for binary types), and either basic (for basic types)
+ * or rich (for parameterized types). See {@link Signature} for details.
+ * </p>
  *
- * @see Signature
- * @return the type signature of this field.
+ * @return the type signature of this field
  * @exception JavaModelException if this element does not exist or if an
  *      exception occurs while accessing its corresponding resource
+ * @see Signature
  */
 String getTypeSignature() throws JavaModelException;
+/**
+ * Returns whether this field represents an enum constant.
+ * 
+ * @return whether this field represents an enum constant
+ * @exception JavaModelException if this element does not exist or if an
+ *      exception occurs while accessing its corresponding resource
+ * @since 3.1
+ */
+boolean isEnumConstant() throws JavaModelException;
+/**
+ * Returns whether this field represents a resolved field.
+ * If a field is resoved, its key contains resolved information.
+ * 
+ * @return whether this field represents a resolved field.
+ * @since 3.1
+ */
+boolean isResolved();
+
 }

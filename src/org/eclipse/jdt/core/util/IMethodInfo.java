@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -14,7 +14,7 @@ package org.eclipse.jdt.core.util;
  * Description of a method info as described in the JVM 
  * specifications.
  *  
- * This interface may be implemented by clients. 
+ * This interface may be implemented by clients.
  * 
  * @since 2.0
  */
@@ -80,11 +80,13 @@ public interface IMethodInfo {
 	boolean isConstructor();
 
 	/**
-	 * Answer true if this method info has a synthetic attribute,
-	 * false otherwise.
+	 * Return true if the method info is synthetic according to the JVM specification, false otherwise.
+	 * <p>Note that prior to JDK 1.5, synthetic fields were always marked using
+	 * an attribute; with 1.5, synthetic fields can also be marked using 
+	 * the {@link IModifierConstants#ACC_SYNTHETIC} flag.
+	 * </p>
 	 * 
-	 * @return true if this method info has a synthetic attribute,
-	 * false otherwise
+	 * @return true if the method info is synthetic according to the JVM specification, false otherwise
 	 */
 	boolean isSynthetic();
 
@@ -112,7 +114,7 @@ public interface IMethodInfo {
 	 * 	@return the exception attribute of this method info, null is none
 	 */
 	IExceptionAttribute getExceptionAttribute();
-	
+
 	/**
 	 * Answer back the attribute number of the method info. It includes the CodeAttribute
 	 * if any even if the decoding flags doesn't include METHOD_BODIES.

@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -75,13 +75,14 @@ int getFlags() throws JavaModelException;
  */
 ISourceRange getNameRange() throws JavaModelException;
 /**
- * Returns the local or anonymous type declared in this member with the given simple name and/or
+ * Returns the local or anonymous type declared in this source member with the given simple name and/or
  * with the specified position relative to the order they are defined in the source.
  * The name is empty if it is an anonymous type.
- * Numbering starts at 1 (thus the first occurrence is occurrence 1, not occurrence 0)..
+ * Numbering starts at 1 (thus the first occurrence is occurrence 1, not occurrence 0).
  * This is a handle-only method. The type may or may not exist.
+ * Throws a <code>RuntimeException</code> if this member is not a source member.
  * 
- * @param the given simple name
+ * @param name the given simple name
  * @param occurrenceCount the specified position
  * @return the type with the given name and/or with the specified position relative to the order they are defined in the source
  * @since 3.0

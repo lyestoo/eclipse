@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -83,7 +83,7 @@ public class TryStatement extends SubRoutineStatement {
 					.analyseCode(
 						currentScope,
 						finallyContext = new FinallyFlowContext(flowContext, finallyBlock),
-						flowInfo.copy())
+						flowInfo.copy().unconditionalInits().discardNullRelatedInitializations())
 					.unconditionalInits();
 			if (subInfo == FlowInfo.DEAD_END) {
 				isSubRoutineEscaping = true;
@@ -128,7 +128,10 @@ public class TryStatement extends SubRoutineStatement {
 						.addPotentialInitializationsFrom(handlingContext.initsOnReturn);
 
 				// catch var is always set
-				catchInfo.markAsDefinitelyAssigned(catchArguments[i].binding);
+				LocalVariableBinding catchArg = catchArguments[i].binding;
+				FlowContext catchContext = insideSubContext == null ? flowContext : insideSubContext;
+				catchInfo.markAsDefinitelyAssigned(catchArg);
+				catchInfo.markAsDefinitelyNonNull(catchArg);
 				/*
 				"If we are about to consider an unchecked exception handler, potential inits may have occured inside
 				the try block that need to be detected , e.g. 
@@ -136,15 +139,13 @@ public class TryStatement extends SubRoutineStatement {
 				"(uncheckedExceptionTypes notNil and: [uncheckedExceptionTypes at: index])
 				ifTrue: [catchInits addPotentialInitializationsFrom: tryInits]."
 				*/
-				// TODO (philippe) should only tag as unreachable if the catchblock cannot be reached?
-				//??? if (!handlingContext.initsOnException(caughtExceptionTypes[i]).isReachable()){
 				if (tryBlock.statements == null) {
 					catchInfo.setReachMode(FlowInfo.UNREACHABLE);
 				}
 				catchInfo =
 					catchBlocks[i].analyseCode(
 						currentScope,
-						insideSubContext == null ? flowContext : insideSubContext,
+						catchContext,
 						catchInfo);
 				catchExits[i] = !catchInfo.isReachable();
 				tryInfo = tryInfo.mergedWith(catchInfo.unconditionalInits());
@@ -159,7 +160,7 @@ public class TryStatement extends SubRoutineStatement {
 
 		// we also need to check potential multiple assignments of final variables inside the finally block
 		// need to include potential inits from returns inside the try/catch parts - 1GK2AOF
-		finallyContext.complainOnRedundantFinalAssignments(
+		finallyContext.complainOnDeferredChecks(
 			tryInfo.isReachable() 
 				? (tryInfo.addPotentialInitializationsFrom(insideSubContext.initsOnReturn))
 				: insideSubContext.initsOnReturn, 
@@ -207,7 +208,7 @@ public class TryStatement extends SubRoutineStatement {
 		} else {
 			if (this.isSubRoutineEscaping) {
 				finallyMode = FINALLY_DOES_NOT_COMPLETE;
-			} else if (scope.environment().options.inlineJsrBytecode) {
+			} else if (scope.compilerOptions().inlineJsrBytecode) {
 				finallyMode = FINALLY_MUST_BE_INLINED;
 			} else {
 				finallyMode = FINALLY_SUBROUTINE;
@@ -249,7 +250,7 @@ public class TryStatement extends SubRoutineStatement {
 						codeStream.goto_(subRoutineStartLabel);
 						break;
 				}
-				codeStream.updateLastRecordedEndPC(position);
+				codeStream.updateLastRecordedEndPC(tryBlock.scope, position);
 				//goto is tagged as part of the try block
 			}
 			for (int i = 0; i < maxCatches; i++) {
@@ -410,9 +411,11 @@ public class TryStatement extends SubRoutineStatement {
 		if (this.isSubRoutineEscaping) {
 				codeStream.goto_(this.subRoutineStartLabel);
 		} else {
-			if (currentScope.environment().options.inlineJsrBytecode) { 
+			if (currentScope.compilerOptions().inlineJsrBytecode) {
 				// cannot use jsr bytecode, then simply inline the subroutine
+				this.exitAnyExceptionHandler();				
 				this.finallyBlock.generateCode(currentScope, codeStream);
+				this.enterAnyExceptionHandler(codeStream);
 			} else {
 				// classic subroutine invocation, distinguish case of non-returning subroutine
 				codeStream.jsr(this.subRoutineStartLabel);
@@ -422,7 +425,7 @@ public class TryStatement extends SubRoutineStatement {
 
 	public StringBuffer printStatement(int indent, StringBuffer output) {
 		printIndent(indent, output).append("try \n"); //$NON-NLS-1$
-		tryBlock.printStatement(indent + 1, output); //$NON-NLS-1$
+		tryBlock.printStatement(indent + 1, output);
 
 		//catches
 		if (catchBlocks != null)
@@ -462,7 +465,7 @@ public class TryStatement extends SubRoutineStatement {
 				MethodScope methodScope = scope.methodScope();
 	
 				// the type does not matter as long as it is not a base type
-				if (!upperScope.environment().options.inlineJsrBytecode) {
+				if (!upperScope.compilerOptions().inlineJsrBytecode) {
 					this.returnAddressVariable =
 						new LocalVariableBinding(SecretReturnName, upperScope.getJavaLangObject(), AccDefault, false);
 					finallyScope.addLocalVariable(returnAddressVariable);

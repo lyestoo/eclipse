@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -21,31 +21,26 @@ import org.eclipse.jdt.core.compiler.IProblem;
  *
  * @see ICodeAssist
  * @since 2.0
+ * @deprecated Use {@link CompletionRequestor} instead.
  */
 public interface ICompletionRequestor {
 /**
  * Code assist notification of an anonymous type declaration completion.
  * @param superTypePackageName Name of the package that contains the super type of this 
- * 		new anonymous type declaration .
- * 
+ * 		new anonymous type declaration.
  * @param superTypeName Name of the super type of this new anonymous type declaration.
- * 
  * @param parameterPackageNames Names of the packages in which the parameter types are declared.
  *    	Should contain as many elements as parameterTypeNames.
- * 
- * @param parameterTypeNames Names of the parameters types. 
+ * @param parameterTypeNames Names of the parameter types. 
  * 		Should contain as many elements as parameterPackageNames.
- * 
+ * @param parameterNames Names of the parameters. 
+ * 		Should contain as many elements as parameterPackageNames.
  * @param completionName The completion for the anonymous type declaration.
  * 		Can include zero, one or two brackets. If the closing bracket is included,
  * 		then the cursor should be placed before it.
- * 
  * @param modifiers The modifiers of the constructor.
- * 
  * @param completionStart The start position of insertion of the name of this new anonymous type declaration.
- * 
  * @param completionEnd The end position of insertion of the name of this new anonymous type declaration.
- * 
  * @param relevance The relevance of the completion proposal
  * 		It is a positive integer which are used for determine if this proposal is more relevant than another proposal.
  * 		This value can only be used for compare relevance. A proposal is more relevant than another if his relevance
@@ -59,6 +54,8 @@ public interface ICompletionRequestor {
  *    The default package is represented by an empty array.
  *
  * NOTE: parameter names can be retrieved from the source model after the user selects a specific method.
+ * 
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptAnonymousType(
 	char[] superTypePackageName,
@@ -89,6 +86,8 @@ void acceptAnonymousType(
  *    Package names are in the form "a.b.c".
  *    Nested type names are in the qualified form "A.M".
  *    The default package is represented by an empty array.
+ *    
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptClass(
 	char[] packageName,
@@ -108,6 +107,8 @@ void acceptClass(
  *		detected (might be in another compilation unit, if it was indirectly requested
  *		during the code assist process).
  *      Note: the problem knows its originating file name.
+ *      
+ * @deprecated Use {@link CompletionRequestor#completionFailure(IProblem)} instead.
  */
 void acceptError(IProblem error);
 /**
@@ -133,6 +134,8 @@ void acceptError(IProblem error);
  *    Array types are in the qualified form "M[]" or "int[]".
  *    Nested type names are in the qualified form "A.M".
  *    The default package is represented by an empty array.
+ *
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptField(
 	char[] declaringTypePackageName,
@@ -149,7 +152,7 @@ void acceptField(
  * Code assist notification of an interface completion.
  * 
  * @param packageName Declaring package name of the interface.
- * @param className Name of the interface.
+ * @param interfaceName Name of the interface.
  * @param completionName The completion for the interface.	Can include ';' for imported interfaces.
  * @param modifiers The modifiers of the interface.
  * @param completionStart The start position of insertion of the name of the interface.
@@ -163,6 +166,8 @@ void acceptField(
  *    Package names are in the form "a.b.c".
  *    Nested type names are in the qualified form "A.M".
  *    The default package is represented by an empty array.
+ *    
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptInterface(
 	char[] packageName,
@@ -181,6 +186,7 @@ void acceptInterface(
  * 		It is a positive integer which are used for determine if this proposal is more relevant than another proposal.
  * 		This value can only be used for compare relevance. A proposal is more relevant than another if his relevance
  * 		value is higher.
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptKeyword(char[] keywordName, int completionStart, int completionEnd, int relevance);
 /**
@@ -193,6 +199,7 @@ void acceptKeyword(char[] keywordName, int completionStart, int completionEnd, i
  * 		It is a positive integer which are used for determine if this proposal is more relevant than another proposal.
  * 		This value can only be used for compare relevance. A proposal is more relevant than another if his relevance
  * 		value is higher.
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptLabel(char[] labelName, int completionStart, int completionEnd, int relevance);
 /**
@@ -215,6 +222,8 @@ void acceptLabel(char[] labelName, int completionStart, int completionEnd, int r
  *    Array types are in the qualified form "M[]" or "int[]".
  *    Nested type names are in the qualified form "A.M".
  *    The default package is represented by an empty array.
+ *    
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptLocalVariable(
 	char[] name,
@@ -232,7 +241,9 @@ void acceptLocalVariable(
  * @param selector Name of the new method.
  * @param parameterPackageNames Names of the packages in which the parameter types are declared.
  *    	Should contain as many elements as parameterTypeNames.
- * @param parameterTypeNames Names of the parameters types.
+ * @param parameterTypeNames Names of the parameter types.
+ *    	Should contain as many elements as parameterPackageNames.
+ * @param parameterNames Names of the parameters.
  *    	Should contain as many elements as parameterPackageNames.
  * @param returnTypePackageName Name of the package in which the return type is declared.
  * @param returnTypeName Name of the return type of this new method, should be <code>null</code> for a constructor.
@@ -253,6 +264,8 @@ void acceptLocalVariable(
  *    The default package is represented by an empty array.
  *
  * NOTE: parameter names can be retrieved from the source model after the user selects a specific method.
+ * 
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptMethod(
 	char[] declaringTypePackageName,
@@ -277,7 +290,9 @@ void acceptMethod(
  * @param selector Name of the new method.
  * @param parameterPackageNames Names of the packages in which the parameter types are declared.
  *    	Should contain as many elements as parameterTypeNames.
- * @param parameterTypeNames Names of the parameters types.
+ * @param parameterTypeNames Names of the parameter types.
+ *    	Should contain as many elements as parameterPackageNames.
+ * @param parameterNames Names of the parameters.
  *    	Should contain as many elements as parameterPackageNames.
  * @param returnTypePackageName Name of the package in which the return type is declared.
  * @param returnTypeName Name of the return type of this new method, should be <code>null</code> for a constructor.
@@ -298,6 +313,8 @@ void acceptMethod(
  *    The default package is represented by an empty array.
  *
  * NOTE: parameter names can be retrieved from the source model after the user selects a specific method.
+ * 
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptMethodDeclaration(
 	char[] declaringTypePackageName,
@@ -323,6 +340,7 @@ void acceptMethodDeclaration(
  * 		It is a positive integer which are used for determine if this proposal is more relevant than another proposal.
  * 		This value can only be used for compare relevance. A proposal is more relevant than another if his relevance
  * 		value is higher.
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptModifier(char[] modifierName, int completionStart, int completionEnd, int relevance);
 /**
@@ -340,6 +358,7 @@ void acceptModifier(char[] modifierName, int completionStart, int completionEnd,
  * NOTE - All package names are presented in their readable form:
  *    Package names are in the form "a.b.c".
  *    The default package is represented by an empty array.
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptPackage(
 	char[] packageName,
@@ -364,6 +383,7 @@ void acceptPackage(
  *    Package names are in the form "a.b.c".
  *    Nested type names are in the qualified form "A.M".
  *    The default package is represented by an empty array.
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptType(
 	char[] packageName,
@@ -393,6 +413,7 @@ void acceptType(
  *    Array types are in the qualified form "M[]" or "int[]".
  *    Nested type names are in the qualified form "A.M".
  *    The default package is represented by an empty array.
+ * @deprecated Use {@link CompletionRequestor#accept(CompletionProposal)} instead.
  */
 void acceptVariableName(
 	char[] typePackageName,

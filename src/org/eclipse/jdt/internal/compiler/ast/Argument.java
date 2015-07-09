@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -18,26 +18,22 @@ public class Argument extends LocalDeclaration {
 	
 	// prefix for setter method (to recognize special hiding argument)
 	private final static char[] SET = "set".toCharArray(); //$NON-NLS-1$
-	public boolean isVarArgs;
 	
-	public Argument(char[] name, long posNom, TypeReference tr, int modifiers, boolean isVarArgs) {
+	public Argument(char[] name, long posNom, TypeReference tr, int modifiers) {
 
 		super(name, (int) (posNom >>> 32), (int) posNom);
 		this.declarationSourceEnd = (int) posNom;
 		this.modifiers = modifiers;
 		type = tr;
 		this.bits |= IsLocalDeclarationReachableMASK;
-		this.isVarArgs = isVarArgs;
 	}
 
 	public void bind(MethodScope scope, TypeBinding typeBinding, boolean used) {
 
-		if (this.type != null)
-			this.type.resolvedType = typeBinding; // TODO (philippe) no longer necessary as when binding got resolved, it was recorded already (SourceTypeBinding#resolveTypesFor(MethodBinding))
 		// record the resolved type into the type reference
 		int modifierFlag = this.modifiers;
 
-		Binding existingVariable = scope.getBinding(name, BindingIds.VARIABLE, this, false /*do not resolve hidden field*/);
+		Binding existingVariable = scope.getBinding(name, Binding.VARIABLE, this, false /*do not resolve hidden field*/);
 		if (existingVariable != null && existingVariable.isValidBinding()){
 			if (existingVariable instanceof LocalVariableBinding && this.hiddenVariableDepth == 0) {
 				scope.problemReporter().redefineArgument(this);
@@ -60,15 +56,29 @@ public class Argument extends LocalDeclaration {
 		scope.addLocalVariable(
 			this.binding =
 				new LocalVariableBinding(this, typeBinding, modifierFlag, true));
+		resolveAnnotations(scope, this.annotations, this.binding);		
 		//true stand for argument instead of just local
 		this.binding.declaration = this;
 		this.binding.useFlag = used ? LocalVariableBinding.USED : LocalVariableBinding.UNUSED;
 	}
 
+	/**
+	 * @see org.eclipse.jdt.internal.compiler.ast.AbstractVariableDeclaration#getKind()
+	 */
+	public int getKind() {
+		return PARAMETER;
+	}
+
+	public boolean isVarArgs() {
+		return this.type != null &&  (this.type.bits & IsVarArgs) != 0;
+	}
+		
 	public StringBuffer print(int indent, StringBuffer output) {
 
 		printIndent(indent, output);
 		printModifiers(this.modifiers, output);
+		if (this.annotations != null) printAnnotations(this.annotations, output);
+		
 		if (type == null) {
 			output.append("<no type> "); //$NON-NLS-1$
 		} else {
@@ -88,9 +98,9 @@ public class Argument extends LocalDeclaration {
 		// provide the scope with a side effect : insertion of a LOCAL
 		// that represents the argument. The type must be from JavaThrowable
 
-		TypeBinding exceptionType = this.type.resolveType(scope);
+		TypeBinding exceptionType = this.type.resolveType(scope, true /* check bounds*/);
 		if (exceptionType == null) return null;
-		if (exceptionType.isGenericType() || exceptionType.isParameterizedType()) {
+		if (exceptionType.isGenericType() || exceptionType.isBoundParameterizedType()) {
 			scope.problemReporter().invalidParameterizedExceptionType(exceptionType, this);
 			return null;
 		}
@@ -104,7 +114,7 @@ public class Argument extends LocalDeclaration {
 			return null;
 		}
 		
-		Binding existingVariable = scope.getBinding(name, BindingIds.VARIABLE, this, false /*do not resolve hidden field*/);
+		Binding existingVariable = scope.getBinding(name, Binding.VARIABLE, this, false /*do not resolve hidden field*/);
 		if (existingVariable != null && existingVariable.isValidBinding()){
 			if (existingVariable instanceof LocalVariableBinding && this.hiddenVariableDepth == 0) {
 				scope.problemReporter().redefineArgument(this);
@@ -113,7 +123,9 @@ public class Argument extends LocalDeclaration {
 			scope.problemReporter().localVariableHiding(this, existingVariable, false);
 		}
 
-		binding = new LocalVariableBinding(this, exceptionType, modifiers, false); // argument decl, but local var  (where isArgument = false)
+		this.binding = new LocalVariableBinding(this, exceptionType, modifiers, false); // argument decl, but local var  (where isArgument = false)
+		resolveAnnotations(scope, this.annotations, this.binding);
+		
 		scope.addLocalVariable(binding);
 		binding.setConstant(NotAConstant);
 		return exceptionType;

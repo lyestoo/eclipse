@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -39,8 +39,8 @@ public class ClassLiteralAccess extends Expression {
 		if ((!(sourceType.isInterface()
 				// no field generated in interface case (would'nt verify) see 1FHHEZL
 				|| sourceType.isBaseType()))
-				&& currentScope.environment().options.sourceLevel <= ClassFileConstants.JDK1_5) {
-			syntheticField = sourceType.addSyntheticField(targetType, currentScope);
+				&& currentScope.compilerOptions().sourceLevel <= ClassFileConstants.JDK1_5) {
+			syntheticField = sourceType.addSyntheticFieldForClassLiteral(targetType, currentScope);
 		}
 		return flowInfo;
 	}
@@ -61,6 +61,7 @@ public class ClassLiteralAccess extends Expression {
 		// in interface case, no caching occurs, since cannot make a cache field for interface
 		if (valueRequired) {
 			codeStream.generateClassLiteralAccessForType(type.resolvedType, syntheticField);
+			codeStream.generateImplicitConversion(this.implicitConversion);
 		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
@@ -73,7 +74,7 @@ public class ClassLiteralAccess extends Expression {
 	public TypeBinding resolveType(BlockScope scope) {
 
 		constant = NotAConstant;
-		if ((targetType = type.resolveType(scope)) == null)
+		if ((targetType = type.resolveType(scope, true /* check bounds*/)) == null)
 			return null;
 
 		if (targetType.isArrayType()
@@ -85,8 +86,17 @@ public class ClassLiteralAccess extends Expression {
 		}
 		ReferenceBinding classType = scope.getJavaLangClass();
 		if (classType.isGenericType()) {
-		    // Integer.class is of type Class<Integer>
-		    this.resolvedType = scope.createParameterizedType(classType, new TypeBinding[]{ targetType }, null);
+		    // Integer.class --> Class<Integer>, perform boxing of base types (int.class --> Class<Integer>)
+			TypeBinding boxedType = null;
+			if (targetType.id == T_void) {
+				boxedType = scope.environment().getType(JAVA_LANG_VOID);
+				if (boxedType == null) {
+					boxedType = new ProblemReferenceBinding(JAVA_LANG_VOID, null, ProblemReasons.NotFound);
+				}
+			} else {
+				boxedType = scope.boxing(targetType);
+			}
+		    this.resolvedType = scope.environment().createParameterizedType(classType, new TypeBinding[]{ boxedType }, null/*not a member*/);
 		} else {
 		    this.resolvedType = classType;
 		}

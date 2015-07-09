@@ -1,12 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added J2SE 1.5 support
  *******************************************************************************/
 package org.eclipse.jdt.core;
 
@@ -16,8 +17,12 @@ import org.eclipse.core.runtime.IProgressMonitor;
 
 /**
  * Represents either a source type in a compilation unit (either a top-level
- * type or a member type) or a binary type in a class file.
+ * type, a member type, a local type or an anonymous type) 
+ * or a binary type in a class file. Enumeration classes and annotation
+ * types are subkinds of classes and interfaces, respectively.
  * <p>
+ * Note that the element name of an anonymous source type is always empty.
+ * </p><p>
  * If a binary type cannot be parsed, its structure remains unknown.
  * Use <code>IJavaElement.isStructureKnown</code> to determine whether this
  * is the case.
@@ -43,9 +48,9 @@ public interface IType extends IMember {
 	 * @param insertion the position with in source where the snippet
 	 * is inserted. This position must not be in comments.
 	 * A possible value is -1, if the position is not known.
-	 * @param position the position with in snippet where the user 
+	 * @param position the position within snippet where the user 
 	 * is performing code assist.
-	 * @param localVariableTypesNames an array (possibly empty) of fully qualified 
+	 * @param localVariableTypeNames an array (possibly empty) of fully qualified 
 	 * type names of local variables visible at the current scope
 	 * @param localVariableNames an array (possibly empty) of local variable names 
 	 * that are visible at the current scope
@@ -53,7 +58,10 @@ public interface IType extends IMember {
 	 * local variables
 	 * @param isStatic whether the current scope is in a static context
 	 * @param requestor the completion requestor
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
 	 * @since 2.0
+	 * @deprecated Use {@link #codeComplete(char[],int,int,char[][],char[][],int[],boolean,CompletionRequestor)} instead.
 	 */
 	void codeComplete(
 		char[] snippet,
@@ -86,7 +94,7 @@ public interface IType extends IMember {
 	 * A possible value is -1, if the position is not known.
 	 * @param position the position with in snippet where the user 
 	 * is performing code assist.
-	 * @param localVariableTypesNames an array (possibly empty) of fully qualified 
+	 * @param localVariableTypeNames an array (possibly empty) of fully qualified 
 	 * type names of local variables visible at the current scope
 	 * @param localVariableNames an array (possibly empty) of local variable names 
 	 * that are visible at the current scope
@@ -95,7 +103,10 @@ public interface IType extends IMember {
 	 * @param isStatic whether the current scope is in a static context
 	 * @param requestor the completion requestor
 	 * @param owner the owner of working copies that take precedence over their original compilation units
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
 	 * @since 3.0
+	 * @deprecated Use {@link #codeComplete(char[],int,int,char[][],char[][],int[],boolean,CompletionRequestor,WorkingCopyOwner)} instead.
 	 */
 	void codeComplete(
 		char[] snippet,
@@ -108,6 +119,88 @@ public interface IType extends IMember {
 		ICompletionRequestor requestor,
 		WorkingCopyOwner owner)
 		throws JavaModelException;
+	
+	/**
+	 * Do code completion inside a code snippet in the context of the current type.
+	 * 
+	 * If the type can access to his source code and the insertion position is valid,
+	 * then completion is performed against source. Otherwise the completion is performed
+	 * against type structure and given locals variables.
+	 * 
+	 * @param snippet the code snippet
+	 * @param insertion the position with in source where the snippet
+	 * is inserted. This position must not be in comments.
+	 * A possible value is -1, if the position is not known.
+	 * @param position the position within snippet where the user 
+	 * is performing code assist.
+	 * @param localVariableTypeNames an array (possibly empty) of fully qualified 
+	 * type names of local variables visible at the current scope
+	 * @param localVariableNames an array (possibly empty) of local variable names 
+	 * that are visible at the current scope
+	 * @param localVariableModifiers an array (possible empty) of modifiers for 
+	 * local variables
+	 * @param isStatic whether the current scope is in a static context
+	 * @param requestor the completion requestor
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @since 3.1
+	 */
+	void codeComplete(
+		char[] snippet,
+		int insertion,
+		int position,
+		char[][] localVariableTypeNames,
+		char[][] localVariableNames,
+		int[] localVariableModifiers,
+		boolean isStatic,
+		CompletionRequestor requestor)
+		throws JavaModelException;
+
+	/**
+	 * Do code completion inside a code snippet in the context of the current type.
+	 * It considers types in the working copies with the given owner first. In other words, 
+	 * the owner's working copies will take precedence over their original compilation units
+	 * in the workspace.
+	 * <p>
+	 * Note that if a working copy is empty, it will be as if the original compilation
+	 * unit had been deleted.
+	 * </p><p>
+	 * If the type can access to his source code and the insertion position is valid,
+	 * then completion is performed against source. Otherwise the completion is performed
+	 * against type structure and given locals variables.
+	 * </p>
+	 * 
+	 * @param snippet the code snippet
+	 * @param insertion the position with in source where the snippet
+	 * is inserted. This position must not be in comments.
+	 * A possible value is -1, if the position is not known.
+	 * @param position the position with in snippet where the user 
+	 * is performing code assist.
+	 * @param localVariableTypeNames an array (possibly empty) of fully qualified 
+	 * type names of local variables visible at the current scope
+	 * @param localVariableNames an array (possibly empty) of local variable names 
+	 * that are visible at the current scope
+	 * @param localVariableModifiers an array (possible empty) of modifiers for 
+	 * local variables
+	 * @param isStatic whether the current scope is in a static context
+	 * @param requestor the completion requestor
+	 * @param owner the owner of working copies that take precedence over their original compilation units
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @since 3.1
+	 */
+	void codeComplete(
+		char[] snippet,
+		int insertion,
+		int position,
+		char[][] localVariableTypeNames,
+		char[][] localVariableNames,
+		int[] localVariableModifiers,
+		boolean isStatic,
+		CompletionRequestor requestor,
+		WorkingCopyOwner owner)
+		throws JavaModelException;
+
 
 	/**
 	 * Creates and returns a field in this type with the
@@ -207,7 +300,7 @@ public interface IType extends IMember {
 	 * <p>
 	 * Optionally, the new type can be positioned before the specified
 	 * sibling. If no sibling is specified, the type will be appended
-	 * to this type.
+	 * to this type.</p>
 	 *
 	 * <p>It is possible that a type with the same name already exists in this type.
 	 * The value of the <code>force</code> parameter effects the resolution of
@@ -323,6 +416,17 @@ public interface IType extends IMember {
 	String getFullyQualifiedName(char enclosingTypeSeparator);
 	
 	/**
+	 * Returns this type's fully qualified name followed by its type parameters between angle brakets if it is a generic type.
+	 * For example, "p.X<T>", "java.util.Map<java.lang.String, p.X>"
+	 * 
+	 * @exception JavaModelException if this element does not exist or if an
+	 *      exception occurs while accessing its corresponding resource.
+	 * @return the fully qualified parameterized representation of this type
+	 * @since 3.1
+	 */
+	String getFullyQualifiedParameterizedName() throws JavaModelException;
+
+	/**
 	 * Returns the initializer with the specified position relative to
 	 * the order they are defined in the source.
 	 * Numbering starts at 1 (thus the first occurrence is occurrence 1, not occurrence 0).
@@ -346,11 +450,28 @@ public interface IType extends IMember {
 	IInitializer[] getInitializers() throws JavaModelException;
 	
 	/**
+	 * Returns the binding key for this type. A binding key is a key that uniquely
+	 * identifies this type. It allows access to generic info for parameterized
+	 * types.
+	 * 
+	 * @return the binding key for this type
+	 * @see org.eclipse.jdt.core.dom.IBinding#getKey()
+	 * @see BindingKey
+	 * @since 3.1
+	 */
+	String getKey();
+	
+	/**
 	 * Returns the method with the specified name and parameter types
-	 * in this type (for example, <code>"foo", {"I", "QString;"}</code>). To get the
-	 * handle for a constructor, the name specified must be the simple
-	 * name of the enclosing type.
+	 * in this type (for example, <code>"foo", {"I", "QString;"}</code>).
+	 * To get the handle for a constructor, the name specified must be the
+	 * simple name of the enclosing type.
 	 * This is a handle-only method.  The method may or may not be present.
+	 * <p>
+	 * The type signatures may be either unresolved (for source types)
+	 * or resolved (for binary types), and either basic (for basic types)
+	 * or rich (for parameterized types). See {@link Signature} for details.
+	 * </p>
 	 * 
 	 * @param name the given name
 	 * @param parameterTypeSignatures the given parameter types
@@ -383,10 +504,17 @@ public interface IType extends IMember {
 	/**
 	 * Returns the name of this type's superclass, or <code>null</code>
 	 * for source types that do not specify a superclass.
+	 * <p>
 	 * For interfaces, the superclass name is always <code>"java.lang.Object"</code>.
 	 * For source types, the name as declared is returned, for binary types,
 	 * the resolved, qualified name is returned.
 	 * For anonymous types, the superclass name is the name appearing after the 'new' keyword'.
+	 * If the superclass is a parameterized type, the string
+	 * may include its type arguments enclosed in "&lt;&gt;".
+	 * If the returned string is needed for anything other than display
+	 * purposes, use {@link #getSuperclassTypeSignature()} which returns
+	 * a structured type signature string containing more precise information.
+	 * </p>
 	 *
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
@@ -395,14 +523,65 @@ public interface IType extends IMember {
 	String getSuperclassName() throws JavaModelException;
 	
 	/**
+	 * Returns the type signature of this type's superclass, or 
+	 * <code>null</code> if none.
+	 * <p>
+	 * The type signature may be either unresolved (for source types)
+	 * or resolved (for binary types), and either basic (for basic types)
+	 * or rich (for parameterized types). See {@link Signature} for details.
+	 * </p>
+	 *
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @return the type signature of this type's superclass, or
+	 * <code>null</code> if none
+	 * @since 3.0
+	 */
+	String getSuperclassTypeSignature() throws JavaModelException;
+	
+	/**
+	 * Returns the type signatures of the interfaces that this type
+	 * implements or extends, in the order in which they are listed in the
+	 * source.
+	 * <p>
+	 * For classes and enum types, this gives the interfaces that this
+	 * class implements. For interfaces and annotation types,
+	 * this gives the interfaces that this interface extends.
+	 * An empty collection is returned if this type does not implement or
+	 * extend any interfaces. For anonymous types, an empty collection is
+	 * always returned.
+	 * </p>
+	 * <p>
+	 * The type signatures may be either unresolved (for source types)
+	 * or resolved (for binary types), and either basic (for basic types)
+	 * or rich (for parameterized types). See {@link Signature} for details.
+	 * </p>
+	 *
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @return  the type signatures of interfaces that this type implements
+	 * or extends, in the order in which they are listed in the source, 
+	 * an empty collection if none
+	 * @since 3.0
+	 */
+	String[] getSuperInterfaceTypeSignatures() throws JavaModelException;
+	
+	/**
 	 * Returns the names of interfaces that this type implements or extends,
 	 * in the order in which they are listed in the source.
+	 * </p>
 	 * For classes, this gives the interfaces that this class implements.
 	 * For interfaces, this gives the interfaces that this interface extends.
 	 * An empty collection is returned if this type does not implement or
 	 * extend any interfaces. For source types, simple names are returned,
 	 * for binary types, qualified names are returned.
 	 * For anonymous types, an empty collection is always returned.
+	 * If the list of supertypes includes parameterized types,
+	 * the string may include type arguments enclosed in "&lt;&gt;".
+	 * If the result is needed for anything other than display
+	 * purposes, use {@link #getSuperInterfaceTypeSignatures()} which returns
+	 * structured signature strings containing more precise information.
+	 * </p>
 	 *
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
@@ -412,20 +591,60 @@ public interface IType extends IMember {
 	String[] getSuperInterfaceNames() throws JavaModelException;
 	
 	/**
+	 * Returns the formal type parameter signatures for this type.
+	 * Returns an empty array if this type has no formal type parameters.
+	 * <p>
+	 * The formal type parameter signatures may be either unresolved (for source
+	 * types) or resolved (for binary types). See {@link Signature} for details.
+	 * </p>
+	 *
+	 * @exception JavaModelException if this element does not exist or if an
+	 *      exception occurs while accessing its corresponding resource.
+	 * @return the formal type parameter signatures of this type,
+	 * in the order declared in the source, an empty array if none
+	 * @see Signature
+	 * @since 3.0
+	 */
+	String[] getTypeParameterSignatures() throws JavaModelException;
+	
+	/**
+	 * Returns the formal type parameters for this type.
+	 * Returns an empty array if this type has no formal type parameters.
+	 *
+	 * @exception JavaModelException if this element does not exist or if an
+	 *      exception occurs while accessing its corresponding resource.
+	 * @return the formal type parameters of this type,
+	 * in the order declared in the source, an empty array if none
+	 * @since 3.1
+	 */
+	ITypeParameter[] getTypeParameters() throws JavaModelException;
+
+	/**
 	 * Returns the member type declared in this type with the given simple name.
 	 * This is a handle-only method. The type may or may not exist.
 	 * 
-	 * @param the given simple name
+	 * @param name the given simple name
 	 * @return the member type declared in this type with the given simple name
 	 */
 	IType getType(String name);
 	
 	/**
+	 * Returns the type parameter declared in this type with the given name.
+	 * This is a handle-only method. The type parameter may or may not exist.
+	 * 
+	 * @param name the given simple name
+	 * @return the type parameter declared in this type with the given name
+	 * @since 3.1
+	 */
+	ITypeParameter getTypeParameter(String name);
+	
+	/**
 	 * Returns the type-qualified name of this type, 
 	 * including qualification for any enclosing types,
 	 * but not including package qualification.
-	 * For source types, this consists of the simple names of
-	 * any enclosing types, separated by <code>"$"</code>, followed by the simple name of this type.
+	 * For source types, this consists of the simple names of any enclosing types, 
+	 * separated by <code>'$'</code>, followed by the simple name of this type
+	 * or the occurence count of this type if it is anonymous.
 	 * For binary types, this is the name of the class file without the ".class" suffix.
 	 * This is a handle-only method.
 	 * 
@@ -437,9 +656,10 @@ public interface IType extends IMember {
 	 * Returns the type-qualified name of this type, 
 	 * including qualification for any enclosing types,
 	 * but not including package qualification.
-	 * This consists of the simple names of any enclosing types, 
-	 * separated by the <code>enclosingTypeSeparator</code>, 
-	 * followed by the simple name of this type.
+	 * For source types, this consists of the simple names of any enclosing types, 
+	 * separated by <code>enclosingTypeSeparator</code>, followed by the 
+	 * simple name of this type  or the occurence count of this type if it is anonymous.
+	 * For binary types, this is the name of the class file without the ".class" suffix.
 	 * 
 	 * For example:
 	 * <ul>
@@ -485,6 +705,9 @@ public interface IType extends IMember {
 
 	/**
 	 * Returns whether this type represents a class.
+	 * <p>
+	 * Note that a class can neither be an interface, an enumeration class, nor an annotation type.
+	 * </p>
 	 *
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
@@ -493,7 +716,24 @@ public interface IType extends IMember {
 	boolean isClass() throws JavaModelException;
 	
 	/**
+	 * Returns whether this type represents an enumeration class.
+	 * <p>
+	 * Note that an enumeration class can neither be a class, an interface, nor an annotation type.
+	 * </p>
+	 * 
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @return true if this type represents an enumeration class,
+	 * false otherwise
+	 * @since 3.0
+	 */
+	boolean isEnum() throws JavaModelException;
+
+	/**
 	 * Returns whether this type represents an interface.
+	 * <p>
+	 * Note that an interface can also be an annotation type, but it can neither be a class nor an enumeration class.
+	 * </p>
 	 *
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
@@ -501,6 +741,20 @@ public interface IType extends IMember {
 	 */
 	boolean isInterface() throws JavaModelException;
 	
+	/**
+	 * Returns whether this type represents an annotation type.
+	 * <p>
+	 * Note that an annotation type is also an interface, but it can neither be a class nor an enumeration class. 
+	 * </p>
+	 *
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @return true if this type represents an annotation type,
+	 * false otherwise
+	 * @since 3.0
+	 */
+	boolean isAnnotation() throws JavaModelException;
+
 	/**
 	 * Returns whether this type represents a local type.
 	 *
@@ -521,6 +775,14 @@ public interface IType extends IMember {
 	 */
 	boolean isMember() throws JavaModelException;
 	/**
+	 * Returns whether this type represents a resolved type.
+	 * If a type is resoved, its key contains resolved information.
+	 * 
+	 * @return whether this type represents a resolved type.
+	 * @since 3.1
+	 */
+	boolean isResolved();
+	/**
 	 * Loads a previously saved ITypeHierarchy from an input stream. A type hierarchy can
 	 * be stored using ITypeHierachy#store(OutputStream).
 	 * 
@@ -537,7 +799,7 @@ public interface IType extends IMember {
 	 * @exception JavaModelException if the hierarchy could not be restored, reasons include:
 	 *      - type is not the focus of the hierarchy or 
 	 *		- unable to read the input stream (wrong format, IOException during reading, ...)
-	 * @see ITypeHierarchy#store(OutputStream, IProgressMonitor)
+	 * @see ITypeHierarchy#store(java.io.OutputStream, IProgressMonitor)
 	 * @since 2.1
 	 */
 	ITypeHierarchy loadTypeHierachy(InputStream input, IProgressMonitor monitor) throws JavaModelException;
@@ -545,9 +807,9 @@ public interface IType extends IMember {
 	 * Creates and returns a type hierarchy for this type containing
 	 * this type and all of its supertypes.
 	 *
+	 * @param monitor the given progress monitor
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
-	 * @param monitor the given progress monitor
 	 * @return a type hierarchy for this type containing this type and all of its supertypes
 	 */
 	ITypeHierarchy newSupertypeHierarchy(IProgressMonitor monitor) throws JavaModelException;
@@ -567,7 +829,28 @@ public interface IType extends IMember {
 	 * @return a type hierarchy for this type containing this type and all of its supertypes
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
+	 * @since 3.0
+	 */
+	ITypeHierarchy newSupertypeHierarchy(ICompilationUnit[] workingCopies, IProgressMonitor monitor)
+		throws JavaModelException;
+		
+	/**
+	 * Creates and returns a type hierarchy for this type containing
+	 * this type and all of its supertypes, considering types in the given 
+	 * working copies. In other words, the list of working copies will take 
+	 * precedence over their original compilation units in the workspace.
+	 * <p>
+	 * Note that passing an empty working copy will be as if the original compilation
+	 * unit had been deleted.
+	 * </p>
+	 *
+	 * @param workingCopies the working copies that take precedence over their original compilation units
+	 * @param monitor the given progress monitor
+	 * @return a type hierarchy for this type containing this type and all of its supertypes
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
 	 * @since 2.0
+	 * @deprecated use #newSupertypeHierarchy(ICompilationUnit[], IProgressMonitor) instead
 	 */
 	ITypeHierarchy newSupertypeHierarchy(IWorkingCopy[] workingCopies, IProgressMonitor monitor)
 		throws JavaModelException;
@@ -636,9 +919,9 @@ public interface IType extends IMember {
 	 * Creates and returns a type hierarchy for this type containing
 	 * this type, all of its supertypes, and all its subtypes in the workspace.
 	 *
+	 * @param monitor the given progress monitor
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
-	 * @param monitor the given progress monitor
 	 * @return a type hierarchy for this type containing
 	 * this type, all of its supertypes, and all its subtypes in the workspace
 	 */
@@ -659,7 +942,27 @@ public interface IType extends IMember {
 	 * this type, all of its supertypes, and all its subtypes in the workspace
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
+	 * @since 3.0
+	 */
+	ITypeHierarchy newTypeHierarchy(ICompilationUnit[] workingCopies, IProgressMonitor monitor) throws JavaModelException;
+	
+	/**
+	 * Creates and returns a type hierarchy for this type containing
+	 * this type, all of its supertypes, and all its subtypes in the workspace, 
+	 * considering types in the given working copies. In other words, the list of working 
+	 * copies that will take precedence over their original compilation units in the workspace.
+	 * <p>
+	 * Note that passing an empty working copy will be as if the original compilation
+	 * unit had been deleted.
+	 *
+	 * @param workingCopies the working copies that take precedence over their original compilation units
+	 * @param monitor the given progress monitor
+	 * @return a type hierarchy for this type containing
+	 * this type, all of its supertypes, and all its subtypes in the workspace
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
 	 * @since 2.0
+	 * @deprecated use #newTypeHierarchy(ICompilationUnit[], IProgressMonitor) instead
 	 */
 	ITypeHierarchy newTypeHierarchy(IWorkingCopy[] workingCopies, IProgressMonitor monitor) throws JavaModelException;
 	
@@ -674,7 +977,6 @@ public interface IType extends IMember {
 	 * unit had been deleted.
 	 * <p>
 	 *
-	 * @param workingCopies the working copies that take precedence over their original compilation units
 	 * @param owner the owner of working copies that take precedence over their original compilation units
 	 * @param monitor the given progress monitor
 	 * @return a type hierarchy for this type containing
@@ -687,18 +989,29 @@ public interface IType extends IMember {
 	
 	/**
 	 * Resolves the given type name within the context of this type (depending on the type hierarchy 
-	 * and its imports). Multiple answers might be found in case there are ambiguous matches.
-	 *
+	 * and its imports). 
+	 * <p>
+	 * Multiple answers might be found in case there are ambiguous matches.
+	 * </p>
+	 * <p>
 	 * Each matching type name is decomposed as an array of two strings, the first denoting the package
-	 * name (dot-separated) and the second being the type name.
+	 * name (dot-separated) and the second being the type name. The package name is empty if it is the
+	 * default package. The type name is the type qualified name using a '.' enclosing type separator.
+	 * </p>
+	 * <p>
 	 * Returns <code>null</code> if unable to find any matching type.
-	 *
+	 * </p>
+	 *<p>
 	 * For example, resolution of <code>"Object"</code> would typically return
-	 * <code>{{"java.lang", "Object"}}</code>.
+	 * <code>{{"java.lang", "Object"}}</code>. Another resolution that returns
+	 * <code>{{"", "X.Inner"}}</code> represents the inner type Inner defined in type X in the 
+	 * default package.
+	 * </p>
 	 * 
 	 * @param typeName the given type name
 	 * @exception JavaModelException if code resolve could not be performed. 
 	 * @return the resolved type names or <code>null</code> if unable to find any matching type
+	 * @see #getTypeQualifiedName(char)
 	 */
 	String[][] resolveType(String typeName) throws JavaModelException;
 
@@ -711,23 +1024,28 @@ public interface IType extends IMember {
 	 * Note that if a working copy is empty, it will be as if the original compilation
 	 * unit had been deleted.
 	 * </p>
-	 * <p>. 
-	 * Multiple answers might be found in case there are ambiguous matches.
+	 * <p>Multiple answers might be found in case there are ambiguous matches.
 	 * </p>
 	 * <p>
 	 * Each matching type name is decomposed as an array of two strings, the first denoting the package
-	 * name (dot-separated) and the second being the type name.
+	 * name (dot-separated) and the second being the type name. The package name is empty if it is the
+	 * default package. The type name is the type qualified name using a '.' enclosing type separator.
+	 * </p>
+	 * <p>
 	 * Returns <code>null</code> if unable to find any matching type.
 	 *</p>
 	 *<p>
 	 * For example, resolution of <code>"Object"</code> would typically return
-	 * <code>{{"java.lang", "Object"}}</code>.
+	 * <code>{{"java.lang", "Object"}}</code>. Another resolution that returns
+	 * <code>{{"", "X.Inner"}}</code> represents the inner type Inner defined in type X in the 
+	 * default package.
 	 * </p>
 	 * 
 	 * @param typeName the given type name
 	 * @param owner the owner of working copies that take precedence over their original compilation units
 	 * @exception JavaModelException if code resolve could not be performed. 
 	 * @return the resolved type names or <code>null</code> if unable to find any matching type
+	 * @see #getTypeQualifiedName(char)
 	 * @since 3.0
 	 */
 	String[][] resolveType(String typeName, WorkingCopyOwner owner) throws JavaModelException;

@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -56,7 +56,7 @@ public TypeBinding resolveType(BlockScope scope) {
 		if (this.resolvedType.isInterface()) // handle the anonymous class definition case
 			this.resolvedType = scope.getJavaLangObject();
 	} else {
-		this.resolvedType = type.resolveType(scope);
+		this.resolvedType = type.resolveType(scope, true /* check bounds*/);
 		if (!(this.resolvedType instanceof ReferenceBinding))
 			throw new CompletionNodeFound(); // no need to continue if its an array or base type
 	}

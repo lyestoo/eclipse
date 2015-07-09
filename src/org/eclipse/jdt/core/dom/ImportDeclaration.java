@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -47,7 +47,7 @@ public class ImportDeclaration extends ASTNode {
 	
 	/**
 	 * The "static" structural property of this node type (added in JLS3 API).
-	 * @since 3.0
+	 * @since 3.1
 	 */
 	public static final SimplePropertyDescriptor STATIC_PROPERTY = 
 		new SimplePropertyDescriptor(ImportDeclaration.class, "static", boolean.class, MANDATORY); //$NON-NLS-1$
@@ -64,7 +64,7 @@ public class ImportDeclaration extends ASTNode {
 	 * A list of property descriptors (element type: 
 	 * {@link StructuralPropertyDescriptor}),
 	 * or null if uninitialized.
-	 * @since 3.0
+	 * @since 3.1
 	 */
 	private static final List PROPERTY_DESCRIPTORS_3_0;
 	
@@ -95,7 +95,7 @@ public class ImportDeclaration extends ASTNode {
 	 * @since 3.0
 	 */
 	public static List propertyDescriptors(int apiLevel) {
-		if (apiLevel == AST.JLS2) {
+		if (apiLevel == AST.JLS2_INTERNAL) {
 			return PROPERTY_DESCRIPTORS_2_0;
 		} else {
 			return PROPERTY_DESCRIPTORS_3_0;
@@ -116,7 +116,7 @@ public class ImportDeclaration extends ASTNode {
 	/**
 	 * Static versus regular; defaults to regular import.
 	 * Added in JLS3; not used in JLS2.
-	 * @since 3.0
+	 * @since 3.1
 	 */
 	private boolean isStatic = false;
 
@@ -303,18 +303,12 @@ public class ImportDeclaration extends ASTNode {
 	
 	/**
 	 * Returns whether this import declaration is a static import (added in JLS3 API).
-	 * <p>
-	 * Note: This API element is only needed for dealing with Java code that uses
-	 * new language features of J2SE 1.5. It is included in anticipation of J2SE
-	 * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
-	 * may change slightly before reaching its final form.
-	 * </p>
 	 * 
 	 * @return <code>true</code> if this is a static import,
 	 *    and <code>false</code> if this is a regular import
 	 * @exception UnsupportedOperationException if this operation is used in
 	 * a JLS2 AST
-	 * @since 3.0
+	 * @since 3.1
 	 */ 
 	public boolean isStatic() {
 		unsupportedIn2();
@@ -323,18 +317,12 @@ public class ImportDeclaration extends ASTNode {
 		
 	/**
 	 * Sets whether this import declaration is a static import (added in JLS3 API).
-	 * <p>
-	 * Note: This API element is only needed for dealing with Java code that uses
-	 * new language features of J2SE 1.5. It is included in anticipation of J2SE
-	 * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
-	 * may change slightly before reaching its final form.
-	 * </p>
 	 * 
 	 * @param isStatic <code>true</code> if this is a static import,
 	 *    and <code>false</code> if this is a regular import
 	 * @exception UnsupportedOperationException if this operation is used in
 	 * a JLS2 AST
-	 * @since 3.0
+	 * @since 3.1
 	 */ 
 	public void setStatic(boolean isStatic) {
 		unsupportedIn2();
@@ -344,16 +332,27 @@ public class ImportDeclaration extends ASTNode {
 	}
 	
 	/**
-	 * Resolves and returns the binding for the package or type imported by
-	 * this import declaration.
+	 * Resolves and returns the binding for the package, type, field, or
+	 * method named in this import declaration.
+	 * <p>
+	 * The name specified in a non-static single-type import can resolve
+	 * to a type (only). The name specified in a non-static on-demand
+	 * import can itself resolve to either a package or a type.
+	 * For static imports (introduced in JLS3), the name specified in a
+	 * static on-demand import can itself resolve to a type (only).
+	 * The name specified in a static single import can resolve to a
+	 * type, field, or method; in cases where the name could be resolved
+	 * to more than one element with that name (for example, two
+	 * methods both named "max", or a method and a field), this method
+	 * returns one of the plausible bindings.
+	 * </p>
 	 * <p>
 	 * Note that bindings are generally unavailable unless requested when the
 	 * AST is being built.
 	 * </p>
 	 * 
-	 * @return the package binding (for on-demand imports) or type binding
-	 *    (for single-type imports), or <code>null</code> if the binding cannot
-	 *    be resolved
+	 * @return a package, type, field, or method binding, or <code>null</code>
+	 * if the binding cannot be resolved
 	 */	
 	public IBinding resolveBinding() {
 		return this.ast.getBindingResolver().resolveImport(this);

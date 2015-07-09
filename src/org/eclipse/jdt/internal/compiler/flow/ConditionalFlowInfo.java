@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -83,6 +83,42 @@ public class ConditionalFlowInfo extends FlowInfo {
 				&& initsWhenFalse.isDefinitelyAssigned(local);
 	}
 	
+	/**
+	 * Check status of definite non-null assignment for a field.
+	 */
+	public boolean isDefinitelyNonNull(FieldBinding field) {
+		
+		return initsWhenTrue.isDefinitelyNonNull(field) 
+				&& initsWhenFalse.isDefinitelyNonNull(field);
+	}
+
+	/**
+	 * Check status of definite non-null assignment for a local variable.
+	 */
+	public boolean isDefinitelyNonNull(LocalVariableBinding local) {
+		
+		return initsWhenTrue.isDefinitelyNonNull(local) 
+				&& initsWhenFalse.isDefinitelyNonNull(local);
+	}
+	
+	/**
+	 * Check status of definite null assignment for a field.
+	 */
+	public boolean isDefinitelyNull(FieldBinding field) {
+		
+		return initsWhenTrue.isDefinitelyNull(field) 
+				&& initsWhenFalse.isDefinitelyNull(field);
+	}
+
+	/**
+	 * Check status of definite null assignment for a local variable.
+	 */
+	public boolean isDefinitelyNull(LocalVariableBinding local) {
+		
+		return initsWhenTrue.isDefinitelyNull(local) 
+				&& initsWhenFalse.isDefinitelyNull(local);
+	}
+
 	public int reachMode(){
 		return unconditionalInits().reachMode();
 	}
@@ -129,6 +165,42 @@ public class ConditionalFlowInfo extends FlowInfo {
 		initsWhenFalse.markAsDefinitelyAssigned(local);	
 	}
 	
+	/**
+	 * Record a field got definitely assigned to non-null value.
+	 */
+	public void markAsDefinitelyNonNull(FieldBinding field) {
+		
+		initsWhenTrue.markAsDefinitelyNonNull(field);
+		initsWhenFalse.markAsDefinitelyNonNull(field);	
+	}
+	
+	/**
+	 * Record a field got definitely assigned to non-null value
+	 */
+	public void markAsDefinitelyNonNull(LocalVariableBinding local) {
+		
+		initsWhenTrue.markAsDefinitelyNonNull(local);
+		initsWhenFalse.markAsDefinitelyNonNull(local);	
+	}
+
+	/**
+	 * Record a field got definitely assigned to null.
+	 */
+	public void markAsDefinitelyNull(FieldBinding field) {
+		
+		initsWhenTrue.markAsDefinitelyNull(field);
+		initsWhenFalse.markAsDefinitelyNull(field);	
+	}
+	
+	/**
+	 * Record a field got definitely assigned to null.
+	 */
+	public void markAsDefinitelyNull(LocalVariableBinding local) {
+		
+		initsWhenTrue.markAsDefinitelyNull(local);
+		initsWhenFalse.markAsDefinitelyNull(local);	
+	}
+
 	/**
 	 * Clear the initialization info for a field
 	 */

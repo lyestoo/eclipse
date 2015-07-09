@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -25,17 +25,73 @@ public class ParameterizedMethodBinding extends MethodBinding {
 	/**
 	 * Create method of parameterized type, substituting original parameters/exception/return type with type arguments.
 	 */
-	public ParameterizedMethodBinding(ParameterizedTypeBinding parameterizedDeclaringClass, MethodBinding originalMethod) {
+	public ParameterizedMethodBinding(final ParameterizedTypeBinding parameterizedDeclaringClass, MethodBinding originalMethod) {
 
 		super(
 				originalMethod.modifiers,
 				originalMethod.selector,
-				parameterizedDeclaringClass.substitute(originalMethod.returnType),
-				Scope.substitute(parameterizedDeclaringClass, originalMethod.parameters),
-				Scope.substitute(parameterizedDeclaringClass, originalMethod.thrownExceptions),
+				 originalMethod.returnType,
+				originalMethod.parameters,
+				originalMethod.thrownExceptions,
 				parameterizedDeclaringClass);
 		this.originalMethod = originalMethod;
-		this.typeVariables = originalMethod.typeVariables;
+
+		final TypeVariableBinding[] originalVariables = originalMethod.typeVariables;
+		Substitution substitution = null;
+		final int length = originalVariables.length;
+		final boolean isStatic = originalMethod.isStatic();
+		if (length == 0) {
+			this.typeVariables = NoTypeVariables;
+			if (!isStatic) substitution = parameterizedDeclaringClass;
+		} else {
+			// at least fix up the declaringElement binding + bound substitution if non static
+			final TypeVariableBinding[] substitutedVariables = new TypeVariableBinding[length];
+			for (int i = 0; i < length; i++) { // copy original type variable to relocate
+				TypeVariableBinding originalVariable = originalVariables[i];
+				substitutedVariables[i] = new TypeVariableBinding(originalVariable.sourceName, this, originalVariable.rank);
+			}
+			this.typeVariables = substitutedVariables;
+			
+			// need to substitute old var refs with new ones (double substitution: declaringClass + new type variables)
+			substitution = new Substitution() {
+				public LookupEnvironment environment() { 
+					return parameterizedDeclaringClass.environment; 
+				}
+				public boolean isRawSubstitution() {
+					return !isStatic && parameterizedDeclaringClass.isRawSubstitution();
+				}
+				public TypeBinding substitute(TypeVariableBinding typeVariable) {
+			        // check this variable can be substituted given copied variables
+			        if (typeVariable.rank < length && originalVariables[typeVariable.rank] == typeVariable) {
+						return substitutedVariables[typeVariable.rank];
+			        }
+			        if (!isStatic)
+						return parameterizedDeclaringClass.substitute(typeVariable);
+			        return typeVariable;
+				}
+			};
+		
+			// initialize new variable bounds
+			for (int i = 0; i < length; i++) {
+				TypeVariableBinding originalVariable = originalVariables[i];
+				TypeVariableBinding substitutedVariable = substitutedVariables[i];
+				TypeBinding substitutedSuperclass = Scope.substitute(substitution, originalVariable.superclass);
+				substitutedVariable.superclass = (ReferenceBinding) (substitutedSuperclass.isArrayType() 
+							? parameterizedDeclaringClass.environment.getType(JAVA_LANG_OBJECT)
+							: substitutedSuperclass);
+				substitutedVariable.superInterfaces = Scope.substitute(substitution, originalVariable.superInterfaces);
+				if (originalVariable.firstBound != null) {
+					substitutedVariable.firstBound = originalVariable.firstBound == originalVariable.superclass
+						? substitutedSuperclass // could be array type
+						: substitutedVariable.superInterfaces[0];
+				}
+			}
+		}
+		if (substitution != null) {
+			this.returnType = Scope.substitute(substitution, this.returnType);
+			this.parameters = Scope.substitute(substitution, this.parameters);
+			this.thrownExceptions = Scope.substitute(substitution, this.thrownExceptions);
+		}
 	}
 
 	public ParameterizedMethodBinding() {
@@ -55,9 +111,9 @@ public class ParameterizedMethodBinding extends MethodBinding {
 		method.parameters = originalMethod.parameters;
 		method.thrownExceptions = originalMethod.thrownExceptions;
 		ReferenceBinding genericClassType = scope.getJavaLangClass();
-		method.returnType = scope.createParameterizedType(
+		method.returnType = scope.environment().createParameterizedType(
 			genericClassType,
-			new TypeBinding[] {  scope.environment().createWildcard(genericClassType, 0, receiverType.erasure(), Wildcard.EXTENDS) },
+			new TypeBinding[] {  scope.environment().createWildcard(genericClassType, 0, receiverType.erasure(), null /*no extra bound*/, Wildcard.EXTENDS) },
 			null);
 		return method;
 	}

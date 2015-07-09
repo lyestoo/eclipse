@@ -1,30 +1,37 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
+import java.util.*;
+
 import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.Clinit;
+import org.eclipse.jdt.internal.compiler.ast.AbstractVariableDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.QualifiedAllocationExpression;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.env.AccessRestriction;
+import org.eclipse.jdt.internal.compiler.env.IGenericType;
 import org.eclipse.jdt.internal.compiler.problem.AbortCompilation;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
 
 public class ClassScope extends Scope {
+	
 	public TypeDeclaration referenceContext;
-	private TypeReference superTypeReference;
+	public TypeReference superTypeReference;
 
 	private final static char[] IncompleteHierarchy = new char[] {'h', 'a', 's', ' ', 'i', 'n', 'c', 'o', 'n', 's', 'i', 's', 't', 'e', 'n', 't', ' ', 'h', 'i', 'e', 'r', 'a', 'r', 'c', 'h', 'y'};
 
@@ -57,7 +64,7 @@ public class ClassScope extends Scope {
 			if (hierarchyIsInconsistent) { // 72468
 				referenceContext.binding.fields = new FieldBinding[1];
 				referenceContext.binding.fields[0] =
-					new FieldBinding(IncompleteHierarchy, VoidBinding, AccPrivate, referenceContext.binding, null);
+					new FieldBinding(IncompleteHierarchy, IntBinding, AccPrivate, referenceContext.binding, null);
 			} else {
 				referenceContext.binding.fields = NoFields;
 			}
@@ -67,9 +74,13 @@ public class ClassScope extends Scope {
 		FieldDeclaration[] fields = referenceContext.fields;
 		int size = fields.length;
 		int count = 0;
-		for (int i = 0; i < size; i++)
-			if (fields[i].isField())
-				count++;
+		for (int i = 0; i < size; i++) {
+			switch (fields[i].getKind()) {
+				case AbstractVariableDeclaration.FIELD:
+				case AbstractVariableDeclaration.ENUM_CONSTANT:
+					count++;
+			}
+		}
 
 		if (hierarchyIsInconsistent)
 			count++;
@@ -80,7 +91,7 @@ public class ClassScope extends Scope {
 		count = 0;
 		for (int i = 0; i < size; i++) {
 			FieldDeclaration field = fields[i];
-			if (!field.isField()) {
+			if (field.getKind() == AbstractVariableDeclaration.INITIALIZER) {
 				if (referenceContext.binding.isInterface())
 					problemReporter().interfaceCannotHaveInitializers(referenceContext.binding, field);
 			} else {
@@ -114,7 +125,7 @@ public class ClassScope extends Scope {
 		}
 		// remove duplicate fields
 		if (duplicate) {
-			FieldBinding[] newFieldBindings = new FieldBinding[knownFieldNames.size() - 1];
+			FieldBinding[] newFieldBindings = new FieldBinding[fieldBindings.length];
 			// we know we'll be removing at least 1 duplicate name
 			size = count;
 			count = 0;
@@ -126,7 +137,7 @@ public class ClassScope extends Scope {
 			fieldBindings = newFieldBindings;
 		}
 		if (hierarchyIsInconsistent)
-			fieldBindings[count++] = new FieldBinding(IncompleteHierarchy, VoidBinding, AccPrivate, referenceContext.binding, null);
+			fieldBindings[count++] = new FieldBinding(IncompleteHierarchy, IntBinding, AccPrivate, referenceContext.binding, null);
 
 		if (count != fieldBindings.length)
 			System.arraycopy(fieldBindings, 0, fieldBindings = new FieldBinding[count], 0, count);
@@ -157,7 +168,7 @@ public class ClassScope extends Scope {
 		referenceContext.initializerScope = new MethodScope(this, referenceContext, false);
 
 		// build the binding or the local type
-		LocalTypeBinding localType = new LocalTypeBinding(this, enclosingType, this.switchCase());
+		LocalTypeBinding localType = new LocalTypeBinding(this, enclosingType, this.innermostSwitchCase());
 		referenceContext.binding = localType;
 		checkAndSetModifiers();
 		buildTypeVariables();
@@ -170,7 +181,7 @@ public class ClassScope extends Scope {
 			int count = 0;
 			nextMember : for (int i = 0; i < size; i++) {
 				TypeDeclaration memberContext = referenceContext.memberTypes[i];
-				if (memberContext.isInterface()) {
+				if (memberContext.kind() == IGenericType.INTERFACE_DECL) {
 					problemReporter().nestedClassCannotDeclareInterface(memberContext);
 					continue nextMember;
 				}
@@ -212,7 +223,7 @@ public class ClassScope extends Scope {
 		referenceContext.binding.verifyMethods(environment().methodVerifier());
 	}
 	
-	private void buildMemberTypes() {
+	private void buildMemberTypes(AccessRestriction accessRestriction) {
 	    SourceTypeBinding sourceType = referenceContext.binding;
 		ReferenceBinding[] memberTypeBindings = NoMemberTypes;
 		if (referenceContext.memberTypes != null) {
@@ -221,9 +232,9 @@ public class ClassScope extends Scope {
 			int count = 0;
 			nextMember : for (int i = 0; i < length; i++) {
 				TypeDeclaration memberContext = referenceContext.memberTypes[i];
-				if (memberContext.isInterface()
+				if (memberContext.kind() == IGenericType.INTERFACE_DECL
 					&& sourceType.isNestedType()
-					&& sourceType.isClass()
+					&& sourceType.isClass() // no need to check for enum, since implicitly static
 					&& !sourceType.isStatic()) {
 					problemReporter().nestedClassCannotDeclareInterface(memberContext);
 					continue nextMember;
@@ -246,7 +257,7 @@ public class ClassScope extends Scope {
 				}
 
 				ClassScope memberScope = new ClassScope(this, memberContext);
-				memberTypeBindings[count++] = memberScope.buildType(sourceType, sourceType.fPackage);
+				memberTypeBindings[count++] = memberScope.buildType(sourceType, sourceType.fPackage, accessRestriction);
 			}
 			if (count != length)
 				System.arraycopy(memberTypeBindings, 0, memberTypeBindings = new ReferenceBinding[count], 0, count);
@@ -255,24 +266,33 @@ public class ClassScope extends Scope {
 	}
 	
 	private void buildMethods() {
-		if (referenceContext.methods == null) {
+		boolean isEnum = referenceContext.kind() == IGenericType.ENUM_DECL;
+		if (referenceContext.methods == null && !isEnum) {
 			referenceContext.binding.methods = NoMethods;
 			return;
 		}
 
 		// iterate the method declarations to create the bindings
 		AbstractMethodDeclaration[] methods = referenceContext.methods;
-		int size = methods.length;
+		int size = methods == null ? 0 : methods.length;
+		// look for <clinit> method
 		int clinitIndex = -1;
 		for (int i = 0; i < size; i++) {
-			if (methods[i] instanceof Clinit) {
+			if (methods[i].isClinit()) {
 				clinitIndex = i;
 				break;
 			}
 		}
-		MethodBinding[] methodBindings = new MethodBinding[clinitIndex == -1 ? size : size - 1];
 
-		int count = 0;
+		int count = isEnum ? 2 : 0; // reserve 2 slots for special enum methods: #values() and #valueOf(String)
+		MethodBinding[] methodBindings = new MethodBinding[(clinitIndex == -1 ? size : size - 1) + count];
+		// create special methods for enums
+		if (isEnum) {
+		    SourceTypeBinding sourceType = referenceContext.binding;
+			methodBindings[0] = sourceType.addSyntheticEnumMethod(TypeConstants.VALUES); // add <EnumType>[] values() 
+			methodBindings[1] = sourceType.addSyntheticEnumMethod(TypeConstants.VALUEOF); // add <EnumType> valueOf() 
+		}
+		// create bindings for source methods
 		for (int i = 0; i < size; i++) {
 			if (i != clinitIndex) {
 				MethodScope scope = new MethodScope(this, methods[i], false);
@@ -285,10 +305,9 @@ public class ClassScope extends Scope {
 			System.arraycopy(methodBindings, 0, methodBindings = new MethodBinding[count], 0, count);
 
 		referenceContext.binding.methods = methodBindings;
-		referenceContext.binding.modifiers |= AccUnresolved; // until methods() is sent
 	}
 	
-	SourceTypeBinding buildType(SourceTypeBinding enclosingType, PackageBinding packageBinding) {
+	SourceTypeBinding buildType(SourceTypeBinding enclosingType, PackageBinding packageBinding, AccessRestriction accessRestriction) {
 		// provide the typeDeclaration with needed scopes
 		referenceContext.scope = this;
 		referenceContext.staticInitializerScope = new MethodScope(this, referenceContext, true);
@@ -305,10 +324,11 @@ public class ClassScope extends Scope {
 		}
 
 		SourceTypeBinding sourceType = referenceContext.binding;
+		environment().setAccessRestriction(sourceType, accessRestriction);		
 		sourceType.fPackage.addType(sourceType);
 		checkAndSetModifiers();
 		buildTypeVariables();
-		buildMemberTypes();
+		buildMemberTypes(accessRestriction);
 		return sourceType;
 	}
 	
@@ -318,13 +338,13 @@ public class ClassScope extends Scope {
 		TypeParameter[] typeParameters = referenceContext.typeParameters;
 		
 	    // do not construct type variables if source < 1.5
-		if (typeParameters == null || environment().options.sourceLevel < ClassFileConstants.JDK1_5) {
+		if (typeParameters == null || compilerOptions().sourceLevel < ClassFileConstants.JDK1_5) {
 		    sourceType.typeVariables = NoTypeVariables;
 		    return;
 		}
 		sourceType.typeVariables = NoTypeVariables; // safety
 
-		if (sourceType.id == T_Object) { // handle the case of redefining java.lang.Object up front
+		if (sourceType.id == T_JavaLangObject) { // handle the case of redefining java.lang.Object up front
 			problemReporter().objectCannotBeGeneric(referenceContext);
 			return; 
 		}
@@ -337,21 +357,31 @@ public class ClassScope extends Scope {
 		int modifiers = sourceType.modifiers;
 		if ((modifiers & AccAlternateModifierProblem) != 0)
 			problemReporter().duplicateModifierForType(sourceType);
-
 		ReferenceBinding enclosingType = sourceType.enclosingType();
 		boolean isMemberType = sourceType.isMemberType();
-		
 		if (isMemberType) {
+			modifiers |= (enclosingType.modifiers & (AccGenericSignature|AccStrictfp));
 			// checks for member types before local types to catch local members
-			if (enclosingType.isStrictfp())
-				modifiers |= AccStrictfp;
-			if (enclosingType.isViewedAsDeprecated() && !sourceType.isDeprecated())
-				modifiers |= AccDeprecatedImplicitly;
 			if (enclosingType.isInterface())
 				modifiers |= AccPublic;
+			if (sourceType.isEnum()) {
+				if (!enclosingType.isStatic())
+					problemReporter().nonStaticContextForEnumMemberType(sourceType);
+				else
+					modifiers |= AccStatic;
+			}
 		} else if (sourceType.isLocalType()) {
-			if (sourceType.isAnonymousType()) 
+			if (sourceType.isEnum()) {
+				problemReporter().illegalLocalTypeDeclaration(referenceContext);
+				sourceType.modifiers = 0;
+				return;
+			}
+			if (sourceType.isAnonymousType()) {
 			    modifiers |= AccFinal;
+			    // set AccEnum flag for anonymous body of enum constants
+			    if (referenceContext.allocation.type == null)
+			    	modifiers |= AccEnum;
+			}
 			Scope scope = this;
 			do {
 				switch (scope.kind) {
@@ -363,9 +393,8 @@ public class ClassScope extends Scope {
 							// inside field declaration ? check field modifier to see if deprecated
 							if (methodScope.initializedField != null) {
 									// currently inside this field initialization
-								if (methodScope.initializedField.isViewedAsDeprecated() && !sourceType.isDeprecated()){
+								if (methodScope.initializedField.isViewedAsDeprecated() && !sourceType.isDeprecated())
 									modifiers |= AccDeprecatedImplicitly;
-								}
 							} else {
 								if (type.isStrictfp())
 									modifiers |= AccStrictfp;
@@ -374,7 +403,7 @@ public class ClassScope extends Scope {
 							}					
 						} else {
 							MethodBinding method = ((AbstractMethodDeclaration) methodScope.referenceContext).binding;
-							if (method != null){
+							if (method != null) {
 								if (method.isStrictfp())
 									modifiers |= AccStrictfp;
 								if (method.isViewedAsDeprecated() && !sourceType.isDeprecated())
@@ -393,16 +422,21 @@ public class ClassScope extends Scope {
 				scope = scope.parent;
 			} while (scope != null);
 		}
+
 		// after this point, tests on the 16 bits reserved.
 		int realModifiers = modifiers & AccJustFlag;
 
-		if ((realModifiers & AccInterface) != 0) {
+		if ((realModifiers & AccInterface) != 0) { // interface and annotation type
 			// detect abnormal cases for interfaces
 			if (isMemberType) {
 				int unexpectedModifiers =
-					~(AccPublic | AccPrivate | AccProtected | AccStatic | AccAbstract | AccInterface | AccStrictfp);
-				if ((realModifiers & unexpectedModifiers) != 0)
-					problemReporter().illegalModifierForMemberInterface(sourceType);
+					~(AccPublic | AccPrivate | AccProtected | AccStatic | AccAbstract | AccInterface | AccStrictfp | AccAnnotation);
+				if ((realModifiers & unexpectedModifiers) != 0) {
+					if ((realModifiers & AccAnnotation) != 0)
+						problemReporter().illegalModifierForAnnotationMemberType(sourceType);
+					else
+						problemReporter().illegalModifierForMemberInterface(sourceType);
+				}
 				/*
 				} else if (sourceType.isLocalType()) { //interfaces cannot be defined inside a method
 					int unexpectedModifiers = ~(AccAbstract | AccInterface | AccStrictfp);
@@ -410,16 +444,65 @@ public class ClassScope extends Scope {
 						problemReporter().illegalModifierForLocalInterface(sourceType);
 				*/
 			} else {
-				int unexpectedModifiers = ~(AccPublic | AccAbstract | AccInterface | AccStrictfp);
-				if ((realModifiers & unexpectedModifiers) != 0)
-					problemReporter().illegalModifierForInterface(sourceType);
+				int unexpectedModifiers = ~(AccPublic | AccAbstract | AccInterface | AccStrictfp | AccAnnotation);
+				if ((realModifiers & unexpectedModifiers) != 0) {
+					if ((realModifiers & AccAnnotation) != 0)
+						problemReporter().illegalModifierForAnnotationType(sourceType);
+					else
+						problemReporter().illegalModifierForInterface(sourceType);
+				}
 			}
 			modifiers |= AccAbstract;
-		} else {
-			// detect abnormal cases for types
+		} else if ((realModifiers & AccEnum) != 0) {
+			// detect abnormal cases for enums
 			if (isMemberType) { // includes member types defined inside local types
-				int unexpectedModifiers =
-					~(AccPublic | AccPrivate | AccProtected | AccStatic | AccAbstract | AccFinal | AccStrictfp);
+				int unexpectedModifiers = ~(AccPublic | AccPrivate | AccProtected | AccStatic | AccStrictfp | AccEnum);
+				if ((realModifiers & unexpectedModifiers) != 0)
+					problemReporter().illegalModifierForMemberEnum(sourceType);
+			} else if (sourceType.isLocalType()) { // each enum constant is an anonymous local type
+				int unexpectedModifiers = ~(AccStrictfp | AccFinal | AccEnum); // add final since implicitly set for anonymous type
+				if ((realModifiers & unexpectedModifiers) != 0)
+					problemReporter().illegalModifierForLocalEnum(sourceType);
+			} else {
+				int unexpectedModifiers = ~(AccPublic | AccStrictfp | AccEnum);
+				if ((realModifiers & unexpectedModifiers) != 0)
+					problemReporter().illegalModifierForEnum(sourceType);
+			}
+
+			// what about inherited interface methods?
+			if ((referenceContext.bits & ASTNode.HasAbstractMethods) != 0) {
+				modifiers |= AccAbstract;
+			} else if (!sourceType.isAnonymousType()) {
+				// body of enum constant must implement any inherited abstract methods
+				// enum type needs to implement abstract methods if one of its constants does not supply a body
+				checkAbstractEnum: {
+					TypeDeclaration typeDeclaration = this.referenceContext;
+					FieldDeclaration[] fields = typeDeclaration.fields;
+					int fieldsLength = fields == null ? 0 : fields.length;
+					if (fieldsLength == 0) break checkAbstractEnum; // has no constants so must implement the method itself
+					AbstractMethodDeclaration[] methods = typeDeclaration.methods;
+					int methodsLength = methods == null ? 0 : methods.length;
+					// TODO (kent) cannot tell that the superinterfaces are empty or that their methods are implemented
+					boolean definesAbstractMethod = typeDeclaration.superInterfaces != null;
+					for (int i = 0; i < methodsLength && !definesAbstractMethod; i++)
+						definesAbstractMethod = methods[i].isAbstract();
+					if (!definesAbstractMethod) break checkAbstractEnum; // all methods have bodies
+					for (int i = 0; i < fieldsLength; i++) {
+						FieldDeclaration fieldDecl = fields[i];
+						if (fieldDecl.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT)
+							if (!(fieldDecl.initialization instanceof QualifiedAllocationExpression))
+								break checkAbstractEnum;
+					}
+					// tag this enum as abstract since an abstract method must be implemented AND all enum constants define an anonymous body
+					// as a result, each of its anonymous constants will see it as abstract and must implement each inherited abstract method					
+					modifiers |= AccAbstract;
+				}
+			}
+			modifiers |= AccFinal;
+		} else {
+			// detect abnormal cases for classes
+			if (isMemberType) { // includes member types defined inside local types
+				int unexpectedModifiers = ~(AccPublic | AccPrivate | AccProtected | AccStatic | AccAbstract | AccFinal | AccStrictfp);
 				if ((realModifiers & unexpectedModifiers) != 0)
 					problemReporter().illegalModifierForMemberClass(sourceType);
 			} else if (sourceType.isLocalType()) {
@@ -445,25 +528,24 @@ public class ClassScope extends Scope {
 
 					// need to keep the less restrictive
 					if ((realModifiers & AccProtected) != 0)
-						modifiers ^= AccProtected;
+						modifiers &= ~AccProtected;
 					if ((realModifiers & AccPrivate) != 0)
-						modifiers ^= AccPrivate;
+						modifiers &= ~AccPrivate;
 				}
 			} else {
 				int accessorBits = realModifiers & (AccPublic | AccProtected | AccPrivate);
 				if ((accessorBits & (accessorBits - 1)) > 1) {
 					problemReporter().illegalVisibilityModifierCombinationForMemberType(sourceType);
 
-					// need to keep the less restrictive
+					// need to keep the less restrictive so disable Protected/Private as necessary
 					if ((accessorBits & AccPublic) != 0) {
 						if ((accessorBits & AccProtected) != 0)
-							modifiers ^= AccProtected;
+							modifiers &= ~AccProtected;
 						if ((accessorBits & AccPrivate) != 0)
-							modifiers ^= AccPrivate;
+							modifiers &= ~AccPrivate;
+					} else if ((accessorBits & AccProtected) != 0 && (accessorBits & AccPrivate) != 0) {
+						modifiers &= ~AccPrivate;
 					}
-					if ((accessorBits & AccProtected) != 0)
-						if ((accessorBits & AccPrivate) != 0)
-							modifiers ^= AccPrivate;
 				}
 			}
 
@@ -471,10 +553,9 @@ public class ClassScope extends Scope {
 			if ((realModifiers & AccStatic) == 0) {
 				if (enclosingType.isInterface())
 					modifiers |= AccStatic;
-			} else {
-				if (!enclosingType.isStatic())
-					// error the enclosing type of a static field must be static or a top-level type
-					problemReporter().illegalStaticModifierForMemberType(sourceType);
+			} else if (!enclosingType.isStatic()) {
+				// error the enclosing type of a static field must be static or a top-level type
+				problemReporter().illegalStaticModifierForMemberType(sourceType);
 			}
 		}
 
@@ -490,151 +571,159 @@ public class ClassScope extends Scope {
 	*/
 	private void checkAndSetModifiersForField(FieldBinding fieldBinding, FieldDeclaration fieldDecl) {
 		int modifiers = fieldBinding.modifiers;
+		final ReferenceBinding declaringClass = fieldBinding.declaringClass;
 		if ((modifiers & AccAlternateModifierProblem) != 0)
-			problemReporter().duplicateModifierForField(fieldBinding.declaringClass, fieldDecl);
+			problemReporter().duplicateModifierForField(declaringClass, fieldDecl);
 
-		if (fieldBinding.declaringClass.isInterface()) {
+		if (declaringClass.isInterface()) {
 			int expectedValue = AccPublic | AccStatic | AccFinal;
 			// set the modifiers
 			modifiers |= expectedValue;
 
 			// and then check that they are the only ones
-			if ((modifiers & AccJustFlag) != expectedValue)
-				problemReporter().illegalModifierForInterfaceField(fieldBinding.declaringClass, fieldDecl);
+			if ((modifiers & AccJustFlag) != expectedValue) {
+				if ((declaringClass.modifiers  & AccAnnotation) != 0)
+					problemReporter().illegalModifierForAnnotationField(fieldDecl);
+				else
+					problemReporter().illegalModifierForInterfaceField(fieldDecl);
+			}
 			fieldBinding.modifiers = modifiers;
+			return;
+		} else if (fieldDecl.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT) {
+			// check that they are not modifiers in source
+			if ((modifiers & AccJustFlag) != 0)
+				problemReporter().illegalModifierForEnumConstant(declaringClass, fieldDecl);
+		
+			// set the modifiers
+			int implicitValue = AccPublic | AccStatic | AccFinal | AccEnum;
+			if (fieldDecl.initialization instanceof QualifiedAllocationExpression)
+				declaringClass.modifiers &= ~AccFinal;
+			fieldBinding.modifiers|= implicitValue;
 			return;
 		}
 
 		// after this point, tests on the 16 bits reserved.
 		int realModifiers = modifiers & AccJustFlag;
-		int unexpectedModifiers =
-			~(AccPublic | AccPrivate | AccProtected | AccFinal | AccStatic | AccTransient | AccVolatile);
-		if ((realModifiers & unexpectedModifiers) != 0)
-			problemReporter().illegalModifierForField(fieldBinding.declaringClass, fieldDecl);
+		int unexpectedModifiers = ~(AccPublic | AccPrivate | AccProtected | AccFinal | AccStatic | AccTransient | AccVolatile);
+		if ((realModifiers & unexpectedModifiers) != 0) {
+			problemReporter().illegalModifierForField(declaringClass, fieldDecl);
+			modifiers &= ~AccJustFlag | ~unexpectedModifiers;
+		}
 
 		int accessorBits = realModifiers & (AccPublic | AccProtected | AccPrivate);
 		if ((accessorBits & (accessorBits - 1)) > 1) {
-			problemReporter().illegalVisibilityModifierCombinationForField(
-				fieldBinding.declaringClass,
-				fieldDecl);
+			problemReporter().illegalVisibilityModifierCombinationForField(declaringClass, fieldDecl);
 
-			// need to keep the less restrictive
+			// need to keep the less restrictive so disable Protected/Private as necessary
 			if ((accessorBits & AccPublic) != 0) {
 				if ((accessorBits & AccProtected) != 0)
-					modifiers ^= AccProtected;
+					modifiers &= ~AccProtected;
 				if ((accessorBits & AccPrivate) != 0)
-					modifiers ^= AccPrivate;
+					modifiers &= ~AccPrivate;
+			} else if ((accessorBits & AccProtected) != 0 && (accessorBits & AccPrivate) != 0) {
+				modifiers &= ~AccPrivate;
 			}
-			if ((accessorBits & AccProtected) != 0)
-				if ((accessorBits & AccPrivate) != 0)
-					modifiers ^= AccPrivate;
 		}
 
 		if ((realModifiers & (AccFinal | AccVolatile)) == (AccFinal | AccVolatile))
-			problemReporter().illegalModifierCombinationFinalVolatileForField(
-				fieldBinding.declaringClass,
-				fieldDecl);
+			problemReporter().illegalModifierCombinationFinalVolatileForField(declaringClass, fieldDecl);
 
-		if (fieldDecl.initialization == null && (modifiers & AccFinal) != 0) {
+		if (fieldDecl.initialization == null && (modifiers & AccFinal) != 0)
 			modifiers |= AccBlankFinal;
-		}
 		fieldBinding.modifiers = modifiers;
 	}
 
 	private void checkForInheritedMemberTypes(SourceTypeBinding sourceType) {
 		// search up the hierarchy of the sourceType to see if any superType defines a member type
 		// when no member types are defined, tag the sourceType & each superType with the HasNoMemberTypes bit
+		// assumes super types have already been checked & tagged
 		ReferenceBinding currentType = sourceType;
 		ReferenceBinding[][] interfacesToVisit = null;
 		int lastPosition = -1;
 		do {
-			if ((currentType.tagBits & HasNoMemberTypes) != 0)
-				break; // already know it has no inherited member types, can stop looking up
 			if (currentType.hasMemberTypes()) // avoid resolving member types eagerly
-				return; // has member types
+				return;
+
 			ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
 			if (itsInterfaces != NoSuperInterfaces) {
 				if (interfacesToVisit == null)
 					interfacesToVisit = new ReferenceBinding[5][];
 				if (++lastPosition == interfacesToVisit.length)
-					System.arraycopy(
-						interfacesToVisit,
-						0,
-						interfacesToVisit = new ReferenceBinding[lastPosition * 2][],
-						0,
-						lastPosition);
+					System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0, lastPosition);
 				interfacesToVisit[lastPosition] = itsInterfaces;
 			}
-		} while ((currentType = currentType.superclass()) != null);
+		} while ((currentType = currentType.superclass()) != null && (currentType.tagBits & HasNoMemberTypes) == 0);
 
-		boolean hasMembers = false;
 		if (interfacesToVisit != null) {
-			done : for (int i = 0; i <= lastPosition; i++) {
+			// contains the interfaces between the sourceType and any superclass, which was tagged as having no member types
+			boolean needToTag = false;
+			for (int i = 0; i <= lastPosition; i++) {
 				ReferenceBinding[] interfaces = interfacesToVisit[i];
 				for (int j = 0, length = interfaces.length; j < length; j++) {
 					ReferenceBinding anInterface = interfaces[j];
-					if ((anInterface.tagBits & InterfaceVisited) == 0) { // if interface as not already been visited
-						anInterface.tagBits |= InterfaceVisited;
-						if ((anInterface.tagBits & HasNoMemberTypes) != 0)
-							continue; // already know it has no inherited member types
-						if (anInterface.memberTypes() != NoMemberTypes) {
-							hasMembers = true;
-							break done;
-						}
+					if ((anInterface.tagBits & HasNoMemberTypes) == 0) { // skip interface if it already knows it has no member types
+						if (anInterface.hasMemberTypes()) // avoid resolving member types eagerly
+							return;
 
+						needToTag = true;
 						ReferenceBinding[] itsInterfaces = anInterface.superInterfaces();
 						if (itsInterfaces != NoSuperInterfaces) {
 							if (++lastPosition == interfacesToVisit.length)
-								System.arraycopy(
-									interfacesToVisit,
-									0,
-									interfacesToVisit = new ReferenceBinding[lastPosition * 2][],
-									0,
-									lastPosition);
+								System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0, lastPosition);
 							interfacesToVisit[lastPosition] = itsInterfaces;
 						}
 					}
 				}
 			}
 
-			for (int i = 0; i <= lastPosition; i++) {
-				ReferenceBinding[] interfaces = interfacesToVisit[i];
-				for (int j = 0, length = interfaces.length; j < length; j++) {
-					interfaces[j].tagBits &= ~InterfaceVisited;
-					if (!hasMembers)
+			if (needToTag) {
+				for (int i = 0; i <= lastPosition; i++) {
+					ReferenceBinding[] interfaces = interfacesToVisit[i];
+					for (int j = 0, length = interfaces.length; j < length; j++)
 						interfaces[j].tagBits |= HasNoMemberTypes;
 				}
 			}
 		}
 
-		if (!hasMembers) {
-			currentType = sourceType;
-			do {
-				currentType.tagBits |= HasNoMemberTypes;
-			} while ((currentType = currentType.superclass()) != null);
-		}
+		// tag the sourceType and all of its superclasses, unless they have already been tagged
+		currentType = sourceType;
+		do {
+			currentType.tagBits |= HasNoMemberTypes;
+		} while ((currentType = currentType.superclass()) != null && (currentType.tagBits & HasNoMemberTypes) == 0);
 	}
-
-	private void checkTypeVariableBounds(TypeParameter[] typeParameters) {
-		for (int i = 0, paramLength = typeParameters.length; i < paramLength; i++) {
-			TypeParameter typeParameter = typeParameters[i];
-			TypeReference typeRef = typeParameter.type;
-			if (typeRef != null) {
-				typeRef.checkBounds(this);
-
-				TypeReference[] boundRefs = typeParameter.bounds;
-				if (boundRefs != null)
-					for (int j = 0, k = boundRefs.length; j < k; j++)
-						boundRefs[j].checkBounds(this);
+	// Perform deferred bound checks for parameterized type references (only done after hierarchy is connected)
+	public void  checkParameterizedTypeBounds() {
+		TypeReference superclass = referenceContext.superclass;
+		if (superclass != null) {
+			superclass.checkBounds(this);
+		}
+		TypeReference[] superinterfaces = referenceContext.superInterfaces;
+		if (superinterfaces != null) {
+			for (int i = 0, length = superinterfaces.length; i < length; i++) {
+				superinterfaces[i].checkBounds(this);
 			}
 		}
+		TypeParameter[] typeParameters = referenceContext.typeParameters;
+		if (typeParameters != null) {
+			for (int i = 0, paramLength = typeParameters.length; i < paramLength; i++) {
+				typeParameters[i].checkBounds(this);
+			}
+		}
+		// propagate to member types
+		ReferenceBinding[] memberTypes = referenceContext.binding.memberTypes;
+		if (memberTypes != null && memberTypes != NoMemberTypes) {
+			for (int i = 0, size = memberTypes.length; i < size; i++)
+				 ((SourceTypeBinding) memberTypes[i]).scope.checkParameterizedTypeBounds();
+		}		
 	}
 
 	private void connectMemberTypes() {
 		SourceTypeBinding sourceType = referenceContext.binding;
-		if (sourceType.memberTypes != NoMemberTypes)
-			for (int i = 0, size = sourceType.memberTypes.length; i < size; i++)
-				 ((SourceTypeBinding) sourceType.memberTypes[i]).scope.connectTypeHierarchy();
+		ReferenceBinding[] memberTypes = sourceType.memberTypes;
+		if (memberTypes != null && memberTypes != NoMemberTypes) {
+			for (int i = 0, size = memberTypes.length; i < size; i++)
+				 ((SourceTypeBinding) memberTypes[i]).scope.connectTypeHierarchy();
+		}
 	}
 	/*
 		Our current belief based on available JCK tests is:
@@ -649,26 +738,32 @@ public class ClassScope extends Scope {
 	*/
 	private boolean connectSuperclass() {
 		SourceTypeBinding sourceType = referenceContext.binding;
-		if (sourceType.id == T_Object) { // handle the case of redefining java.lang.Object up front
+		if (sourceType.id == T_JavaLangObject) { // handle the case of redefining java.lang.Object up front
 			sourceType.superclass = null;
 			sourceType.superInterfaces = NoSuperInterfaces;
-			if (referenceContext.superclass != null || referenceContext.superInterfaces != null)
+			if (!sourceType.isClass())
+				problemReporter().objectMustBeClass(sourceType);
+			if (referenceContext.superclass != null || (referenceContext.superInterfaces != null && referenceContext.superInterfaces.length > 0))
 				problemReporter().objectCannotHaveSuperTypes(sourceType);
 			return true; // do not propagate Object's hierarchy problems down to every subtype
 		}
 		if (referenceContext.superclass == null) {
+			if (sourceType.isEnum() && compilerOptions().sourceLevel >= JDK1_5) // do not connect if source < 1.5 as enum already got flagged as syntax error
+				return connectEnumSuperclass();
 			sourceType.superclass = getJavaLangObject();
-			return !detectCycle(sourceType, sourceType.superclass, null);
+			return !detectHierarchyCycle(sourceType, sourceType.superclass, null);
 		}
 		TypeReference superclassRef = referenceContext.superclass;
 		ReferenceBinding superclass = findSupertype(superclassRef);
 		if (superclass != null) { // is null if a cycle was detected cycle or a problem
-			if (superclass.isInterface()) {
+			if (!superclass.isClass()) {
 				problemReporter().superclassMustBeAClass(sourceType, superclassRef, superclass);
 			} else if (superclass.isFinal()) {
 				problemReporter().classExtendFinalClass(sourceType, superclassRef, superclass);
-			} else if ((superclass.tagBits & TagBits.HasWildcard) != 0) {
+			} else if ((superclass.tagBits & TagBits.HasDirectWildcard) != 0) {
 				problemReporter().superTypeCannotUseWildcard(sourceType, superclassRef, superclass);
+			} else if (superclass.erasure().id == T_JavaLangEnum) {
+				problemReporter().cannotExtendEnum(sourceType, superclassRef, superclass);
 			} else {
 				// only want to reach here when no errors are reported
 				sourceType.superclass = superclass;
@@ -678,8 +773,34 @@ public class ClassScope extends Scope {
 		sourceType.tagBits |= HierarchyHasProblems;
 		sourceType.superclass = getJavaLangObject();
 		if ((sourceType.superclass.tagBits & BeginHierarchyCheck) == 0)
-			detectCycle(sourceType, sourceType.superclass, null);
+			detectHierarchyCycle(sourceType, sourceType.superclass, null);
 		return false; // reported some error against the source type
+	}
+
+	/**
+	 *  enum X (implicitly) extends Enum<X>
+	 */
+	private boolean connectEnumSuperclass() {
+		SourceTypeBinding sourceType = referenceContext.binding;
+		ReferenceBinding rootEnumType = getJavaLangEnum();
+		boolean foundCycle = detectHierarchyCycle(sourceType, rootEnumType, null);
+		// arity check for well-known Enum<E>
+		TypeVariableBinding[] refTypeVariables = rootEnumType.typeVariables();
+		if (refTypeVariables == NoTypeVariables) { // check generic
+			problemReporter().nonGenericTypeCannotBeParameterized(null, rootEnumType, new TypeBinding[]{ sourceType });
+			return false; // cannot reach here as AbortCompilation is thrown
+		} else if (1 != refTypeVariables.length) { // check arity
+			problemReporter().incorrectArityForParameterizedType(null, rootEnumType, new TypeBinding[]{ sourceType });
+			return false; // cannot reach here as AbortCompilation is thrown
+		}			
+		// check argument type compatibility
+		ParameterizedTypeBinding  superType = environment().createParameterizedType(rootEnumType, new TypeBinding[]{ environment().convertToRawType(sourceType) } , null);
+		sourceType.superclass = superType;
+		// bound check (in case of bogus definition of Enum type)
+		if (refTypeVariables[0].boundCheck(superType, sourceType) != TypeConstants.OK) {
+			problemReporter().typeMismatchError(rootEnumType, refTypeVariables[0], sourceType, null);
+		}		
+		return !foundCycle;
 	}
 
 	/*
@@ -695,9 +816,16 @@ public class ClassScope extends Scope {
 	private boolean connectSuperInterfaces() {
 		SourceTypeBinding sourceType = referenceContext.binding;
 		sourceType.superInterfaces = NoSuperInterfaces;
-		if (referenceContext.superInterfaces == null)
+		if (referenceContext.superInterfaces == null) {
+			if (sourceType.isAnnotationType() && compilerOptions().sourceLevel >= JDK1_5) { // do not connect if source < 1.5 as annotation already got flagged as syntax error) {
+				ReferenceBinding annotationType = getJavaLangAnnotationAnnotation();
+				boolean foundCycle = detectHierarchyCycle(sourceType, annotationType, null);
+				sourceType.superInterfaces = new ReferenceBinding[] { annotationType };
+				return !foundCycle;
+			}
 			return true;
-		if (sourceType.id == T_Object) // already handled the case of redefining java.lang.Object
+		}
+		if (sourceType.id == T_JavaLangObject) // already handled the case of redefining java.lang.Object
 			return true;
 
 		boolean noProblems = true;
@@ -713,41 +841,85 @@ public class ClassScope extends Scope {
 				continue nextInterface;
 			}
 			superInterfaceRef.resolvedType = superInterface; // hold onto the problem type
+			// check for simple interface collisions 
 			// Check for a duplicate interface once the name is resolved, otherwise we may be confused (ie : a.b.I and c.d.I)
-			for (int k = 0; k < count; k++) {
-				if (interfaceBindings[k] == superInterface) {
-					// should this be treated as a warning?
-					problemReporter().duplicateSuperinterface(sourceType, referenceContext, superInterface);
+			for (int j = 0; j < i; j++) {
+				if (interfaceBindings[j] == superInterface) {
+					problemReporter().duplicateSuperinterface(sourceType, superInterfaceRef, superInterface);
 					continue nextInterface;
 				}
 			}
-			if (superInterface.isClass()) {
-				problemReporter().superinterfaceMustBeAnInterface(sourceType, referenceContext, superInterface);
+			if (!superInterface.isInterface()) {
+				problemReporter().superinterfaceMustBeAnInterface(sourceType, superInterfaceRef, superInterface);
 				sourceType.tagBits |= HierarchyHasProblems;
 				noProblems = false;
 				continue nextInterface;
+			} else if (superInterface.isAnnotationType()){
+				problemReporter().annotationTypeUsedAsSuperinterface(sourceType, superInterfaceRef, superInterface);
 			}
-			if ((superInterface.tagBits & TagBits.HasWildcard) != 0) {
+			if ((superInterface.tagBits & TagBits.HasDirectWildcard) != 0) {
 				problemReporter().superTypeCannotUseWildcard(sourceType, superInterfaceRef, superInterface);
 				sourceType.tagBits |= HierarchyHasProblems;
 				noProblems = false;
 				continue nextInterface;
 			}
-			ReferenceBinding invalid = findAmbiguousInterface(superInterface, sourceType);
-			if (invalid != null) {
-				ReferenceBinding generic = null;
-				if (superInterface.isParameterizedType())
-					generic = ((ParameterizedTypeBinding) superInterface).type;
-				else if (invalid.isParameterizedType())
-					generic = ((ParameterizedTypeBinding) invalid).type;
-				problemReporter().superinterfacesCollide(generic, referenceContext, superInterface, invalid);
-				sourceType.tagBits |= HierarchyHasProblems;
-				noProblems = false;
-				continue nextInterface;
-			}
-
 			// only want to reach here when no errors are reported
 			interfaceBindings[count++] = superInterface;
+		}
+		// check for parameterized interface collisions (when different parameterizations occur)
+		if (compilerOptions().sourceLevel >= ClassFileConstants.JDK1_5) {
+			TypeBinding[] types = new TypeBinding[2];
+			Map invocations = new HashMap(2);
+			nextInterface: for (int i = 0; i < count; i++) {
+				ReferenceBinding superInterface =  interfaceBindings[i];
+				// check against superclass
+				if (!sourceType.isInterface()) {
+					types[0] = sourceType.superclass;
+					types[1] = superInterface;
+					TypeBinding[] mecs = minimalErasedCandidates(types, invocations);
+					if (mecs != null) {
+						nextCandidate: for (int k = 0, max = mecs.length; k < max; k++) {
+							TypeBinding mec = mecs[k];
+							if (mec == null) continue nextCandidate;
+							Set invalidInvocations = (Set)invocations.get(mec);
+							int invalidSize = invalidInvocations.size();
+							if (invalidSize > 1) {
+								TypeBinding[] collisions;
+								invalidInvocations.toArray(collisions = new TypeBinding[invalidSize]);
+								problemReporter().superinterfacesCollide(collisions[0].erasure(), referenceContext, collisions[0], collisions[1]);
+								sourceType.tagBits |= HierarchyHasProblems;
+								noProblems = false;
+								continue nextInterface;
+							}
+						}					
+					}					
+				}
+				// check against other super-interfaces
+				types[0] = superInterface;
+				nextOtherInterface: for (int j = 0; j < i; j++) {
+					ReferenceBinding otherInterface = interfaceBindings[j];
+					if (otherInterface == null) continue nextOtherInterface;
+					types[1] = otherInterface;
+					invocations.clear();
+					TypeBinding[] mecs = minimalErasedCandidates(types, invocations);
+					if (mecs != null) {
+						nextCandidate: for (int k = 0, max = mecs.length; k < max; k++) {
+							TypeBinding mec = mecs[k];
+							if (mec == null) continue nextCandidate;
+							Set invalidInvocations = (Set)invocations.get(mec);
+							int invalidSize = invalidInvocations.size();
+							if (invalidSize > 1) {
+								TypeBinding[] collisions;
+								invalidInvocations.toArray(collisions = new TypeBinding[invalidSize]);
+								problemReporter().superinterfacesCollide(collisions[0].erasure(), referenceContext, collisions[0], collisions[1]);
+								sourceType.tagBits |= HierarchyHasProblems;
+								noProblems = false;
+								continue nextInterface;
+							}
+						}					
+					}
+				}
+			}
 		}
 		// hold onto all correctly resolved superinterfaces
 		if (count > 0) {
@@ -762,16 +934,13 @@ public class ClassScope extends Scope {
 		SourceTypeBinding sourceType = referenceContext.binding;
 		if ((sourceType.tagBits & BeginHierarchyCheck) == 0) {
 			sourceType.tagBits |= BeginHierarchyCheck;
-			boolean noProblems = connectTypeVariables(referenceContext.typeParameters);
-			if (sourceType.isClass())
-				noProblems &= connectSuperclass();
+			boolean noProblems = connectSuperclass();
 			noProblems &= connectSuperInterfaces();
+			noProblems &= connectTypeVariables(referenceContext.typeParameters);
 			sourceType.tagBits |= EndHierarchyCheck;
 			if (noProblems && sourceType.isHierarchyInconsistent())
 				problemReporter().hierarchyHasProblems(sourceType);
 		}
-		if (referenceContext.typeParameters != null)
-			checkTypeVariableBounds(referenceContext.typeParameters); // only done after hierarchy is connected
 		connectMemberTypes();
 		try {
 			checkForInheritedMemberTypes(sourceType);
@@ -797,16 +966,15 @@ public class ClassScope extends Scope {
 			return;
 
 		sourceType.tagBits |= BeginHierarchyCheck;
-		boolean noProblems = connectTypeVariables(referenceContext.typeParameters);
-		if (sourceType.isClass())
-			noProblems &= connectSuperclass();
+		boolean noProblems = connectSuperclass();
 		noProblems &= connectSuperInterfaces();
+		noProblems &= connectTypeVariables(referenceContext.typeParameters);
 		sourceType.tagBits |= EndHierarchyCheck;
 		if (noProblems && sourceType.isHierarchyInconsistent())
 			problemReporter().hierarchyHasProblems(sourceType);
 	}
 
-	public boolean detectCycle(TypeBinding superType, TypeReference reference, TypeBinding[] argTypes) {
+	public boolean detectHierarchyCycle(TypeBinding superType, TypeReference reference, TypeBinding[] argTypes) {
 		if (!(superType instanceof ReferenceBinding)) return false;
 
 		if (argTypes != null) {
@@ -826,7 +994,7 @@ public class ClassScope extends Scope {
 			if (superType.isParameterizedType())
 				superType = ((ParameterizedTypeBinding) superType).type;
 			compilationUnitScope().recordSuperTypeReference(superType); // to record supertypes
-			return detectCycle(referenceContext.binding, (ReferenceBinding) superType, reference);
+			return detectHierarchyCycle(referenceContext.binding, (ReferenceBinding) superType, reference);
 		}
 
 		if ((superType.tagBits & BeginHierarchyCheck) == 0 && superType instanceof SourceTypeBinding)
@@ -836,7 +1004,7 @@ public class ClassScope extends Scope {
 	}
 
 	// Answer whether a cycle was found between the sourceType & the superType
-	private boolean detectCycle(SourceTypeBinding sourceType, ReferenceBinding superType, TypeReference reference) {
+	private boolean detectHierarchyCycle(SourceTypeBinding sourceType, ReferenceBinding superType, TypeReference reference) {
 		if (superType.isRawType())
 			superType = ((RawTypeBinding) superType).type;
 		// by this point the superType must be a binary or source type
@@ -847,34 +1015,35 @@ public class ClassScope extends Scope {
 			return true;
 		}
 
-		if (superType.isMemberType()) {
-			ReferenceBinding current = superType.enclosingType();
-			do {
-				if (current.isHierarchyBeingConnected()) {
-					problemReporter().hierarchyCircularity(sourceType, current, reference);
-					sourceType.tagBits |= HierarchyHasProblems;
-					current.tagBits |= HierarchyHasProblems;
-					return true;
-				}
-			} while ((current = current.enclosingType()) != null);
-		}
+// No longer believe this code is necessary, since we changed supertype lookup to use TypeReference resolution
+//		if (superType.isMemberType()) {
+//			ReferenceBinding current = superType.enclosingType();
+//			do {
+//				if (current.isHierarchyBeingConnected()) {
+//					problemReporter().hierarchyCircularity(sourceType, current, reference);
+//					sourceType.tagBits |= HierarchyHasProblems;
+//					current.tagBits |= HierarchyHasProblems;
+//					return true;
+//				}
+//			} while ((current = current.enclosingType()) != null);
+//		}
 
 		if (superType.isBinaryBinding()) {
 			// force its superclass & superinterfaces to be found... 2 possibilities exist - the source type is included in the hierarchy of:
 			//		- a binary type... this case MUST be caught & reported here
 			//		- another source type... this case is reported against the other source type
 			boolean hasCycle = false;
-			if (superType.superclass() != null) {
-				if (sourceType == superType.superclass()) {
+			ReferenceBinding parentType = superType.superclass();
+			if (parentType != null) {
+				if (sourceType == parentType) {
 					problemReporter().hierarchyCircularity(sourceType, superType, reference);
 					sourceType.tagBits |= HierarchyHasProblems;
 					superType.tagBits |= HierarchyHasProblems;
 					return true;
 				}
-				ReferenceBinding parentType = superType.superclass();
 				if (parentType.isParameterizedType())
 					parentType = ((ParameterizedTypeBinding) parentType).type;
-				hasCycle |= detectCycle(sourceType, parentType, reference);
+				hasCycle |= detectHierarchyCycle(sourceType, parentType, reference);
 				if ((parentType.tagBits & HierarchyHasProblems) != 0) {
 					sourceType.tagBits |= HierarchyHasProblems;
 					parentType.tagBits |= HierarchyHasProblems; // propagate down the hierarchy
@@ -893,7 +1062,7 @@ public class ClassScope extends Scope {
 					}
 					if (anInterface.isParameterizedType())
 						anInterface = ((ParameterizedTypeBinding) anInterface).type;
-					hasCycle |= detectCycle(sourceType, anInterface, reference);
+					hasCycle |= detectHierarchyCycle(sourceType, anInterface, reference);
 					if ((anInterface.tagBits & HierarchyHasProblems) != 0) {
 						sourceType.tagBits |= HierarchyHasProblems;
 						superType.tagBits |= HierarchyHasProblems;
@@ -904,10 +1073,13 @@ public class ClassScope extends Scope {
 		}
 
 		if (superType.isHierarchyBeingConnected()) {
-			problemReporter().hierarchyCircularity(sourceType, superType, reference);
-			sourceType.tagBits |= HierarchyHasProblems;
-			superType.tagBits |= HierarchyHasProblems;
-			return true;
+			org.eclipse.jdt.internal.compiler.ast.TypeReference ref = ((SourceTypeBinding) superType).scope.superTypeReference;
+			if (ref != null && ref.resolvedType != null && ((ReferenceBinding) ref.resolvedType).isHierarchyBeingConnected()) { // if null then its connecting its type variables
+				problemReporter().hierarchyCircularity(sourceType, superType, reference);
+				sourceType.tagBits |= HierarchyHasProblems;
+				superType.tagBits |= HierarchyHasProblems;
+				return true;
+			}
 		}
 		if ((superType.tagBits & BeginHierarchyCheck) == 0)
 			// ensure if this is a source superclass that it has already been checked
@@ -915,40 +1087,6 @@ public class ClassScope extends Scope {
 		if ((superType.tagBits & HierarchyHasProblems) != 0)
 			sourceType.tagBits |= HierarchyHasProblems;
 		return false;
-	}
-
-	private ReferenceBinding findAmbiguousInterface(ReferenceBinding newInterface, ReferenceBinding currentType) {
-		TypeBinding newErasure = newInterface.erasure();
-		if (newInterface == newErasure) return null;
-
-		ReferenceBinding[][] interfacesToVisit = new ReferenceBinding[5][];
-		int lastPosition = -1;
-		do {
-			ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
-			if (itsInterfaces != NoSuperInterfaces) {
-				if (++lastPosition == interfacesToVisit.length)
-					System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0, lastPosition);
-				interfacesToVisit[lastPosition] = itsInterfaces;
-			}
-		} while ((currentType = currentType.superclass()) != null);
-
-		for (int i = 0; i <= lastPosition; i++) {
-			ReferenceBinding[] interfaces = interfacesToVisit[i];
-			for (int j = 0, length = interfaces.length; j < length; j++) {
-				currentType = interfaces[j];
-				if (currentType.erasure() == newErasure)
-					if (currentType != newInterface)
-						return currentType;
-
-				ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
-				if (itsInterfaces != NoSuperInterfaces) {
-					if (++lastPosition == interfacesToVisit.length)
-						System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0, lastPosition);
-					interfacesToVisit[lastPosition] = itsInterfaces;
-				}
-			}
-		}
-		return null;
 	}
 
 	private ReferenceBinding findSupertype(TypeReference typeReference) {

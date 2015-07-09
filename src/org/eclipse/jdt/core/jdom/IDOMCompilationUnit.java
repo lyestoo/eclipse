@@ -1,18 +1,14 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.core.jdom;
-
-import org.eclipse.jdt.core.*;
-import org.eclipse.jdt.core.ICompilationUnit;
-import org.eclipse.jdt.core.WorkingCopyOwner;
 
 /**
  * Represents a Java compilation unit (<code>.java</code> source file). 
@@ -22,6 +18,9 @@ import org.eclipse.jdt.core.WorkingCopyOwner;
  * <p>
  * This interface is not intended to be implemented by clients.
  * </p>
+ * @deprecated The JDOM was made obsolete by the addition in 2.0 of the more
+ * powerful, fine-grained DOM/AST API found in the 
+ * org.eclipse.jdt.core.dom package.
  */
 public interface IDOMCompilationUnit extends IDOMNode {
 /**
@@ -51,20 +50,6 @@ public String getHeader();
  */
 public String getName();
 /**
- * Returns a handle for the compilation unit associated with this 
- * document fragment, based on the parent package fragment.
- * The owner of the returned comppilation unit is the given owner
- * if such a working copy exists, otherwise the compilation unit is a 
- * primary compilation unit..
- *
- * @param parent the parent package fragment
- * @param owner the owner of the returned compilation unit
- * @exception IllegalArgumentException if the parent element is not
- *   of a valid parent type for this node
- * @since 3.0
- */
-public ICompilationUnit getCompilationUnit(IPackageFragment parent, WorkingCopyOwner owner) throws IllegalArgumentException;
-/**
  * Sets the header comment for this compilation unit. The header comment
  * appears before the first declaration in a compilation unit.
  * The syntax for a comment corresponds to Comments (JLS2 3.7), <b>including</b>
@@ -77,6 +62,8 @@ public void setHeader(String comment);
 /**
  * The <code>IDOMCompilationNode</code> refinement of this <code>IDOMNode</code>
  * method has no effect (the name is computed from the types declared within it).
+ * 
+ * @param name the given name
  */
 public void setName(String name);
 }

@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -33,24 +33,44 @@ public ArrayBinding(TypeBinding type, int dimensions, LookupEnvironment environm
 	if (type instanceof UnresolvedReferenceBinding)
 		((UnresolvedReferenceBinding) type).addWrapper(this);
 	else
-    	this.tagBits |= type.tagBits & (HasTypeVariable | HasWildcard);
+    	this.tagBits |= type.tagBits & (HasTypeVariable | HasDirectWildcard);
 }
 
 /**
  * Collect the substitutes into a map for certain type variables inside the receiver type
- * e.g.   Collection<T>.findSubstitute(T, Collection<List<X>>):   T --> List<X>
+ * e.g.   Collection<T>.collectSubstitutes(Collection<List<X>>, Map), will populate Map with: T --> List<X>
  */
-public void collectSubstitutes(TypeBinding otherType, Map substitutes) {
-    if (otherType.isArrayType()) {
-        int otherDim = otherType.dimensions();
-        if (otherDim == this.dimensions) {
-		    this.leafComponentType.collectSubstitutes(otherType.leafComponentType(), substitutes);
-        } else if (otherDim > this.dimensions) {
-            ArrayBinding otherReducedType = this.environment.createArrayType(otherType.leafComponentType(), otherDim - this.dimensions);
-            this.leafComponentType.collectSubstitutes(otherReducedType, substitutes);
-        }
-    } 
+public void collectSubstitutes(Scope scope, TypeBinding otherType, Map substitutes, int constraint) {
+	
+	if ((this.tagBits & TagBits.HasTypeVariable) == 0) return;
+	if (otherType == NullBinding) return;
+	
+	switch(otherType.kind()) {
+		case Binding.ARRAY_TYPE :
+	        int otherDim = otherType.dimensions();
+	        if (otherDim == this.dimensions) {
+			    this.leafComponentType.collectSubstitutes(scope, otherType.leafComponentType(), substitutes, constraint);
+	        } else if (otherDim > this.dimensions) {
+	            ArrayBinding otherReducedType = this.environment.createArrayType(otherType.leafComponentType(), otherDim - this.dimensions);
+	            this.leafComponentType.collectSubstitutes(scope, otherReducedType, substitutes, constraint);
+	        }
+			break;
+		case Binding.TYPE_PARAMETER :
+			//TypeVariableBinding variable = (TypeVariableBinding) otherType;
+			// TODO (philippe) should consider array bounds, and recurse
+			break;
+	}
 }
+
+/*
+ * brakets leafUniqueKey
+ * p.X[][] --> [[Lp/X;
+ */
+public char[] computeUniqueKey(boolean isLeaf) {
+	char[] brackets = new char[dimensions];
+	for (int i = dimensions - 1; i >= 0; i--) brackets[i] = '[';
+	return CharOperation.concat(brackets, this.leafComponentType.computeUniqueKey(isLeaf));
+ }
 	
 /**
  * Answer the receiver's constant pool name.
@@ -110,33 +130,48 @@ public char[] genericTypeSignature() {
 public PackageBinding getPackage() {
 	return leafComponentType.getPackage();
 }
+
 public int hashCode() {
 	return this.leafComponentType == null ? super.hashCode() : this.leafComponentType.hashCode();
 }
+
 /* Answer true if the receiver type can be assigned to the argument type (right)
 */
-public boolean isCompatibleWith(TypeBinding right) {
-	if (this == right)
+public boolean isCompatibleWith(TypeBinding otherType) {
+	if (this == otherType)
 		return true;
 
-	if (right.isArrayType()) {
-		ArrayBinding rightArray = (ArrayBinding) right;
-		if (rightArray.leafComponentType.isBaseType())
-			return false; // relying on the fact that all equal arrays are identical
-		if (dimensions == rightArray.dimensions)
-			return leafComponentType.isCompatibleWith(rightArray.leafComponentType);
-		if (dimensions < rightArray.dimensions)
-			return false; // cannot assign 'String[]' into 'Object[][]' but can assign 'byte[][]' into 'Object[]'
-	} else {
-		if (right.isBaseType())
+	switch (otherType.kind()) {
+		case Binding.ARRAY_TYPE :
+			ArrayBinding otherArray = (ArrayBinding) otherType;
+			if (otherArray.leafComponentType.isBaseType())
+				return false; // relying on the fact that all equal arrays are identical
+			if (dimensions == otherArray.dimensions)
+				return leafComponentType.isCompatibleWith(otherArray.leafComponentType);
+			if (dimensions < otherArray.dimensions)
+				return false; // cannot assign 'String[]' into 'Object[][]' but can assign 'byte[][]' into 'Object[]'
+			break;
+		case Binding.BASE_TYPE :
 			return false;
-		if (right.isWildcard()) {
-		    return ((WildcardBinding) right).boundCheck(this);
-		}
+		case Binding.WILDCARD_TYPE :
+		    return ((WildcardBinding) otherType).boundCheck(this);
+/*		    
+		case Binding.TYPE_PARAMETER :
+			// check compatibility with capture of ? super X
+			if (otherType.isCapture()) {
+				CaptureBinding otherCapture = (CaptureBinding) otherType;
+				TypeBinding otherLowerBound;
+				if ((otherLowerBound = otherCapture.lowerBound) != null) {
+					if (!otherLowerBound.isArrayType()) return false;					
+					return this.isCompatibleWith(otherLowerBound);
+				}
+			}
+			return false;
+*/
 	}
 	//Check dimensions - Java does not support explicitly sized dimensions for types.
 	//However, if it did, the type checking support would go here.
-	switch (right.leafComponentType().id) {
+	switch (otherType.leafComponentType().id) {
 	    case T_JavaLangObject :
 	    case T_JavaLangCloneable :
 	    case T_JavaIoSerializable :
@@ -145,18 +180,10 @@ public boolean isCompatibleWith(TypeBinding right) {
 	return false;
 }
 
-/**
- * Returns true if a type is identical to another one,
- * or for generic types, true if compared to its raw type.
- */
-public boolean isEquivalentTo(TypeBinding otherType) {
-    if (this == otherType) return true;
-    if (otherType == null) return false;
-    if (otherType.isWildcard()) // wildcard
-		return ((WildcardBinding) otherType).boundCheck(this);
-	return false;
-
+public int kind() {
+	return ARRAY_TYPE;
 }
+
 public TypeBinding leafComponentType(){
 	return leafComponentType;
 }
@@ -165,7 +192,6 @@ public TypeBinding leafComponentType(){
 * Answer the problem id associated with the receiver.
 * NoError if the receiver is a valid binding.
 */
-
 public int problemId() {
 	return leafComponentType.problemId();
 }
@@ -209,8 +235,8 @@ public char[] sourceName() {
 }
 public void swapUnresolved(UnresolvedReferenceBinding unresolvedType, ReferenceBinding resolvedType, LookupEnvironment env) {
 	if (this.leafComponentType == unresolvedType) {
-		this.leafComponentType = resolvedType.isGenericType() ? env.createRawType(resolvedType, null) : resolvedType;
-		this.tagBits |= this.leafComponentType.tagBits & (HasTypeVariable | HasWildcard);
+		this.leafComponentType = env.convertToRawType(resolvedType);
+		this.tagBits |= this.leafComponentType.tagBits & (HasTypeVariable | HasDirectWildcard);
 	}
 }
 public String toString() {

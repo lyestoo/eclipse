@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -39,7 +39,7 @@ public class SingleTypeReference extends TypeReference {
 		this.resolvedType = scope.getType(token);
 
 		if (scope.kind == Scope.CLASS_SCOPE && this.resolvedType.isValidBinding())
-			if (((ClassScope) scope).detectCycle(this.resolvedType, this, null))
+			if (((ClassScope) scope).detectHierarchyCycle(this.resolvedType, this, null))
 				return null;
 		return this.resolvedType;
 	}
@@ -57,22 +57,13 @@ public class SingleTypeReference extends TypeReference {
 
 		ReferenceBinding memberType = scope.getMemberType(token, enclosingType);
 		if (!memberType.isValidBinding()) {
+			this.resolvedType = memberType;
 			scope.problemReporter().invalidEnclosingType(this, memberType, enclosingType);
 			return null;
 		}
-		if (isTypeUseDeprecated(memberType, scope)) {
+		if (isTypeUseDeprecated(memberType, scope))
 			scope.problemReporter().deprecatedType(memberType, this);
-		}
-		// check raw type
-		if (memberType.isArrayType()) {
-		    TypeBinding leafComponentType = memberType.leafComponentType();
-		    if (leafComponentType.isGenericType()) { // raw type
-		        return this.resolvedType = scope.createArrayType(scope.environment().createRawType((ReferenceBinding)leafComponentType, null), memberType.dimensions());
-		    }
-		} else if (memberType.isGenericType()) {
-	        return this.resolvedType = scope.environment().createRawType(memberType, null); // raw type
-		}			
-		return this.resolvedType = memberType;
+		return this.resolvedType = scope.environment().convertToRawType(memberType);
 	}
 
 	public void traverse(ASTVisitor visitor, BlockScope scope) {

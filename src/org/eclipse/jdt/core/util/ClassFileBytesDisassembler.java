@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -27,7 +27,20 @@ public abstract class ClassFileBytesDisassembler {
 	/**
 	 * The mode is the default mode to disassemble IClassFileReader.
 	 */
-	public final static  int DEFAULT  = 2;
+	public final static int DEFAULT  = 2;
+	
+	/**
+	 * This mode corresponds to the detailed mode plus the constant pool contents and
+	 * any further information that would be useful for debugging purpose.
+	 * @since 3.1
+	 */
+	public final static int SYSTEM = 4;
+	
+	/**
+	 * This mode is used to compact the class name to a simple name instead of a qualified name.
+	 * @since 3.1
+	 */
+	public final static int COMPACT = 8;
 
 	/**
 	 * Answers back the disassembled string of the classfile bytes using the default

@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -16,7 +16,8 @@ import org.eclipse.jdt.internal.compiler.env.IBinaryMethod;
 import org.eclipse.jdt.internal.compiler.env.IBinaryNestedType;
 import org.eclipse.jdt.internal.compiler.env.IBinaryType;
 import org.eclipse.jdt.internal.compiler.env.IConstants;
-import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.compiler.env.IGenericType;
+import org.eclipse.jdt.internal.core.util.Util;
 
 /**
  * The skeleton of the class 'org.eclipse.jdt.internal.eval.target.CodeSnippet'
@@ -82,6 +83,9 @@ public class CodeSnippetSkeleton implements IBinaryType, EvaluationConstants {
 		public char[] getGenericSignature() {
 			return null;
 		}
+		public long getTagBits() {
+			return 0;
+		}
 }
 	
 /**
@@ -96,8 +100,11 @@ public char[] getEnclosingTypeName() {
 public IBinaryField[] getFields() {
 	return null;
 }
+/**
+ * @see org.eclipse.jdt.internal.compiler.env.IDependent#getFileName()
+ */
 public char[] getFileName() {
-	return CharOperation.concat(CODE_SNIPPET_NAME, SuffixConstants.SUFFIX_java); //$NON-NLS-1$
+	return CharOperation.concat(CODE_SNIPPET_NAME, Util.defaultJavaExtension().toCharArray());
 }
 public char[] getGenericSignature() {
 	return null;
@@ -126,11 +133,11 @@ public boolean isAnonymous() {
 public boolean isBinaryType() {
 	return true;
 }
-public boolean isClass() {
-	return true;
-}
-public boolean isInterface() {
-	return false;
+/**
+ * @see org.eclipse.jdt.internal.compiler.env.IGenericType#getKind()
+ */
+public int getKind() {
+	return IGenericType.CLASS_DECL;
 }
 public boolean isLocal() {
 	return false;
@@ -140,5 +147,8 @@ public boolean isMember() {
 }
 public char[] sourceFileName() {
 	return null;
+}
+public long getTagBits() {
+	return 0;
 }
 }

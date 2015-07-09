@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -29,21 +29,11 @@ int getDeclarationSourceStart();
 ISourceType getEnclosingType();
 
 /**
- * Answer the receiver's fields or null if the array is empty.
+ * Answer the receiver's fields.
  *
  * NOTE: Multiple fields with the same name can exist in the result.
  */
 ISourceField[] getFields();
-
-/**
- * Answer the receiver's imports or null if the array is empty.
- *
- * An import is a qualified, dot separated name.
- * For example, java.util.Hashtable or java.lang.*.
- * A static import used 'static.' as its first fragment, for
- * example: static.java.util.Hashtable.*
- */
-ISourceImport[] getImports();
 
 /**
  * Answer the unresolved names of the receiver's interfaces
@@ -55,13 +45,12 @@ ISourceImport[] getImports();
 char[][] getInterfaceNames();
 
 /**
- * Answer the receiver's member types
- * or null if the array is empty.
+ * Answer the receiver's member types.
  */
 ISourceType[] getMemberTypes();
 
 /**
- * Answer the receiver's methods or null if the array is empty.
+ * Answer the receiver's methods.
  *
  * NOTE: Multiple methods with the same name & parameter types can exist in the result.
  */
@@ -83,14 +72,6 @@ int getNameSourceEnd();
 int getNameSourceStart();
 
 /**
- * Answer the qualified name of the receiver's package separated by periods
- * or null if its the default package.
- *
- * For example, {java.util.Hashtable}.
- */
-char[] getPackageName();
-
-/**
  * Answer the unresolved name of the receiver's superclass
  * or null if it does not have one.
  *
@@ -99,13 +80,11 @@ char[] getPackageName();
  */
 char[] getSuperclassName();
 /**
- * Answer the names of the receiver's type parameters
- * or null if the array is empty.
- */
-char[][] getTypeParameterNames();
-/**
- * Answer the array of bound names of the receiver's type parameters
- * or null if the array is empty.
+ * Answer the array of bound names of the receiver's type parameters.
  */
 char[][][] getTypeParameterBounds();
+/**
+ * Answer the names of the receiver's type parameters.
+ */
+char[][] getTypeParameterNames();
 }

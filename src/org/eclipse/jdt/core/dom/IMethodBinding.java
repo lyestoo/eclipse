@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -92,6 +92,15 @@ public interface IMethodBinding extends IBinding {
 	 * in declaration order, of this method or constructor. Returns an array of
 	 * length 0 if this method or constructor does not takes any parameters.
 	 * <p>
+	 * Note that the binding for the last parameter type of a vararg method
+	 * declaration like <code>void fun(Foo... args)</code> is always for
+	 * an array type (i.e., <code>Foo[]</code>) reflecting the the way varargs
+	 * get compiled. However, the type binding obtained directly from
+	 * the <code>SingleVariableDeclaration</code> for the vararg parameter
+	 * is always for the type as written; i.e., the type binding for
+	 * <code>Foo</code>.
+	 * </p>
+	 * <p>
 	 * Note: The result does not include synthetic parameters introduced by
 	 * inner class emulation.
 	 * </p>
@@ -129,39 +138,54 @@ public interface IMethodBinding extends IBinding {
 	 * parameters (they instead have non-empty type arguments
 	 * and non-trivial erasure).
 	 * </p>
-	 * <p>
-	 * Note: Support for new language features proposed for the upcoming 1.5
-	 * release of J2SE is tentative and subject to change.
-	 * </p>
 	 *
 	 * @return the list of binding for the type variables for the type
 	 * parameters of this method, or otherwise the empty list
 	 * @see ITypeBinding#isTypeVariable()
-	 * @since 3.0
+	 * @since 3.1
 	 */
 	public ITypeBinding[] getTypeParameters();
+	
+	/**
+	 * Returns whether this method binding represents a declaration of
+	 * a generic method.
+	 * <p>
+	 * Note that type parameters only occur on the binding of the
+	 * declaring generic method; e.g., <code>public &lt;T&gt; T identity(T t);</code>.
+	 * Method bindings corresponding to a raw or parameterized reference to a generic
+	 * method do not carry type parameters (they instead have non-empty type arguments
+	 * and non-trivial erasure).
+	 * This method is fully equivalent to <code>getTypeParameters().length &gt; 0)</code>.
+	 * </p>
+	 * <p>
+	 * Note that {@link #isGenericMethod()},
+	 * {@link #isParameterizedMethod()},
+	 * and {@link #isRawMethod()} are mutually exclusive.
+	 * </p>
+	 *
+	 * @return <code>true</code> if this method binding represents a 
+	 * declaration of a generic method, and <code>false</code> otherwise
+	 * @see #getTypeParameters()
+	 * @since 3.1
+	 */
+	public boolean isGenericMethod();
 	
 	/**
 	 * Returns whether this method binding represents an instance of
 	 * a generic method corresponding to a parameterized method reference.
 	 * <p>
-	 * Note that <code>isRawMethod()</code> and
-	 * <code>isParameterizedMethod()</code> are mutually exclusive.
-	 * </p>
-	 * <p>
-	 * Note: Support for new language features proposed for the upcoming 1.5
-	 * release of J2SE is tentative and subject to change.
+	 * Note that {@link #isGenericMethod()},
+	 * {@link #isParameterizedMethod()},
+	 * and {@link #isRawMethod()} are mutually exclusive.
 	 * </p>
 	 *
 	 * @return <code>true</code> if this method binding represents a 
 	 * an instance of a generic method corresponding to a parameterized
 	 * method reference, and <code>false</code> otherwise
-	 * @see #getErasure()
+	 * @see #getMethodDeclaration()
 	 * @see #getTypeArguments()
-	 * @see #isRawMethod()
 	 * @since 3.1
 	 */
-	// TODO - need better name
 	public boolean isParameterizedMethod();
 	
 	/**
@@ -174,14 +198,10 @@ public interface IMethodBinding extends IBinding {
 	 * which only occur on the method binding corresponding directly to the
 	 * declaration of a generic method.
 	 * </p> 
-	 * <p>
-	 * Note: Support for new language features proposed for the upcoming 1.5
-	 * release of J2SE is tentative and subject to change.
-	 * </p>
 	 *
 	 * @return the list of type bindings for the type arguments used to
 	 * instantiate the corrresponding generic method, or otherwise the empty list
-	 * @see #getErasure()
+	 * @see #getMethodDeclaration()
 	 * @see #isParameterizedMethod()
 	 * @see #isRawMethod()
 	 * @since 3.1
@@ -189,47 +209,71 @@ public interface IMethodBinding extends IBinding {
 	public ITypeBinding[] getTypeArguments();
 	
 	/**
-	 * Returns the erasure of this method binding.
-	 * Some bindings correspond to method declarations in the context of
-	 * a particular instance of a generic method. In those cases, this method
-	 * returns the generic method binding from which this method binding
-	 * was instantiated.
-	 * For other type bindings, this method returns the identical type binding.
-	 * <p>
-	 * Note: the erasure link is not a general back-link between the members
-	 * of a generic type instance and the corresponding members of the
-	 * generic type. 
-	 * </p>
-	 * <p>
-	 * Note: Support for new language features proposed for the upcoming 1.5
-	 * release of J2SE is tentative and subject to change.
-	 * </p>
+	 * Returns the binding for the method declaration corresponding to this
+	 * method binding. For parameterized methods ({@link #isParameterizedMethod()})
+	 * and raw methods ({@link #isRawMethod()}), this method returns the binding
+	 * for the corresponding generic method. For other method bindings, this
+	 * returns the same binding.
 	 *
-	 * @return the erasure method binding
+	 * <p>Note: The one notable exception is the method <code>Object.getClass()</code>, 
+	 * which is declared to return <code>Class&lt;? extends Object&gt;</code>, but 
+	 * when invoked its return type becomes <code>Class&lt;? extends 
+	 * </code><em>R</em><code>&gt;</code>, where <em>R</em> is the compile type of 
+	 * the receiver of the method invocation.</p>
+	 *
+	 * @return the method binding
 	 * @since 3.1
 	 */
-	public IMethodBinding getErasure();
-	
+	public IMethodBinding getMethodDeclaration();
+
 	/**
 	 * Returns whether this method binding represents an instance of
 	 * a generic method corresponding to a raw method reference.
 	 * <p>
-	 * Note that <code>isRawMethod()</code> and
-	 * <code>isParameterizedMethod()</code> are mutually exclusive.
-	 * </p>
-	 * <p>
-	 * Note: Support for new language features proposed for the upcoming 1.5
-	 * release of J2SE is tentative and subject to change.
+	 * Note that {@link #isGenericMethod()},
+	 * {@link #isParameterizedMethod()},
+	 * and {@link #isRawMethod()} are mutually exclusive.
 	 * </p>
 	 *
 	 * @return <code>true</code> if this method binding represents a 
 	 * an instance of a generic method corresponding to a raw
 	 * method reference, and <code>false</code> otherwise
-	 * @see #getErasure()
+	 * @see #getMethodDeclaration()
 	 * @see #getTypeArguments()
-	 * @see #isParameterizedMethod()
 	 * @since 3.1
 	 */
-	// TODO - need better name
 	public boolean isRawMethod();
+	
+	/**
+	 * Returns whether this method's signature is a subsignature of the given method as
+	 * specified in section 8.4.2 of <em>The Java Language Specification, Third Edition</em> (JLS3). 
+	 * 
+	 * @return <code>true</code> if this method's signature is a subsignature of the given method
+	 * @since 3.1
+	 */
+	public boolean isSubsignature(IMethodBinding otherMethod);
+	
+	/**
+	 * Returns whether this is a variable arity method.
+	 * <p>
+	 * Note: Variable arity ("varargs") methods were added in JLS3.
+	 * </p>
+	 * 
+	 * @return <code>true</code> if this is a variable arity method,
+	 *    and <code>false</code> otherwise
+	 * @since 3.1
+	 */ 
+	public boolean isVarargs();
+	
+	/**
+	 * Returns whether this method overrides the given method,
+	 * as specified in section 6.4.2 of <em>The Java Language 
+	 * Specification, Second Edition</em> (JLS2).
+	 * 
+	 * @param method the method that is possibly overriden
+	 * @return <code>true</code> if this method overrides the given method,
+	 * and <code>false</code> otherwise
+	 * @since 3.1
+	 */
+	public boolean overrides(IMethodBinding method);
 }

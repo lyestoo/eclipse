@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -13,6 +13,7 @@ package org.eclipse.jdt.internal.compiler.parser;
 /**
  * Internal field structure for parsing recovery 
  */
+import org.eclipse.jdt.internal.compiler.ast.AbstractVariableDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ArrayTypeReference;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.Expression;
@@ -109,13 +110,32 @@ public String toString(int tab){
 }
 public FieldDeclaration updatedFieldDeclaration(){
 
-	if (this.anonymousTypes != null && fieldDeclaration.initialization == null) {
-		for (int i = 0; i < this.anonymousTypeCount; i++){
-			if (anonymousTypes[i].preserveContent){
-				fieldDeclaration.initialization = this.anonymousTypes[i].updatedTypeDeclaration().allocation;
+	if (this.anonymousTypes != null) {
+		if(fieldDeclaration.initialization == null) {
+			for (int i = 0; i < this.anonymousTypeCount; i++){
+				RecoveredType recoveredType = anonymousTypes[i];
+				TypeDeclaration typeDeclaration = recoveredType.typeDeclaration;
+				if(typeDeclaration.declarationSourceEnd == 0) {
+					typeDeclaration.declarationSourceEnd = this.fieldDeclaration.declarationSourceEnd;
+					typeDeclaration.bodyEnd = this.fieldDeclaration.declarationSourceEnd;
+				}
+				if (recoveredType.preserveContent){
+					fieldDeclaration.initialization = recoveredType.updatedTypeDeclaration().allocation;
+				}
+			}
+			if (this.anonymousTypeCount > 0) fieldDeclaration.bits |= ASTNode.HasLocalTypeMASK;
+		} else if(fieldDeclaration.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT) {
+			// fieldDeclaration is an enum constant
+			for (int i = 0; i < this.anonymousTypeCount; i++){
+				RecoveredType recoveredType = anonymousTypes[i];
+				TypeDeclaration typeDeclaration = recoveredType.typeDeclaration;
+				if(typeDeclaration.declarationSourceEnd == 0) {
+					typeDeclaration.declarationSourceEnd = this.fieldDeclaration.declarationSourceEnd;
+					typeDeclaration.bodyEnd = this.fieldDeclaration.declarationSourceEnd;
+				}
+				recoveredType.updatedTypeDeclaration();
 			}
 		}
-		if (this.anonymousTypeCount > 0) fieldDeclaration.bits |= ASTNode.HasLocalTypeMASK;
 	}
 	return fieldDeclaration;
 }
@@ -128,7 +148,14 @@ public FieldDeclaration updatedFieldDeclaration(){
 public RecoveredElement updateOnClosingBrace(int braceStart, int braceEnd){
 	if (bracketBalance > 0){ // was an array initializer
 		bracketBalance--;
-		if (bracketBalance == 0) alreadyCompletedFieldInitialization = true;
+		if (bracketBalance == 0) {
+			if(fieldDeclaration.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT) {
+				updateSourceEndIfNecessary(braceEnd - 1);
+				return parent;
+			} else {
+				alreadyCompletedFieldInitialization = true;
+			}
+		}
 		return this;
 	} else if (bracketBalance == 0) {
 		alreadyCompletedFieldInitialization = true;
@@ -149,6 +176,11 @@ public RecoveredElement updateOnOpeningBrace(int braceStart, int braceEnd){
 		&& !alreadyCompletedFieldInitialization){
 		bracketBalance++;
 		return null; // no update is necessary	(array initializer)
+	}
+	if (fieldDeclaration.declarationSourceEnd == 0 
+		&& fieldDeclaration.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT){
+		bracketBalance++;
+		return null; // no update is necessary	(enum constant)
 	}
 	// might be an array initializer
 	this.updateSourceEndIfNecessary(braceStart - 1, braceEnd - 1);	

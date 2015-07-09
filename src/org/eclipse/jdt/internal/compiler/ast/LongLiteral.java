@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -30,50 +30,71 @@ public LongLiteral(char[] token, int s,int e, long value) {
 public void computeConstant() {
 	//the overflow (when radix=10) is tested using the fact that
 	//the value should always grow during its computation
-
 	int length = source.length - 1; //minus one because the last char is 'l' or 'L'
 	
 	long computedValue ;
-	if (source[0] == '0')
-	{	if (length == 1) { 	constant = Constant.fromValue(0L);	return;	}
+	if (source[0] == '0') {
+		if (length == 1) {
+			constant = Constant.fromValue(0L);
+			return;
+		}
 		final int shift,radix;
 		int j ;
-		if ( (source[1] == 'x') || (source[1] == 'X') )
-		{	shift = 4 ; j = 2; radix = 16;}
-		else
-		{	shift = 3 ; j = 1; radix = 8;}
+		if ( (source[1] == 'x') || (source[1] == 'X') ) {
+			shift = 4 ; j = 2; radix = 16;
+		} else {
+			shift = 3 ; j = 1; radix = 8;
+		}
 		int nbDigit = 0;
-		while (source[j]=='0') 
-		{	j++; //jump over redondant zero
-			if ( j == length)
-			{	//watch for 0000000000000L
+		while (source[j]=='0') {
+			j++; //jump over redondant zero
+			if ( j == length) {
+				//watch for 0000000000000L
 				constant = Constant.fromValue(value = 0L);
-				return ;}}
+				return ;
+			}
+		}
 				
 		int digitValue ;
-		if ((digitValue = Character.digit(source[j++],radix))	< 0 ) 	
-		{	constant = FORMAT_ERROR; return ;}
-		if (digitValue >= 8) nbDigit = 4;
-		else 	if (digitValue >= 4) nbDigit = 3;
-				else 	if (digitValue >= 2) nbDigit = 2;
-						else nbDigit = 1; //digitValue is not 0
+		if ((digitValue = Character.digit(source[j++],radix)) < 0 ) {
+			constant = FORMAT_ERROR; return ;
+		}
+		if (digitValue >= 8)
+			nbDigit = 4;
+		else if (digitValue >= 4)
+			nbDigit = 3;
+		else if (digitValue >= 2)
+			nbDigit = 2;
+		else
+			nbDigit = 1; //digitValue is not 0
 		computedValue = digitValue ;
-		while (j<length)
-		{	if ((digitValue = Character.digit(source[j++],radix))	< 0 ) 	
-			{	constant = FORMAT_ERROR; return ;}
-			if ((nbDigit += shift) > 64) return /*constant stays null*/ ;
-			computedValue = (computedValue<<shift) | digitValue ;}}
-
-	else
-	{	//-----------case radix=10-----------------
-		long previous = computedValue = 0;
-		for (int i = 0 ; i < length; i++) 
-		{	int digitValue ;	
-			if ((digitValue = Character.digit(source[i], 10)) < 0 ) return /*constant stays null*/ ;
+		while (j<length) {
+			if ((digitValue = Character.digit(source[j++],radix)) < 0) {
+				constant = FORMAT_ERROR; return ;
+			}
+			if ((nbDigit += shift) > 64)
+				return /*constant stays null*/ ;
+			computedValue = (computedValue<<shift) | digitValue ;
+		}
+	} else {
+		//-----------case radix=10-----------------
+		long previous = 0;
+		computedValue = 0;
+		final long limit = Long.MAX_VALUE / 10; // needed to check prior to the multiplication
+		for (int i = 0 ; i < length; i++) {
+			int digitValue ;	
+			if ((digitValue = Character.digit(source[i], 10)) < 0 ) return /*constant stays null*/;
 			previous = computedValue;
-			computedValue = 10 * computedValue + digitValue ;
-			if (previous > computedValue) return /*constant stays null*/;}}
-	
+			if (computedValue > limit)
+				return /*constant stays null*/;
+			computedValue *= 10;
+			if ((computedValue + digitValue) > Long.MAX_VALUE)
+				return /*constant stays null*/;
+			computedValue += digitValue;
+			if (previous > computedValue)
+				return /*constant stays null*/;
+		}
+	}
 	constant = Constant.fromValue(value = computedValue);
 }
 /**
@@ -85,11 +106,9 @@ public void computeConstant() {
  */ 
 public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean valueRequired) {
 	int pc = codeStream.position;
-	if (valueRequired)
-		if ((implicitConversion >> 4) == T_long)
-			codeStream.generateInlinedValue(value);
-		else
-			codeStream.generateConstant(constant, implicitConversion);
+	if (valueRequired) {
+		codeStream.generateConstant(constant, implicitConversion);
+	}
 	codeStream.recordPositionsFrom(pc, this.sourceStart);
 }
 public TypeBinding literalType(BlockScope scope) {
@@ -120,7 +139,8 @@ public final boolean mayRepresentMIN_VALUE(){
 			(source[15] == '5') &&
 			(source[16] == '8') &&			
 			(source[17] == '0') &&
-			(source[18] == '8'));}
+			(source[18] == '8'));
+}
 public TypeBinding resolveType(BlockScope scope) {
 	// the format may be incorrect while the scanner could detect
 	// such error only on painfull tests...easier and faster here

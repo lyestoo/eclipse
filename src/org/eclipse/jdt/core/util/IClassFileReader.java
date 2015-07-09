@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -13,6 +13,14 @@ package org.eclipse.jdt.core.util;
 /**
  * Description of a .class file. This class reifies the internal structure of a .class
  * file following the JVM specifications.
+ * <p>
+ * Note that several changes were introduced with J2SE 1.5.
+ * Class file reader implementations should use support these
+ * new class file attributes by returning objects implementing
+ * the appropriate specialized attribute interfaces. Class
+ * file reader clients can search for these new attributes
+ * and downcast to the new interfaces as appropriate.
+ * </p>
  *  
  * This interface may be implemented by clients. 
  * 

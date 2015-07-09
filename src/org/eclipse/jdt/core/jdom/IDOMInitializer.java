@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -17,6 +17,9 @@ package org.eclipse.jdt.core.jdom;
  * <p>
  * This interface is not intended to be implemented by clients.
  * </p>
+ * @deprecated The JDOM was made obsolete by the addition in 2.0 of the more
+ * powerful, fine-grained DOM/AST API found in the 
+ * org.eclipse.jdt.core.dom package.
  */
 public interface IDOMInitializer extends IDOMMember {
 /**
@@ -30,6 +33,8 @@ public String getBody();
 /**
  * The <code>IDOMInitializer</code> refinement of this <code>IDOMNode</code>
  * method returns <code>null</code>. An initializer does not have a name.
+ * 
+ * @return <code>null</code>
  */
 public String getName();
 /**
@@ -44,6 +49,8 @@ public void setBody(String body);
 /**
  * The <code>IDOMInitializer</code> refinement of this <code>IDOMNode</code>
  * method does nothing.
+ * 
+ * @param name the given name
  */
 public void setName(String name);
 }

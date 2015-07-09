@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -58,13 +58,13 @@ public class Wildcard extends SingleTypeReference {
 	    if (this.bound != null) {
 			boundType = scope.kind == Scope.CLASS_SCOPE
 	       		? this.bound.resolveType((ClassScope)scope)
-	       		: this.bound.resolveType((BlockScope)scope);
+	       		: this.bound.resolveType((BlockScope)scope, true /* check bounds*/);
 	       		        
 			if (boundType == null) {
 				return null;
 			}	    
 		}
-	    WildcardBinding wildcard = scope.environment().createWildcard(genericType, rank, boundType, this.kind);
+	    WildcardBinding wildcard = scope.environment().createWildcard(genericType, rank, boundType, null /*no extra bound*/, this.kind);
 	    return this.resolvedType = wildcard;
 	}
 	
@@ -72,6 +72,7 @@ public class Wildcard extends SingleTypeReference {
         switch (this.kind) {
             case Wildcard.UNBOUND : 
                 output.append(WILDCARD_NAME);
+                break;
             case Wildcard.EXTENDS :
                 output.append(WILDCARD_NAME).append(WILDCARD_EXTENDS);
             	this.bound.printExpression(0, output);

@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -99,7 +99,7 @@ public class OR_OR_Expression extends BinaryExpression {
 				codeStream.removeNotDefinitelyAssignedVariables(currentScope, mergedInitStateIndex);
 			}			
 			codeStream.generateImplicitConversion(implicitConversion);
-			codeStream.updateLastRecordedEndPC(codeStream.position);
+			codeStream.updateLastRecordedEndPC(currentScope, codeStream.position);
 			codeStream.recordPositionsFrom(pc, this.sourceStart);
 			return;
 		}
@@ -143,17 +143,18 @@ public class OR_OR_Expression extends BinaryExpression {
 		if (valueRequired) {
 			if (leftIsConst && leftIsTrue) {
 				codeStream.iconst_1();
-				codeStream.updateLastRecordedEndPC(codeStream.position);
+				codeStream.updateLastRecordedEndPC(currentScope, codeStream.position);
 			} else {
 				if (rightIsConst && rightIsTrue) {
 					codeStream.iconst_1();
-					codeStream.updateLastRecordedEndPC(codeStream.position);
+					codeStream.updateLastRecordedEndPC(currentScope, codeStream.position);
 				} else {
 					codeStream.iconst_0();
 				}
 				if (trueLabel.hasForwardReferences()) {
 					if ((bits & ValueForReturnMASK) != 0) {
-						codeStream.ireturn();
+						codeStream.generateImplicitConversion(this.implicitConversion);
+						codeStream.generateReturnBytecode(this);
 						trueLabel.place();
 						codeStream.iconst_1();
 					} else {
@@ -168,7 +169,7 @@ public class OR_OR_Expression extends BinaryExpression {
 				}
 			}
 			codeStream.generateImplicitConversion(implicitConversion);
-			codeStream.updateLastRecordedEndPC(codeStream.position);
+			codeStream.updateLastRecordedEndPC(currentScope, codeStream.position);
 		} else {
 			trueLabel.place();
 		}
@@ -213,7 +214,7 @@ public class OR_OR_Expression extends BinaryExpression {
 					// need value, e.g. if (a == 1 || ((b = 2) > 0)) {} -> shouldn't initialize 'b' if a==1
 					if (leftIsConst && leftIsTrue) {
 						codeStream.goto_(trueLabel);
-						codeStream.updateLastRecordedEndPC(codeStream.position);
+						codeStream.updateLastRecordedEndPC(currentScope, codeStream.position);
 						break generateOperands; // no need to generate right operand
 					}
 					if (rightInitStateIndex != -1) {
@@ -223,7 +224,7 @@ public class OR_OR_Expression extends BinaryExpression {
 					right.generateOptimizedBoolean(currentScope, codeStream, trueLabel, null, valueRequired && !rightIsConst);
 					if (valueRequired && rightIsConst && rightIsTrue) {
 						codeStream.goto_(trueLabel);
-						codeStream.updateLastRecordedEndPC(codeStream.position);
+						codeStream.updateLastRecordedEndPC(currentScope, codeStream.position);
 					}
 				}
 			} else {
@@ -244,7 +245,7 @@ public class OR_OR_Expression extends BinaryExpression {
 					if (valueRequired && rightIsConst) {
 						if (!rightIsTrue) {
 							codeStream.goto_(falseLabel);
-							codeStream.updateLastRecordedEndPC(codeStream.position);
+							codeStream.updateLastRecordedEndPC(currentScope, codeStream.position);
 						}
 					}
 					internalTrueLabel.place();

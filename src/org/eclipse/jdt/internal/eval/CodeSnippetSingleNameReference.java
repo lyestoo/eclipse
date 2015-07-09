@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -21,6 +21,7 @@ import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.flow.FlowContext;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
@@ -52,7 +53,7 @@ public CodeSnippetSingleNameReference(char[] source, long pos, EvaluationContext
 public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo, boolean valueRequired) {
 
 	switch (this.bits & RestrictiveFlagMASK) {
-		case FIELD : // reading a field
+		case Binding.FIELD : // reading a field
 			// check if reading a final blank field
 			FieldBinding fieldBinding;
 			if ((fieldBinding = (FieldBinding) this.binding).isBlankFinal() 
@@ -62,7 +63,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 				}
 			}
 			break;
-		case LOCAL : // reading a local variable
+		case Binding.LOCAL : // reading a local variable
 			LocalVariableBinding localBinding;
 			if (!flowInfo.isDefinitelyAssigned(localBinding = (LocalVariableBinding) this.binding)) {
 				currentScope.problemReporter().uninitializedLocalVariable(localBinding, this);
@@ -85,7 +86,7 @@ public TypeBinding checkFieldAccess(BlockScope scope) {
 	}
 	FieldBinding fieldBinding = (FieldBinding) this.binding;
 	this.bits &= ~RestrictiveFlagMASK; // clear bits
-	this.bits |= FIELD;
+	this.bits |= Binding.FIELD;
 	if (!fieldBinding.isStatic()) {
 		// must check for the static status....
 		if (this.evaluationContext.isStatic) {
@@ -109,26 +110,32 @@ public void generateAssignment(BlockScope currentScope, CodeStream codeStream, A
 	// optimizing assignment like: i = i + 1 or i = 1 + i
 	if (assignment.expression.isCompactableOperation()) {
 		BinaryExpression operation = (BinaryExpression) assignment.expression;
+		int operator = (operation.bits & OperatorMASK) >> OperatorSHIFT;
 		SingleNameReference variableReference;
 		if ((operation.left instanceof SingleNameReference) && ((variableReference = (SingleNameReference) operation.left).binding == this.binding)) {
 			// i = i + value, then use the variable on the right hand side, since it has the correct implicit conversion
-			variableReference.generateCompoundAssignment(currentScope, codeStream, this.syntheticAccessors == null ? null : this.syntheticAccessors[WRITE], operation.right, (operation.bits & OperatorMASK) >> OperatorSHIFT, operation.left.implicitConversion /*should be equivalent to no conversion*/, valueRequired);
+			variableReference.generateCompoundAssignment(currentScope, codeStream, this.syntheticAccessors == null ? null : this.syntheticAccessors[WRITE], operation.right, operator, operation.implicitConversion, valueRequired);
+			if (valueRequired) {
+				codeStream.generateImplicitConversion(assignment.implicitConversion);
+			}
 			return;
 		}
-		int operator = (operation.bits & OperatorMASK) >> OperatorSHIFT;
 		if ((operation.right instanceof SingleNameReference)
 			&& ((operator == PLUS) || (operator == MULTIPLY)) // only commutative operations
 			&& ((variableReference = (SingleNameReference) operation.right).binding == this.binding)
 			&& (operation.left.constant != NotAConstant) // exclude non constant expressions, since could have side-effect
-			&& ((operation.left.implicitConversion >> 4) != T_String) // exclude string concatenation which would occur backwards
-			&& ((operation.right.implicitConversion >> 4) != T_String)) { // exclude string concatenation which would occur backwards
+			&& (((operation.left.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4) != T_JavaLangString) // exclude string concatenation which would occur backwards
+			&& (((operation.right.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4) != T_JavaLangString)) { // exclude string concatenation which would occur backwards
 			// i = value + i, then use the variable on the right hand side, since it has the correct implicit conversion
-			variableReference.generateCompoundAssignment(currentScope, codeStream, this.syntheticAccessors == null ? null : this.syntheticAccessors[WRITE], operation.left, operator, operation.right.implicitConversion /*should be equivalent to no conversion*/, valueRequired);
+			variableReference.generateCompoundAssignment(currentScope, codeStream, this.syntheticAccessors == null ? null : this.syntheticAccessors[WRITE], operation.left, operator, operation.implicitConversion, valueRequired);
+			if (valueRequired) {
+				codeStream.generateImplicitConversion(assignment.implicitConversion);
+			}
 			return;
 		}
 	}
 	switch (this.bits & RestrictiveFlagMASK) {
-		case FIELD : // assigning to a field
+		case Binding.FIELD : // assigning to a field
 			FieldBinding fieldBinding = (FieldBinding) this.codegenBinding;
 			if (fieldBinding.canBeSeenBy(getReceiverType(currentScope), this, currentScope)) {
 				if (!fieldBinding.isStatic()) { // need a receiver?
@@ -172,7 +179,7 @@ public void generateAssignment(BlockScope currentScope, CodeStream codeStream, A
 				}
 			}
 			return;
-		case LOCAL : // assigning to a local variable
+		case Binding.LOCAL : // assigning to a local variable
 			LocalVariableBinding localBinding = (LocalVariableBinding) this.codegenBinding;
 			if (localBinding.resolvedPosition != -1) {
 				assignment.expression.generateCode(currentScope, codeStream, true);
@@ -217,7 +224,7 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 		}
 	} else {
 		switch (this.bits & RestrictiveFlagMASK) {
-			case FIELD : // reading a field
+			case Binding.FIELD : // reading a field
 				FieldBinding fieldBinding;
 				if (valueRequired) {
 					if (!(fieldBinding = (FieldBinding) this.codegenBinding).isConstantValue()) { // directly use inlined value for constant fields
@@ -254,14 +261,14 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 							}
 							((CodeSnippetCodeStream)codeStream).generateEmulatedReadAccessForField(fieldBinding);
 						}
+						if (this.genericCast != null) codeStream.checkcast(this.genericCast);		
 						codeStream.generateImplicitConversion(this.implicitConversion);
-						if (this.genericCast != null) codeStream.checkcast(this.genericCast);						
 					} else { // directly use the inlined value
 						codeStream.generateConstant(fieldBinding.constant(), this.implicitConversion);
 					}
 				}
 				break;
-			case LOCAL : // reading a local
+			case Binding.LOCAL : // reading a local
 				LocalVariableBinding localBinding = (LocalVariableBinding) this.codegenBinding;
 				if (valueRequired) {
 					// outer local?
@@ -285,7 +292,7 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
  */
 public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeStream, MethodBinding writeAccessor, Expression expression, int operator, int assignmentImplicitConversion, boolean valueRequired) {
 	switch (this.bits & RestrictiveFlagMASK) {
-		case FIELD : // assigning to a field
+		case Binding.FIELD : // assigning to a field
 			FieldBinding fieldBinding = (FieldBinding) this.codegenBinding;
 			if (fieldBinding.isStatic()) {
 				if (fieldBinding.canBeSeenBy(getReceiverType(currentScope), this, currentScope)) {
@@ -326,13 +333,13 @@ public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeS
 				}
 			}
 			break;
-		case LOCAL : // assigning to a local variable (cannot assign to outer local)
+		case Binding.LOCAL : // assigning to a local variable (cannot assign to outer local)
 			LocalVariableBinding localBinding = (LocalVariableBinding) this.codegenBinding;
 			Constant assignConstant;
 			int increment;
 			// using incr bytecode if possible
 			switch (localBinding.type.id) {
-				case T_String :
+				case T_JavaLangString :
 					codeStream.generateStringConcatenationAppend(currentScope, this, expression);
 					if (valueRequired) {
 						codeStream.dup();
@@ -365,25 +372,29 @@ public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeS
 	}
 	// perform the actual compound operation
 	int operationTypeID;
-	if ((operationTypeID = this.implicitConversion >> 4) == T_String || operationTypeID == T_Object) {
-		codeStream.generateStringConcatenationAppend(currentScope, null, expression);
-	} else {
-		// promote the array reference to the suitable operation type
-		codeStream.generateImplicitConversion(this.implicitConversion);
-		// generate the increment value (will by itself  be promoted to the operation value)
-		if (expression == IntLiteral.One){ // prefix operation
-			codeStream.generateConstant(expression.constant, this.implicitConversion);			
-		} else {
-			expression.generateCode(currentScope, codeStream, true);
-		}		
-		// perform the operation
-		codeStream.sendOperator(operator, operationTypeID);
-		// cast the value back to the array reference type
-		codeStream.generateImplicitConversion(assignmentImplicitConversion);
+	switch(operationTypeID = (this.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4) {
+		case T_JavaLangString :
+		case T_JavaLangObject :
+		case T_undefined :
+			codeStream.generateStringConcatenationAppend(currentScope, null, expression);
+			break;
+		default :
+			// promote the array reference to the suitable operation type
+			codeStream.generateImplicitConversion(this.implicitConversion);
+			// generate the increment value (will by itself  be promoted to the operation value)
+			if (expression == IntLiteral.One){ // prefix operation
+				codeStream.generateConstant(expression.constant, this.implicitConversion);			
+			} else {
+				expression.generateCode(currentScope, codeStream, true);
+			}		
+			// perform the operation
+			codeStream.sendOperator(operator, operationTypeID);
+			// cast the value back to the array reference type
+			codeStream.generateImplicitConversion(assignmentImplicitConversion);
 	}
 	// store the result back into the variable
 	switch (this.bits & RestrictiveFlagMASK) {
-		case FIELD : // assigning to a field
+		case Binding.FIELD : // assigning to a field
 			FieldBinding fieldBinding = (FieldBinding) this.codegenBinding;
 			if (fieldBinding.canBeSeenBy(getReceiverType(currentScope), this, currentScope)) {
 				fieldStore(codeStream, fieldBinding, writeAccessor, valueRequired);
@@ -402,7 +413,7 @@ public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeS
 				((CodeSnippetCodeStream) codeStream).generateEmulatedWriteAccessForField(fieldBinding);
 			}
 			return;
-		case LOCAL : // assigning to a local variable
+		case Binding.LOCAL : // assigning to a local variable
 			LocalVariableBinding localBinding = (LocalVariableBinding) this.codegenBinding;
 			if (valueRequired) {
 				if ((localBinding.type == LongBinding) || (localBinding.type == DoubleBinding)) {
@@ -416,7 +427,7 @@ public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeS
 }
 public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream, CompoundAssignment postIncrement, boolean valueRequired) {
 	switch (this.bits & RestrictiveFlagMASK) {
-		case FIELD : // assigning to a field
+		case Binding.FIELD : // assigning to a field
 			FieldBinding fieldBinding = (FieldBinding) this.codegenBinding;
 			if (fieldBinding.canBeSeenBy(getReceiverType(currentScope), this, currentScope)) {
 				if (fieldBinding.isStatic()) {
@@ -449,7 +460,7 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 				}
 				codeStream.generateConstant(postIncrement.expression.constant, this.implicitConversion);
 				codeStream.sendOperator(postIncrement.operator, fieldBinding.type.id);
-				codeStream.generateImplicitConversion(postIncrement.assignmentImplicitConversion);
+				codeStream.generateImplicitConversion(postIncrement.preAssignImplicitConversion);
 				fieldStore(codeStream, fieldBinding, null, false);
 			} else {
 				if (fieldBinding.isStatic()) {
@@ -495,11 +506,11 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 				}
 				codeStream.generateConstant(postIncrement.expression.constant, this.implicitConversion);
 				codeStream.sendOperator(postIncrement.operator, fieldBinding.type.id);
-				codeStream.generateImplicitConversion(postIncrement.assignmentImplicitConversion);
+				codeStream.generateImplicitConversion(postIncrement.preAssignImplicitConversion);
 				((CodeSnippetCodeStream) codeStream).generateEmulatedWriteAccessForField(fieldBinding);
 			}
 			return;
-		case LOCAL : // assigning to a local variable
+		case Binding.LOCAL : // assigning to a local variable
 			LocalVariableBinding localBinding = (LocalVariableBinding) this.codegenBinding;
 			// using incr bytecode if possible
 			if (localBinding.type == IntBinding) {
@@ -522,7 +533,7 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 				}
 				codeStream.generateConstant(postIncrement.expression.constant, this.implicitConversion);
 				codeStream.sendOperator(postIncrement.operator, localBinding.type.id);
-				codeStream.generateImplicitConversion(postIncrement.assignmentImplicitConversion);
+				codeStream.generateImplicitConversion(postIncrement.preAssignImplicitConversion);
 
 				codeStream.store(localBinding, false);
 			}
@@ -538,14 +549,11 @@ public void generateReceiver(CodeStream codeStream) {
  * Check and/or redirect the field access to the delegate receiver if any
  */
 public TypeBinding getReceiverType(BlockScope currentScope) {
-	if (this.receiverType != null) {
-		return this.receiverType;
-	}
 	Scope scope = currentScope.parent;
 	while (true) {
 			switch (scope.kind) {
 				case Scope.CLASS_SCOPE :
-					return this.receiverType = ((ClassScope) scope).referenceContext.binding;
+					return ((ClassScope) scope).referenceContext.binding;
 				default:
 					scope = scope.parent;
 			}
@@ -569,24 +577,31 @@ public void manageSyntheticAccessIfNecessary(BlockScope currentScope, FlowInfo f
 	    FieldBinding fieldCodegenBinding = (FieldBinding)this.codegenBinding;
 	    // extra cast needed if field type was type variable
 	    if ((fieldCodegenBinding.type.tagBits & TagBits.HasTypeVariable) != 0) {
-	        this.genericCast = fieldCodegenBinding.type.genericCast(parameterizedField.type);
+	        this.genericCast = fieldCodegenBinding.type.genericCast(currentScope.boxing(parameterizedField.type)); // runtimeType could be base type in boxing case
 	    }		    
 	}		
-	if ((this.bits & FIELD) != 0) {
+	if ((this.bits & Binding.FIELD) != 0) {
 		FieldBinding fieldBinding = (FieldBinding) this.binding;
+		
 		// if the binding declaring class is not visible, need special action
 		// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
 		// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
 		// and not from Object or implicit static field access.	
 		if (fieldBinding.declaringClass != this.delegateThis.type
-			&& fieldBinding.declaringClass != null
-			&& !fieldBinding.isConstantValue()
-			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2 
-					&& !fieldBinding.isStatic()
-					&& fieldBinding.declaringClass.id != T_Object) // no change for Object fields (if there was any)
-				|| !((FieldBinding)this.codegenBinding).declaringClass.canBeSeenBy(currentScope))){
-			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding((FieldBinding)this.codegenBinding, (ReferenceBinding)this.delegateThis.type.erasure());
-		}
+				&& fieldBinding.declaringClass != null // array.length
+				&& !fieldBinding.isConstantValue()) {
+			CompilerOptions options = currentScope.compilerOptions();
+			if ((options.targetJDK >= ClassFileConstants.JDK1_2
+					&& (options.complianceLevel >= ClassFileConstants.JDK1_4 || !fieldBinding.isStatic())
+					&& fieldBinding.declaringClass.id != T_JavaLangObject) // no change for Object fields
+				|| !fieldBinding.declaringClass.canBeSeenBy(currentScope)) {
+	
+				this.codegenBinding = 
+				    currentScope.enclosingSourceType().getUpdatedFieldBinding(
+					       (FieldBinding)this.codegenBinding, 
+					        (ReferenceBinding)this.delegateThis.type.erasure());
+			}
+		}				
 	}
 }
 /**

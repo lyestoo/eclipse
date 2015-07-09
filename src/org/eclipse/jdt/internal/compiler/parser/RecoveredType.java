@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -12,6 +12,7 @@ package org.eclipse.jdt.internal.compiler.parser;
 
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
+import org.eclipse.jdt.internal.compiler.ast.AbstractVariableDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Block;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Initializer;
@@ -19,6 +20,7 @@ import org.eclipse.jdt.internal.compiler.ast.Statement;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
+import org.eclipse.jdt.internal.compiler.env.IGenericType;
 import org.eclipse.jdt.internal.compiler.lookup.CompilerModifiers;
 
 /**
@@ -38,10 +40,18 @@ public class RecoveredType extends RecoveredStatement implements TerminalTokens,
 	public boolean preserveContent = false;	// only used for anonymous types
 	public int bodyEnd;
 	
+	public boolean insideEnumConstantPart = false;
+	
 public RecoveredType(TypeDeclaration typeDeclaration, RecoveredElement parent, int bracketBalance){
 	super(typeDeclaration, parent, bracketBalance);
 	this.typeDeclaration = typeDeclaration;
-	this.foundOpeningBrace = !bodyStartsAtHeaderEnd();
+	if(typeDeclaration.allocation != null && typeDeclaration.allocation.type == null) {
+		// an enum constant body can not exist if there is no opening brace
+		this.foundOpeningBrace = true;
+	} else {
+		this.foundOpeningBrace = !bodyStartsAtHeaderEnd();
+	}
+	this.insideEnumConstantPart = typeDeclaration.kind() == IGenericType.ENUM_DECL;
 	if(this.foundOpeningBrace) {
 		this.bracketBalance++;
 	}
@@ -70,6 +80,8 @@ public RecoveredElement add(AbstractMethodDeclaration methodDeclaration, int bra
 	}
 	RecoveredMethod element = new RecoveredMethod(methodDeclaration, this, bracketBalanceValue, this.recoveringParser);
 	methods[methodCount++] = element;
+	
+	this.insideEnumConstantPart = false;
 
 	/* consider that if the opening brace was not found, it is there */
 	if (!foundOpeningBrace){
@@ -108,9 +120,19 @@ public RecoveredElement add(FieldDeclaration fieldDeclaration, int bracketBalanc
 				fieldCount); 
 		}
 	}
-	RecoveredField element = fieldDeclaration.isField() 
-								? new RecoveredField(fieldDeclaration, this, bracketBalanceValue)
-								: new RecoveredInitializer(fieldDeclaration, this, bracketBalanceValue);
+	RecoveredField element;
+	switch (fieldDeclaration.getKind()) {
+		case AbstractVariableDeclaration.FIELD:
+		case AbstractVariableDeclaration.ENUM_CONSTANT:
+			element = new RecoveredField(fieldDeclaration, this, bracketBalanceValue);
+			break;
+		case AbstractVariableDeclaration.INITIALIZER:
+			element = new RecoveredInitializer(fieldDeclaration, this, bracketBalanceValue);
+			break;
+		default:
+			// never happens, as field is always identified
+			return this;
+	}
 	fields[fieldCount++] = element;
 
 	/* consider that if the opening brace was not found, it is there */
@@ -130,6 +152,8 @@ public RecoveredElement add(TypeDeclaration memberTypeDeclaration, int bracketBa
 		&& memberTypeDeclaration.declarationSourceStart > typeDeclaration.declarationSourceEnd){
 		return this.parent.add(memberTypeDeclaration, bracketBalanceValue);
 	}
+	
+	this.insideEnumConstantPart = false;
 	
 	if ((memberTypeDeclaration.bits & ASTNode.IsAnonymousTypeMASK) != 0){
 		if (this.methodCount > 0) {
@@ -311,12 +335,14 @@ public TypeDeclaration updatedTypeDeclaration(){
 	/* update methods */
 	int existingCount = typeDeclaration.methods == null ? 0 : typeDeclaration.methods.length;
 	boolean hasConstructor = false, hasRecoveredConstructor = false;
+	boolean hasAbstractMethods = false;
 	int defaultConstructorIndex = -1;
 	if (methodCount > 0){
 		AbstractMethodDeclaration[] methodDeclarations = new AbstractMethodDeclaration[existingCount + methodCount];
 		for (int i = 0; i < existingCount; i++){
 			AbstractMethodDeclaration m = typeDeclaration.methods[i];
 			if (m.isDefaultConstructor()) defaultConstructorIndex = i;
+			if (m.isAbstract()) hasAbstractMethods = true;
 			methodDeclarations[i] = m;
 		}
 		// may need to update the declarationSourceEnd of the last method
@@ -328,9 +354,11 @@ public TypeDeclaration updatedTypeDeclaration(){
 		for (int i = 0; i < methodCount; i++){
 			AbstractMethodDeclaration updatedMethod = methods[i].updatedMethodDeclaration();			
 			if (updatedMethod.isConstructor()) hasRecoveredConstructor = true;
+			if (updatedMethod.isAbstract()) hasAbstractMethods = true;
 			methodDeclarations[existingCount + i] = updatedMethod;			
 		}
 		typeDeclaration.methods = methodDeclarations;
+		if (hasAbstractMethods) typeDeclaration.bits |= ASTNode.HasAbstractMethods;
 		hasConstructor = typeDeclaration.checkConstructors(this.parser());
 	} else {
 		for (int i = 0; i < existingCount; i++){
@@ -365,7 +393,7 @@ public TypeDeclaration updatedTypeDeclaration(){
 		}
 		typeDeclaration.methods = methodDeclarations;
 	} else {
-		if (!hasConstructor && !typeDeclaration.isInterface()) {// if was already reduced, then constructor
+		if (!hasConstructor && typeDeclaration.kind() != IGenericType.INTERFACE_DECL && typeDeclaration.kind() != IGenericType.ANNOTATION_TYPE_DECL) {// if was already reduced, then constructor
 			boolean insideFieldInitializer = false;
 			RecoveredElement parentElement = this.parent; 
 			while (parentElement != null){
@@ -375,7 +403,7 @@ public TypeDeclaration updatedTypeDeclaration(){
 				}
 				parentElement = parentElement.parent;
 			}
-			typeDeclaration.createsInternalConstructor(!parser().diet || insideFieldInitializer, true);
+			typeDeclaration.createDefaultConstructor(!parser().diet || insideFieldInitializer, true);
 		} 
 	}
 	if (parent instanceof RecoveredType){
@@ -391,7 +419,8 @@ public TypeDeclaration updatedTypeDeclaration(){
  */
 public void updateFromParserState(){
 
-	if(this.bodyStartsAtHeaderEnd()){
+	// anymous type and enum constant doesn't need to be updated
+	if(this.bodyStartsAtHeaderEnd() && typeDeclaration.allocation == null){
 		Parser parser = this.parser();
 		/* might want to recover implemented interfaces */
 		// protection for bugs 15142

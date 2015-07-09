@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *     Genady Beriozkin - added support for reporting assignment with no effect
@@ -42,9 +42,25 @@ public class Assignment extends Expression {
 		// a field reference, a blank final field reference, a field of an enclosing instance or 
 		// just a local variable.
 
-		return ((Reference) lhs)
+		LocalVariableBinding local = this.lhs.localVariableBinding();
+		int nullStatus = this.expression.nullStatus(flowInfo);
+		if (local != null && nullStatus == FlowInfo.NULL) {
+				flowContext.recordUsingNullReference(currentScope, local, this.lhs, FlowInfo.NON_NULL, flowInfo);
+		}
+		flowInfo = ((Reference) lhs)
 			.analyseAssignment(currentScope, flowContext, flowInfo, this, false)
 			.unconditionalInits();
+		if (local != null) {
+			switch(nullStatus) {
+				case FlowInfo.NULL :
+					flowInfo.markAsDefinitelyNull(local);
+					break;
+				case FlowInfo.NON_NULL :
+					flowInfo.markAsDefinitelyNonNull(local);
+					break;
+			}
+		}		
+		return flowInfo;
 	}
 
 	void checkAssignmentEffect(BlockScope scope) {
@@ -59,13 +75,12 @@ public class Assignment extends Expression {
 	void checkAssignment(BlockScope scope, TypeBinding lhsType, TypeBinding rhsType) {
 		
 		FieldBinding leftField = getLastField(this.lhs);
-		if (leftField != null &&  rhsType != NullBinding && lhsType.isWildcard() && ((WildcardBinding)lhsType).kind != Wildcard.SUPER) {
+		if (leftField != null &&  rhsType != NullBinding && lhsType.isWildcard() && ((WildcardBinding)lhsType).boundKind != Wildcard.SUPER) {
 		    scope.problemReporter().wildcardAssignment(lhsType, rhsType, this.expression);
-		} else if (leftField != null && leftField.declaringClass != null /*length pseudo field*/&& leftField.declaringClass.isRawType() 
-		        && (rhsType.isParameterizedType() || rhsType.isGenericType())) {
+		} else if (leftField != null && leftField.declaringClass != null /*length pseudo field*/&& leftField.declaringClass.isRawType()) {
 		    scope.problemReporter().unsafeRawFieldAssignment(leftField, rhsType, this.lhs);
-		} else if (rhsType.isRawType() && (lhsType.isBoundParameterizedType() || lhsType.isGenericType())) {
-		    scope.problemReporter().unsafeRawConversion(this.expression, rhsType, lhsType);
+		} else if (rhsType.needsUncheckedConversion(lhsType)) {
+		    scope.problemReporter().unsafeTypeConversion(this.expression, rhsType, lhsType);
 		}		
 	}
 	
@@ -99,19 +114,21 @@ public class Assignment extends Expression {
 			if (fieldRef.receiver.isThis() && !(fieldRef.receiver instanceof QualifiedThisReference)) {
 				return fieldRef.binding;
 			}			
+		} else if (someExpression instanceof PostfixExpression) { // recurse for postfix: i++ --> i
+			return getDirectBinding(((PostfixExpression) someExpression).lhs);
 		}
 		return null;
 	}
 	FieldBinding getLastField(Expression someExpression) {
 	    if (someExpression instanceof SingleNameReference) {
-	        if ((someExpression.bits & RestrictiveFlagMASK) == BindingIds.FIELD) {
+	        if ((someExpression.bits & RestrictiveFlagMASK) == Binding.FIELD) {
 	            return (FieldBinding) ((SingleNameReference)someExpression).binding;
 	        }
 	    } else if (someExpression instanceof FieldReference) {
 	        return ((FieldReference)someExpression).binding;
 	    } else if (someExpression instanceof QualifiedNameReference) {
 	        QualifiedNameReference qName = (QualifiedNameReference) someExpression;
-	        if (qName.otherBindings == null && ((someExpression.bits & RestrictiveFlagMASK) == BindingIds.FIELD)) {
+	        if (qName.otherBindings == null && ((someExpression.bits & RestrictiveFlagMASK) == Binding.FIELD)) {
 	            return (FieldBinding)qName.binding;
 	        } else {
 	            return qName.otherBindings[qName.otherBindings.length - 1];
@@ -119,6 +136,11 @@ public class Assignment extends Expression {
 	    }
 	    return null;
 	}	
+
+	public int nullStatus(FlowInfo flowInfo) {
+		return this.expression.nullStatus(flowInfo);
+	}
+	
 	public StringBuffer print(int indent, StringBuffer output) {
 
 		//no () when used as a statement 
@@ -152,8 +174,10 @@ public class Assignment extends Expression {
 			scope.problemReporter().expressionShouldBeAVariable(this.lhs);
 			return null;
 		}
-		TypeBinding lhsType = this.resolvedType = lhs.resolveType(scope);
+		TypeBinding lhsType = lhs.resolveType(scope);
 		expression.setExpectedType(lhsType); // needed in case of generic method invocation
+		if (lhsType != null) 
+			this.resolvedType = lhsType.capture(scope, this.sourceEnd);
 		TypeBinding rhsType = expression.resolveType(scope);
 		if (lhsType == null || rhsType == null) {
 			return null;
@@ -162,13 +186,18 @@ public class Assignment extends Expression {
 
 		// Compile-time conversion of base-types : implicit narrowing integer into byte/short/character
 		// may require to widen the rhs expression at runtime
+		if (lhsType != rhsType) // must call before computeConversion() and typeMismatchError()
+			scope.compilationUnitScope().recordTypeConversion(lhsType, rhsType);
 		if ((expression.isConstantValueOfTypeAssignableToType(rhsType, lhsType)
 				|| (lhsType.isBaseType() && BaseTypeBinding.isWidening(lhsType.id, rhsType.id)))
 				|| rhsType.isCompatibleWith(lhsType)) {
 			expression.computeConversion(scope, lhsType, rhsType);
 			checkAssignment(scope, lhsType, rhsType);
 			return this.resolvedType;
-		}
+		} else if (scope.isBoxingCompatibleWith(rhsType, lhsType)) {
+			expression.computeConversion(scope, lhsType, rhsType);
+			return this.resolvedType;
+		} 
 		scope.problemReporter().typeMismatchError(rhsType, lhsType, expression);
 		return lhsType;
 	}

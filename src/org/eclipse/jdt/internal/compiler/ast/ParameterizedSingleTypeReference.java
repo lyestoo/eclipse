@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -25,23 +25,20 @@ public class ParameterizedSingleTypeReference extends ArrayTypeReference {
 	
 	public ParameterizedSingleTypeReference(char[] name, TypeReference[] typeArguments, int dim, long pos){
 		super(name, dim, pos);
+		this.originalSourceEnd = this.sourceEnd;
 		this.typeArguments = typeArguments;
 	}
 	public void checkBounds(Scope scope) {
-		ParameterizedTypeBinding parameterizedType = null;
-		if (this.resolvedType instanceof ParameterizedTypeBinding)
-			parameterizedType = (ParameterizedTypeBinding) this.resolvedType;
-		else if (this.resolvedType.isArrayType() && this.resolvedType.leafComponentType() instanceof ParameterizedTypeBinding)
-			parameterizedType = (ParameterizedTypeBinding) this.resolvedType.leafComponentType();
+		if (this.resolvedType == null) return;
 
-		if (parameterizedType != null) {
+		if (this.resolvedType.leafComponentType() instanceof ParameterizedTypeBinding) {
+			ParameterizedTypeBinding parameterizedType = (ParameterizedTypeBinding) this.resolvedType.leafComponentType();
 			ReferenceBinding currentType = parameterizedType.type;
 			TypeVariableBinding[] typeVariables = currentType.typeVariables();
-			int argLength = this.typeArguments.length;
 			TypeBinding[] argTypes = parameterizedType.arguments;
-			for (int i = 0; i < argLength; i++)
-			    if (!typeVariables[i].boundCheck(parameterizedType, argTypes[i]))
-					scope.problemReporter().typeMismatchError(argTypes[i], typeVariables[i], currentType, this.typeArguments[i]);
+			if (argTypes != null && typeVariables != null) { // may be null in error cases
+				parameterizedType.boundCheck(scope, this.typeArguments);
+			}
 		}
 	}
 	/**
@@ -88,7 +85,7 @@ public class ParameterizedSingleTypeReference extends ArrayTypeReference {
     /*
      * No need to check for reference to raw type per construction
      */
-	private TypeBinding internalResolveType(Scope scope, ReferenceBinding enclosingType) {
+	private TypeBinding internalResolveType(Scope scope, ReferenceBinding enclosingType, boolean checkBounds) {
 
 		// handle the error here
 		this.constant = NotAConstant;
@@ -104,6 +101,15 @@ public class ParameterizedSingleTypeReference extends ArrayTypeReference {
 				reportInvalidType(scope);
 				return null;
 			}
+			enclosingType = this.resolvedType.enclosingType(); // if member type
+			if (enclosingType != null) {
+				ReferenceBinding currentType = (ReferenceBinding) this.resolvedType;
+				if (currentType.isStatic() 
+						|| (enclosingType.isGenericType() 
+								&& enclosingType.outermostEnclosingType() != scope.outerMostClassScope().referenceContext.binding)) {
+					enclosingType = (ReferenceBinding) scope.environment().convertToRawType(enclosingType);
+				}
+			}
 		} else { // resolving member type (relatively to enclosingType)
 			this.resolvedType = scope.getMemberType(token, (ReferenceBinding)enclosingType.erasure());		    
 			if (!this.resolvedType.isValidBinding()) {
@@ -116,6 +122,11 @@ public class ParameterizedSingleTypeReference extends ArrayTypeReference {
 
 		// check generic and arity
 	    boolean isClassScope = scope.kind == Scope.CLASS_SCOPE;
+	    TypeReference keep = null;
+	    if (isClassScope) {
+	    	keep = ((ClassScope) scope).superTypeReference;
+	    	((ClassScope) scope).superTypeReference = null;
+	    }
 		ReferenceBinding currentType = (ReferenceBinding) this.resolvedType;
 		int argLength = this.typeArguments.length;
 		TypeBinding[] argTypes = new TypeBinding[argLength];
@@ -132,10 +143,11 @@ public class ParameterizedSingleTypeReference extends ArrayTypeReference {
 		     }
 		}
 		if (argHasError) return null;
-// TODO (philippe)	if ((this.bits & ASTNode.IsSuperType) != 0)
-		if (isClassScope)
-			if (((ClassScope) scope).detectCycle(currentType, this, argTypes))
+		if (isClassScope) {
+	    	((ClassScope) scope).superTypeReference = keep;
+			if (((ClassScope) scope).detectHierarchyCycle(currentType, this, argTypes))
 				return null;
+		}
 
 		TypeVariableBinding[] typeVariables = currentType.typeVariables();
 		if (typeVariables == NoTypeVariables) { // check generic
@@ -144,29 +156,39 @@ public class ParameterizedSingleTypeReference extends ArrayTypeReference {
 		} else if (argLength != typeVariables.length) { // check arity
 			scope.problemReporter().incorrectArityForParameterizedType(this, currentType, argTypes);
 			return null;
+		} else if (!currentType.isStatic() && enclosingType != null && enclosingType.isRawType()){
+			scope.problemReporter().rawMemberTypeCannotBeParameterized(
+					this, scope.environment().createRawType((ReferenceBinding)currentType.erasure(), enclosingType), argTypes);
+			return null;
 		}
-		// if generic type X<T> is referred to as parameterized X<T>, then answer itself
-		checkGeneric: {
-		    for (int i = 0; i < argLength; i++)
-				if (typeVariables[i] != argTypes[i])
-				    break checkGeneric;
-			return currentType;
-		}
-		ParameterizedTypeBinding parameterizedType = scope.createParameterizedType(currentType, argTypes, enclosingType);
-		// check argument type compatibility now if not a class scope
-		if (!isClassScope) // otherwise will do it in Scope.connectTypeVariables()
-			for (int i = 0; i < argLength; i++)
-			    if (!typeVariables[i].boundCheck(parameterizedType, argTypes[i]))
-					scope.problemReporter().typeMismatchError(argTypes[i], typeVariables[i], currentType, this.typeArguments[i]);
 
-		this.resolvedType = parameterizedType;
-		if (isTypeUseDeprecated(this.resolvedType, scope))
-			reportDeprecatedType(scope);
+		// if generic type X<T> is referred to as parameterized X<T>, then answer itself
+		boolean isIdentical = true; //this.resolvedType instanceof SourceTypeBinding;
+		if (isIdentical) {
+		    for (int i = 0; i < argLength; i++) {
+				if (typeVariables[i] != argTypes[i]) {
+					isIdentical = false;
+				    break;
+				}
+			}
+		}		
+	    if (!isIdentical) {
+	    	ParameterizedTypeBinding parameterizedType = scope.environment().createParameterizedType((ReferenceBinding)currentType.erasure(), argTypes, enclosingType);
+			// check argument type compatibility
+			if (checkBounds) // otherwise will do it in Scope.connectTypeVariables() or generic method resolution
+				parameterizedType.boundCheck(scope, this.typeArguments);
+	
+			this.resolvedType = parameterizedType;
+			if (isTypeUseDeprecated(this.resolvedType, scope))
+				reportDeprecatedType(scope);
+		} else {
+			this.resolvedType = this.resolvedType.erasure();
+		}
 		// array type ?
 		if (this.dimensions > 0) {
 			if (dimensions > 255)
 				scope.problemReporter().tooManyDimensions(this);
-			this.resolvedType = scope.createArrayType(parameterizedType, dimensions);
+			this.resolvedType = scope.createArrayType(this.resolvedType, dimensions);
 		}
 		return this.resolvedType;
 	}	
@@ -181,22 +203,29 @@ public class ParameterizedSingleTypeReference extends ArrayTypeReference {
 		}
 		typeArguments[max].print(0, output);
 		output.append(">"); //$NON-NLS-1$
-		for (int i= 0 ; i < dimensions ; i++) {
-			output.append("[]"); //$NON-NLS-1$
+		if ((this.bits & IsVarArgs) != 0) {
+			for (int i= 0 ; i < dimensions - 1; i++) {
+				output.append("[]"); //$NON-NLS-1$
+			}
+			output.append("..."); //$NON-NLS-1$
+		} else {
+			for (int i= 0 ; i < dimensions; i++) {
+				output.append("[]"); //$NON-NLS-1$
+			}
 		}
 		return output;
 	}
 	
-	public TypeBinding resolveType(BlockScope scope) {
-	    return internalResolveType(scope, null);
+	public TypeBinding resolveType(BlockScope scope, boolean checkBounds) {
+	    return internalResolveType(scope, null, checkBounds);
 	}	
 
 	public TypeBinding resolveType(ClassScope scope) {
-	    return internalResolveType(scope, null);
+	    return internalResolveType(scope, null, false /*no bounds check in classScope*/);
 	}	
 	
 	public TypeBinding resolveTypeEnclosing(BlockScope scope, ReferenceBinding enclosingType) {
-	    return internalResolveType(scope, enclosingType);
+	    return internalResolveType(scope, enclosingType, true/*check bounds*/);
 	}
 	
 	public void traverse(ASTVisitor visitor, BlockScope scope) {

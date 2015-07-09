@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -12,7 +12,9 @@ package org.eclipse.jdt.internal.compiler.classfmt;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.codegen.AttributeNamesConstants;
+import org.eclipse.jdt.internal.compiler.codegen.ConstantPool;
 import org.eclipse.jdt.internal.compiler.env.IBinaryMethod;
+import org.eclipse.jdt.internal.compiler.lookup.TagBits;
 
 public class MethodInfo extends ClassFileStruct implements IBinaryMethod, AttributeNamesConstants, Comparable {
 	static private final char[][] noException = CharOperation.NO_CHAR_CHAR;
@@ -24,6 +26,7 @@ public class MethodInfo extends ClassFileStruct implements IBinaryMethod, Attrib
 	private char[] name;
 	private char[] signature;
 	private int signatureUtf8Offset;
+	private long tagBits;	
 	
 /**
  * @param classFileBytes byte[]
@@ -41,8 +44,18 @@ public MethodInfo (byte classFileBytes[], int offsets[], int offset) {
 		// check the name of each attribute
 		int utf8Offset = constantPoolOffsets[u2At(readOffset)] - structOffset;
 		char[] attributeName = utf8At(utf8Offset + 3, u2At(utf8Offset + 1));
-		if (CharOperation.equals(AttributeNamesConstants.SignatureName, attributeName)) {
-			this.signatureUtf8Offset = constantPoolOffsets[u2At(readOffset + 6)] - structOffset;
+		if (attributeName.length > 0) {
+			switch(attributeName[0]) {
+				case 'S' :
+					if (CharOperation.equals(AttributeNamesConstants.SignatureName, attributeName)) {
+						this.signatureUtf8Offset = constantPoolOffsets[u2At(readOffset + 6)] - structOffset;
+					}
+					break;
+				case 'R' :
+					if (CharOperation.equals(attributeName, RuntimeVisibleAnnotationsName)) {
+						decodeStandardAnnotations(readOffset);
+					}
+			}
 		}
 		readOffset += (6 + u4At(readOffset + 2));
 	}
@@ -57,6 +70,68 @@ public int compareTo(Object o) {
 	int result = new String(this.getSelector()).compareTo(new String(otherMethod.getSelector()));
 	if (result != 0) return result;
 	return new String(this.getMethodDescriptor()).compareTo(new String(otherMethod.getMethodDescriptor()));
+}
+private int decodeAnnotation(int offset) {
+	int readOffset = offset;
+	int utf8Offset = this.constantPoolOffsets[u2At(offset)] - structOffset;
+	char[] typeName = utf8At(utf8Offset + 3, u2At(utf8Offset + 1));
+	int numberOfPairs = u2At(offset + 2);
+	readOffset += 4;
+	if (typeName.length == 22 && CharOperation.equals(typeName, ConstantPool.JAVA_LANG_DEPRECATED)) {
+		this.tagBits |= TagBits.AnnotationDeprecated;
+		return readOffset;		
+	}
+	for (int i = 0; i < numberOfPairs; i++) {
+		readOffset += 2;
+		readOffset = decodeElementValue(readOffset);
+	}
+	return readOffset;
+}
+private int decodeElementValue(int offset) {
+	int readOffset = offset;
+	int tag = u1At(readOffset);
+	readOffset++;
+	switch(tag) {
+		case 'B' :
+		case 'C' :
+		case 'D' :
+		case 'F' :
+		case 'I' :
+		case 'J' :
+		case 'S' :
+		case 'Z' :
+		case 's' :
+			readOffset += 2;
+			break;
+		case 'e' :
+			readOffset += 4;
+			break;
+		case 'c' :
+			readOffset += 2;
+			break;
+		case '@' :
+			readOffset = decodeAnnotation(readOffset);
+			break;
+		case '[' :
+			int numberOfValues = u2At(readOffset);
+			readOffset += 2;
+			for (int i = 0; i < numberOfValues; i++) {
+				readOffset = decodeElementValue(readOffset);
+			}
+			break;
+	}
+	return readOffset;
+}
+/**
+ * @param offset the offset is located at the beginning of the runtime visible 
+ * annotation attribute.
+ */
+private void decodeStandardAnnotations(int offset) {
+	int numberOfAnnotations = u2At(offset + 6);
+	int readOffset = offset + 8;
+	for (int i = 0; i < numberOfAnnotations; i++) {
+		readOffset = decodeAnnotation(readOffset);
+	}
 }
 /**
  * @see org.eclipse.jdt.internal.compiler.env.IGenericMethod#getArgumentNames()
@@ -115,7 +190,7 @@ public int getModifiers() {
 	if (this.accessFlags == -1) {
 		// compute the accessflag. Don't forget the deprecated attribute
 		this.accessFlags = u2At(0);
-		readDeprecatedAndSyntheticAttributes();
+		readModifierRelatedAttributes();
 	}
 	return this.accessFlags;
 }
@@ -132,6 +207,9 @@ public char[] getSelector() {
 		name = utf8At(utf8Offset + 3, u2At(utf8Offset + 1));
 	}
 	return name;
+}
+public long getTagBits() {
+	return this.tagBits;
 }
 /**
  * This method is used to fully initialize the contents of the receiver. All methodinfos, fields infos
@@ -168,20 +246,6 @@ public boolean isConstructor() {
 public boolean isSynthetic() {
 	return (getModifiers() & AccSynthetic) != 0;
 }
-private void readDeprecatedAndSyntheticAttributes() {
-	int attributesCount = u2At(6);
-	int readOffset = 8;
-	for (int i = 0; i < attributesCount; i++) {
-		int utf8Offset = constantPoolOffsets[u2At(readOffset)] - structOffset;
-		char[] attributeName = utf8At(utf8Offset + 3, u2At(utf8Offset + 1));
-		if (CharOperation.equals(attributeName, DeprecatedName)) {
-			this.accessFlags |= AccDeprecated;
-		} else if (CharOperation.equals(attributeName, SyntheticName)) {
-			this.accessFlags |= AccSynthetic;
-		}
-		readOffset += (6 + u4At(readOffset + 2));
-	}
-}
 private void readExceptionAttributes() {
 	int attributesCount = u2At(6);
 	int readOffset = 8;
@@ -214,6 +278,32 @@ private void readExceptionAttributes() {
 		exceptionNames = noException;
 	}
 }
+private void readModifierRelatedAttributes() {
+	int attributesCount = u2At(6);
+	int readOffset = 8;
+	for (int i = 0; i < attributesCount; i++) {
+		int utf8Offset = constantPoolOffsets[u2At(readOffset)] - structOffset;
+		char[] attributeName = utf8At(utf8Offset + 3, u2At(utf8Offset + 1));
+		// test added for obfuscated .class file. See 79772
+		if (attributeName.length != 0) {
+			switch(attributeName[0]) {
+				case 'D' :
+					if (CharOperation.equals(attributeName, DeprecatedName))
+						this.accessFlags |= AccDeprecated;
+					break;
+				case 'S' :
+					if (CharOperation.equals(attributeName, SyntheticName))
+						this.accessFlags |= AccSynthetic;
+					break;
+				case 'A' :
+					if (CharOperation.equals(attributeName, AnnotationDefaultName))
+						this.accessFlags |= AccAnnotationDefault;
+					break;
+			}
+		}
+		readOffset += (6 + u4At(readOffset + 2));
+	}
+}
 protected void reset() {
 	this.constantPoolOffsets = null;
 	super.reset();
@@ -242,7 +332,7 @@ public String toString() {
 				+ ((modifiers & 0x0008) == 0x000008 ? "static " : "") //$NON-NLS-1$ //$NON-NLS-2$
 				+ ((modifiers & 0x0010) == 0x0010 ? "final " : "") //$NON-NLS-1$ //$NON-NLS-2$
 				+ ((modifiers & 0x0040) == 0x0040 ? "volatile " : "") //$NON-NLS-1$ //$NON-NLS-2$
-				+ ((modifiers & 0x0080) == 0x0080 ? "transient " : "")) //$NON-NLS-1$ //$NON-NLS-2$
+				+ ((modifiers & 0x0080) == 0x0080 ? "varargs " : "")) //$NON-NLS-1$ //$NON-NLS-2$
 		.append(getSelector())
 		.append(desc)
 		.append("}") //$NON-NLS-1$

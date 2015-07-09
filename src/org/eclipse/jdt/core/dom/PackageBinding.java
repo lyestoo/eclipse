@@ -1,17 +1,21 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
+import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
+import org.eclipse.jdt.internal.core.NameLookup;
+import org.eclipse.jdt.internal.core.SearchableEnvironment;
 
 /**
  * Internal implementation of package bindings.
@@ -19,7 +23,7 @@ import org.eclipse.jdt.core.compiler.CharOperation;
 class PackageBinding implements IPackageBinding {
 
 	private static final String[] NO_NAME_COMPONENTS = new String[0];
-	private static final String UNNAMED = "UNNAMED";//$NON-NLS-1$
+	private static final String UNNAMED = ""; //$NON-NLS-1$
 	private static final char PACKAGE_NAME_SEPARATOR = '.';
 	
 	private org.eclipse.jdt.internal.compiler.lookup.PackageBinding binding;
@@ -86,10 +90,43 @@ class PackageBinding implements IPackageBinding {
 	}
 
 	/*
+	 * @see IBinding#getJavaElement()
+	 */
+	public IJavaElement getJavaElement() {
+		INameEnvironment nameEnvironment = this.binding.environment.nameEnvironment; // a package binding always has a LooupEnvironment set
+		if (!(nameEnvironment instanceof SearchableEnvironment)) return null;
+		NameLookup nameLookup = ((SearchableEnvironment) nameEnvironment).nameLookup;
+		if (nameLookup == null) return null;
+		IJavaElement[] pkgs = nameLookup.findPackageFragments(getName(), false/*exact match*/);
+		if (pkgs == null) return null;
+		return pkgs[0];
+	}
+	
+	/*
 	 * @see IBinding#getKey()
 	 */
 	public String getKey() {
-		return getName();
+		return new String(this.binding.computeUniqueKey());
+	}
+	
+	/*
+	 * @see IBinding#isEqualTo(Binding)
+	 * @since 3.1
+	 */
+	public boolean isEqualTo(IBinding other) {
+		if (other == this) {
+			// identical binding - equal (key or no key)
+			return true;
+		}
+		if (other == null) {
+			// other binding missing
+			return false;
+		}
+		if (!(other instanceof PackageBinding)) {
+			return false;
+		}
+		org.eclipse.jdt.internal.compiler.lookup.PackageBinding packageBinding2 = ((PackageBinding) other).binding;
+		return CharOperation.equals(this.binding.compoundName, packageBinding2.compoundName);
 	}
 	
 	private void computeNameAndComponents() {

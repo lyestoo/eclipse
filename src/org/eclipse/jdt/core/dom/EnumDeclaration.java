@@ -1,18 +1,16 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
-
 package org.eclipse.jdt.core.dom;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -27,6 +25,9 @@ import java.util.List;
  *         [ <b>;</b> { ClassBodyDeclaration | <b>;</b> } ]
  *         <b>}</b>
  * </pre>
+ * The {@link #enumConstants()} list holds the enum constant declarations,
+ * while the {@link #bodyDeclarations()} list holds the class body declarations
+ * that appear after the semicolon.
  * <p>
  * When a Javadoc comment is present, the source
  * range begins with the first character of the "/**" comment delimiter.
@@ -36,14 +37,8 @@ import java.util.List;
  * modifiers or annotations). The source range extends through the last
  * character of the "}" token following the body declarations.
  * </p>
- * <p>
- * Note: This API element is only needed for dealing with Java code that uses
- * new language features of J2SE 1.5. It is included in anticipation of J2SE
- * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
- * may change slightly before reaching its final form.
- * </p>
  * 
- * @since 3.0
+ * @since 3.1
  */
 public class EnumDeclaration extends AbstractTypeDeclaration {
 	
@@ -72,6 +67,12 @@ public class EnumDeclaration extends AbstractTypeDeclaration {
 		new ChildListPropertyDescriptor(EnumDeclaration.class, "superInterfaceTypes", Type.class, NO_CYCLE_RISK); //$NON-NLS-1$
 	
 	/**
+	 * The "enumConstants" structural property of this node type.
+	 */
+	public static final ChildListPropertyDescriptor ENUM_CONSTANTS_PROPERTY = 
+		new ChildListPropertyDescriptor(EnumDeclaration.class, "enumConstants", EnumConstantDeclaration.class, CYCLE_RISK); //$NON-NLS-1$
+	
+	/**
 	 * The "bodyDeclarations" structural property of this node type.
 	 */
 	public static final ChildListPropertyDescriptor BODY_DECLARATIONS_PROPERTY = 
@@ -91,6 +92,7 @@ public class EnumDeclaration extends AbstractTypeDeclaration {
 		addProperty(MODIFIERS2_PROPERTY, properyList);
 		addProperty(NAME_PROPERTY, properyList);
 		addProperty(SUPER_INTERFACE_TYPES_PROPERTY, properyList);
+		addProperty(ENUM_CONSTANTS_PROPERTY, properyList);
 		addProperty(BODY_DECLARATIONS_PROPERTY, properyList);
 		PROPERTY_DESCRIPTORS = reapPropertyList(properyList);
 	}
@@ -117,10 +119,18 @@ public class EnumDeclaration extends AbstractTypeDeclaration {
 		new ASTNode.NodeList(SUPER_INTERFACE_TYPES_PROPERTY);
 
 	/**
+	 * The enum constant declarations
+	 * (element type: <code>EnumConstantDeclaration</code>).
+	 * Defaults to an empty list.
+	 */
+	private ASTNode.NodeList enumConstants = 
+		new ASTNode.NodeList(ENUM_CONSTANTS_PROPERTY);
+
+	/**
 	 * Creates a new AST node for an enum declaration owned by the given 
 	 * AST. By default, the enum declaration has an unspecified, but legal,
 	 * name; no modifiers; no javadoc; no superinterfaces; 
-	 * and an empty list of body declarations.
+	 * and empty lists of enum constants and body declarations.
 	 * <p>
 	 * N.B. This constructor is package-private; all subclasses must be 
 	 * declared in the same package; clients are unable to declare 
@@ -174,6 +184,9 @@ public class EnumDeclaration extends AbstractTypeDeclaration {
 		}
 		if (property == SUPER_INTERFACE_TYPES_PROPERTY) {
 			return superInterfaceTypes();
+		}
+		if (property == ENUM_CONSTANTS_PROPERTY) {
+			return enumConstants();
 		}
 		if (property == BODY_DECLARATIONS_PROPERTY) {
 			return bodyDeclarations();
@@ -237,6 +250,8 @@ public class EnumDeclaration extends AbstractTypeDeclaration {
 		result.setName((SimpleName) getName().clone(target));
 		result.superInterfaceTypes().addAll(
 			ASTNode.copySubtrees(target, superInterfaceTypes()));
+		result.enumConstants().addAll(
+				ASTNode.copySubtrees(target, enumConstants()));
 		result.bodyDeclarations().addAll(
 			ASTNode.copySubtrees(target, bodyDeclarations()));
 		return result;
@@ -261,6 +276,7 @@ public class EnumDeclaration extends AbstractTypeDeclaration {
 			acceptChildren(visitor, this.modifiers);
 			acceptChild(visitor, getName());
 			acceptChildren(visitor, this.superInterfaceTypes);
+			acceptChildren(visitor, this.enumConstants);
 			acceptChildren(visitor, this.bodyDeclarations);
 		}
 		visitor.endVisit(this);
@@ -278,32 +294,13 @@ public class EnumDeclaration extends AbstractTypeDeclaration {
 	}
 	
 	/**
-	 * Returns the ordered list of enum constant declarations of this enum
-	 * declaration.
-	 * <p>
-	 * This convenience method returns this node's enum constant declarations
-	 * with non-enum constants filtered out. Unlike <code>bodyDeclarations</code>,
-	 * this method does not return a live result.
-	 * </p>
+	 * Returns the live ordered list of enum constant declarations
+	 * of this enum declaration.
 	 * 
-	 * @return the (possibly empty) list of enum constant declarations
+	 * @return the live list of enum constant declarations
+	 *    (element type: {@link EnumConstantDeclaration})
 	 */ 
-	public EnumConstantDeclaration[] getEnumConstants() {
-		List bd = bodyDeclarations();
-		int enumCount = 0;
-		for (Iterator it = bd.listIterator(); it.hasNext(); ) {
-			if (it.next() instanceof EnumConstantDeclaration) {
-				enumCount++;
-			}
-		}
-		EnumConstantDeclaration[] enumConstants = new EnumConstantDeclaration[enumCount];
-		int next = 0;
-		for (Iterator it = bd.listIterator(); it.hasNext(); ) {
-			Object decl = it.next();
-			if (decl instanceof EnumConstantDeclaration) {
-				enumConstants[next++] = (EnumConstantDeclaration) decl;
-			}
-		}
+	public List enumConstants() {
 		return enumConstants;
 	}
 
@@ -318,7 +315,7 @@ public class EnumDeclaration extends AbstractTypeDeclaration {
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		return super.memSize() + 1 * 4;
+		return super.memSize() + 2 * 4;
 	}
 	
 	/* (omit javadoc for this method)
@@ -330,6 +327,7 @@ public class EnumDeclaration extends AbstractTypeDeclaration {
 			+ this.modifiers.listSize()
 			+ (this.typeName == null ? 0 : getName().treeSize())
 			+ this.superInterfaceTypes.listSize()
+			+ this.enumConstants.listSize()
 			+ this.bodyDeclarations.listSize();
 	}
 }

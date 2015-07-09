@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -19,10 +19,12 @@ import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ExplicitConstructorCall;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.LocalDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.MemberValuePair;
 import org.eclipse.jdt.internal.compiler.ast.Statement;
 import org.eclipse.jdt.internal.compiler.ast.SuperReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
+import org.eclipse.jdt.internal.compiler.env.IGenericType;
 import org.eclipse.jdt.internal.compiler.lookup.BaseTypes;
 import org.eclipse.jdt.internal.compiler.lookup.CompilerModifiers;
 
@@ -212,7 +214,7 @@ public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalanceV
 		}
 		return methodBody.add(typeDeclaration, bracketBalanceValue, true);	
 	}
-	if (typeDeclaration.isInterface()) {
+	if (typeDeclaration.kind() == IGenericType.INTERFACE_DECL) {
 		this.updateSourceEndIfNecessary(this.previousAvailableLineEnd(typeDeclaration.declarationSourceStart - 1));
 		if (this.parent == null) {
 			return this; // ignore
@@ -316,8 +318,8 @@ public AbstractMethodDeclaration updatedMethodDeclaration(){
  * is about to disappear because of restarting recovery
  */
 public void updateFromParserState(){
-
-	if(this.bodyStartsAtHeaderEnd()){
+	// if parent is null then recovery already occured in diet parser.
+	if(this.bodyStartsAtHeaderEnd() && this.parent != null){
 		Parser parser = this.parser();
 		/* might want to recover arguments or thrown exceptions */
 		if (parser.listLength > 0 && parser.astLengthPtr > 0){ // awaiting interface type references
@@ -357,22 +359,44 @@ public void updateFromParserState(){
 				int argLength = parser.astLengthStack[parser.astLengthPtr];
 				int argStart = parser.astPtr - argLength + 1;
 				boolean needUpdateRParenPos = parser.rParenPos < parser.lParenPos; // 12387 : rParenPos will be used
+				
+				// remove unfinished annotation nodes
+				MemberValuePair[] memberValuePairs = null;
+				if (argLength > 0 && parser.astStack[parser.astPtr] instanceof MemberValuePair) {
+					System.arraycopy(parser.astStack, argStart, memberValuePairs = new MemberValuePair[argLength], 0, argLength);
+					parser.astLengthPtr--;
+					parser.astPtr -= argLength;
+					
+					argLength = parser.astLengthStack[parser.astLengthPtr];
+					argStart = parser.astPtr - argLength + 1;
+					needUpdateRParenPos = true;
+				}
+				
 				// to compute bodyStart, and thus used to set next checkpoint.
 				int count;
 				for (count = 0; count < argLength; count++){
-					Argument argument = (Argument)parser.astStack[argStart+count];
-					/* cannot be an argument if non final */
-					char[][] argTypeName = argument.type.getTypeName();
-					if ((argument.modifiers & ~AccFinal) != 0
-						|| (argTypeName.length == 1
-							&& CharOperation.equals(argTypeName[0], VoidBinding.sourceName()))){
+					ASTNode aNode = parser.astStack[argStart+count];
+					if(aNode instanceof Argument) {
+						Argument argument = (Argument)aNode;
+						/* cannot be an argument if non final */
+						char[][] argTypeName = argument.type.getTypeName();
+						if ((argument.modifiers & ~AccFinal) != 0
+							|| (argTypeName.length == 1
+								&& CharOperation.equals(argTypeName[0], VoidBinding.sourceName()))){
+							parser.astLengthStack[parser.astLengthPtr] = count; 
+							parser.astPtr = argStart+count-1; 
+							parser.listLength = count;
+							parser.currentToken = 0;
+							break;
+						}
+						if (needUpdateRParenPos) parser.rParenPos = argument.sourceEnd + 1;
+					} else {
 						parser.astLengthStack[parser.astLengthPtr] = count; 
 						parser.astPtr = argStart+count-1; 
 						parser.listLength = count;
 						parser.currentToken = 0;
 						break;
 					}
-					if (needUpdateRParenPos) parser.rParenPos = argument.sourceEnd + 1;
 				}
 				if (parser.listLength > 0 && parser.astLengthPtr > 0){
 					
@@ -400,9 +424,25 @@ public void updateFromParserState(){
 						}
 					}
 				}
+				
+				if(memberValuePairs != null) {
+					System.arraycopy(memberValuePairs, 0, parser.astStack, parser.astPtr + 1, memberValuePairs.length);
+					parser.astPtr += memberValuePairs.length;
+					parser.astLengthStack[++parser.astLengthPtr] = memberValuePairs.length;
+				}
 			}
 		}
 	}
+}
+public RecoveredElement updateOnClosingBrace(int braceStart, int braceEnd){
+	if(this.methodDeclaration.isAnnotationMethod()) {
+		this.updateSourceEndIfNecessary(braceStart, braceEnd);
+		if(!this.foundOpeningBrace && this.parent != null) {
+			return this.parent.updateOnClosingBrace(braceStart, braceEnd);
+		}
+		return this;
+	}
+	return super.updateOnClosingBrace(braceStart, braceEnd);
 }
 /*
  * An opening brace got consumed, might be the expected opening one of the current element,

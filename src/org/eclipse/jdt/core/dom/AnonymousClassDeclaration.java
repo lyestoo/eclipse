@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -14,8 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Anonymous class declaration AST node type. This type of node appears
+ * Anonymous class declaration AST node type. For JLS2, this type of node appears
  * only as a child on a class instance creation expression.
+ * For JLS3, this type of node appears may also appear as the child of
+ * an enum constant declaration.
  *
  * <pre>
  * AnonymousClassDeclaration:
@@ -23,6 +25,7 @@ import java.util.List;
  * </pre>
  * 
  * @see ClassInstanceCreation
+ * @see EnumConstantDeclaration
  * @since 2.0
  */
 public class AnonymousClassDeclaration extends ASTNode {

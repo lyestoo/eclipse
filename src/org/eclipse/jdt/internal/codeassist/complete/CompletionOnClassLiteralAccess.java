@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -48,7 +48,7 @@ public class CompletionOnClassLiteralAccess extends ClassLiteralAccess {
 	public StringBuffer printExpression(int indent, StringBuffer output) {
 		
 		output.append("<CompleteOnClassLiteralAccess:"); //$NON-NLS-1$
-		return type.print(0, output).append('.').append(completionIdentifier).append('>');
+		return this.type.print(0, output).append('.').append(this.completionIdentifier).append('>');
 	}
 	
 	public TypeBinding resolveType(BlockScope scope) {
@@ -56,6 +56,6 @@ public class CompletionOnClassLiteralAccess extends ClassLiteralAccess {
 		if (super.resolveType(scope) == null)
 			throw new CompletionNodeFound();
 		else
-			throw new CompletionNodeFound(this, targetType, scope);
+			throw new CompletionNodeFound(this, this.targetType, scope);
 	}
 }

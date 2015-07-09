@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -15,9 +15,11 @@ import org.eclipse.jdt.internal.compiler.util.HashtableOfPackage;
 import org.eclipse.jdt.internal.compiler.util.HashtableOfType;
 
 public class PackageBinding extends Binding implements TypeConstants {
+	public long tagBits = 0; // See values in the interface TagBits below
+	
 	public char[][] compoundName;
 	PackageBinding parent;
-	LookupEnvironment environment;
+	public LookupEnvironment environment;
 	HashtableOfType knownTypes;
 	HashtableOfPackage knownPackages;
 protected PackageBinding() {
@@ -59,8 +61,15 @@ void addType(ReferenceBinding element) {
 * Answer the receiver's binding type from Binding.BindingID.
 */
 
-public final int bindingType() {
-	return PACKAGE;
+public final int kind() {
+	return Binding.PACKAGE;
+}
+/*
+ * slash separated name
+ * org.eclipse.jdt.core --> org/eclipse/jdt/core
+ */
+public char[] computeUniqueKey(boolean isLeaf) {
+	return CharOperation.concatWith(compoundName, '/');
 }
 private PackageBinding findPackage(char[] name) {
 	if (!environment.isPackage(this.compoundName, name))
@@ -126,7 +135,7 @@ ReferenceBinding getType(char[] name) {
 
 	typeBinding = BinaryTypeBinding.resolveType(typeBinding, environment, false); // no raw conversion for now
 	if (typeBinding.isNestedType())
-		return new ProblemReferenceBinding(name, InternalNameProvided);
+		return new ProblemReferenceBinding(name, typeBinding, InternalNameProvided);
 	return typeBinding;
 }
 /* Answer the type named name if it exists in the cache.
@@ -157,7 +166,7 @@ public Binding getTypeOrPackage(char[] name) {
 	if (typeBinding != null && typeBinding != LookupEnvironment.TheNotFoundType) {
 		typeBinding = BinaryTypeBinding.resolveType(typeBinding, environment, false); // no raw conversion for now
 		if (typeBinding.isNestedType())
-			return new ProblemReferenceBinding(name, InternalNameProvided);
+			return new ProblemReferenceBinding(name, typeBinding, InternalNameProvided);
 		return typeBinding;
 	}
 
@@ -168,7 +177,7 @@ public Binding getTypeOrPackage(char[] name) {
 	if (typeBinding == null) { // have not looked for it before
 		if ((typeBinding = environment.askForType(this, name)) != null) {
 			if (typeBinding.isNestedType())
-				return new ProblemReferenceBinding(name, InternalNameProvided);
+				return new ProblemReferenceBinding(name, typeBinding, InternalNameProvided);
 			return typeBinding;
 		}
 

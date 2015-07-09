@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -32,11 +32,11 @@ public class CompletionNodeDetector extends ASTVisitor {
 	}
 	
 	public boolean containsCompletionNode() {
-		return result;
+		return this.result;
 	}
 	
 	public ASTNode getCompletionNodeParent() {
-		return parent;
+		return this.parent;
 	}
 	public void endVisit(AllocationExpression allocationExpression, BlockScope scope) {
 		endVisit(allocationExpression);
@@ -152,6 +152,12 @@ public class CompletionNodeDetector extends ASTVisitor {
 	public void endVisit(UnaryExpression unaryExpression, BlockScope scope) {
 		endVisit(unaryExpression);
 	}
+	public void endVisit(MemberValuePair pair, BlockScope scope) {
+		endVisit(pair);
+	}
+	public void endVisit(MemberValuePair pair, CompilationUnitScope scope) {
+		endVisit(pair);
+	}
 	public boolean visit(AllocationExpression allocationExpression, BlockScope scope) {
 		return this.visit(allocationExpression);
 	}
@@ -266,20 +272,25 @@ public class CompletionNodeDetector extends ASTVisitor {
 	public boolean visit(UnaryExpression unaryExpression, BlockScope scope) {
 		return this.visit(unaryExpression);
 	}
-	
+	public boolean visit(MemberValuePair pair, BlockScope scope) {
+		return this.visit(pair);
+	}
+	public boolean visit(MemberValuePair pair, CompilationUnitScope scope) {
+		return this.visit(pair);
+	}
 	private void endVisit(ASTNode astNode) {
-		if(result && parent == null && astNode != searchedNode) {
-			if(!(astNode instanceof AllocationExpression && ((AllocationExpression) astNode).type == searchedNode)
-				&& !(astNode instanceof ConditionalExpression && ((ConditionalExpression) astNode).valueIfTrue == searchedNode)
-				&& !(astNode instanceof ConditionalExpression && ((ConditionalExpression) astNode).valueIfFalse == searchedNode)) {
-				parent = astNode;	
+		if(this.result && this.parent == null && astNode != this.searchedNode) {
+			if(!(astNode instanceof AllocationExpression && ((AllocationExpression) astNode).type == this.searchedNode)
+				&& !(astNode instanceof ConditionalExpression && ((ConditionalExpression) astNode).valueIfTrue == this.searchedNode)
+				&& !(astNode instanceof ConditionalExpression && ((ConditionalExpression) astNode).valueIfFalse == this.searchedNode)) {
+				this.parent = astNode;	
 			}
 		}
 	}
 	private boolean visit(ASTNode astNode) {
-		if(astNode == searchedNode) {
-			result = true;
+		if(astNode == this.searchedNode) {
+			this.result = true;
 		}
-		return !result;
+		return !this.result;
 	}
 }

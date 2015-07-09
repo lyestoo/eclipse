@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -28,7 +28,7 @@ public interface IFieldInfo {
 	 * null otherwise
 	 */
 	IConstantValueAttribute getConstantValueAttribute();
-
+	
 	/**
 	 * Answer back the access flag of this field info.
 	 * 
@@ -76,9 +76,13 @@ public interface IFieldInfo {
 	boolean hasConstantValueAttribute();
 
 	/**
-	 * Return true if the field info has a synthetic attribute, false otherwise.
+	 * Return true if the field info is synthetic according to the JVM specification, false otherwise.
+	 * <p>Note that prior to JDK 1.5, synthetic fields were always marked using
+	 * an attribute; with 1.5, synthetic fields can also be marked using 
+	 * the {@link IModifierConstants#ACC_SYNTHETIC} flag.
+	 * </p>
 	 * 
-	 * @return true if the field info has a synthetic attribute, false otherwise
+	 * @return true if the field info is synthetic according to the JVM specification, false otherwise
 	 */
 	boolean isSynthetic();
 

@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -42,6 +42,18 @@ char[] getMethodDescriptor();
  * return types as specified in section 4.4.4 of the Java 2 VM spec.
  */
 char[] getGenericSignature();
+
+/**
+ * Answer the name of the method.
+ *
+ * For a constructor, answer <init> & <clinit> for a clinit method.
+ */
+char[] getSelector();
+
+/**
+ * Answer the tagbits set according to the bits for annotations.
+ */
+long getTagBits();
 
 /**
  * Answer whether the receiver represents a class initializer method.

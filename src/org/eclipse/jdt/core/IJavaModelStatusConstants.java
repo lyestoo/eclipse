@@ -1,14 +1,14 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  * 
- * TODO: missing 2.1 and subsequent contributions
+ * TODO missing 2.1 and subsequent contributions
  * COMPILER_FAILURE
  *******************************************************************************/
 package org.eclipse.jdt.core;
@@ -78,7 +78,7 @@ public interface IJavaModelStatusConstants {
 	 * supplied do not exist. 
 	 * The element(s) can be retrieved using <code>getElements</code> on the status object.
 	 *
-	 * @see IJavaModelStatus#isDoesNotExist
+	 * @see IJavaModelStatus#isDoesNotExist()
 	 */
 	public static final int ELEMENT_DOES_NOT_EXIST = 969;
 
@@ -267,7 +267,7 @@ public interface IJavaModelStatusConstants {
 	 public static final int CLASSPATH_CYCLE = 1001;
 	 
 	/**
-	 * Status constant indicating that an exclusion pattern got specified
+	 * Status constant indicating that an inclusion or an exclusion pattern got specified
 	 * on a classpath source entry, though it was explicitely disabled 
 	 * according to its project preference settings.
 	 * @see org.eclipse.jdt.core.IJavaProject#getOptions(boolean)
@@ -297,4 +297,14 @@ public interface IJavaModelStatusConstants {
 	 * @since 3.0
 	 */
 	public static final int COMPILER_FAILURE	= 1005;	
+	/**
+	 * Status constant indicating that an element is not on its project's claspath.
+	 * @since 3.1
+	 */
+	public static final int ELEMENT_NOT_ON_CLASSPATH	= 1006;	
+	/**
+	 * Status constant indicating that a compiler option is invalid.
+	 * @since 3.1
+	 */
+//	public static final int INVALID_COMPILER_OPTION = 1007;	
 }

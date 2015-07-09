@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -72,15 +72,13 @@ public class QualifiedThisReference extends ThisReference {
 	public TypeBinding resolveType(BlockScope scope) {
 
 		constant = NotAConstant;
-		TypeBinding type = this.resolvedType = this.qualification.resolveType(scope);
+		TypeBinding type = this.qualification.resolveType(scope, true /* check bounds*/);
 		if (type == null) return null;
-		// X.this is not a raw type as denoting enclosing instance
-		if (type.isRawType()) {
-		    RawTypeBinding rawType = (RawTypeBinding) type;
-		    type = this.resolvedType = rawType.type; // unwrap
-		}
+		// X.this is not a param/raw type as denoting enclosing instance
+		this.resolvedType = type = type.erasure();
+
 		// the qualification MUST exactly match some enclosing type name
-		// Its possible to qualify 'this' by the name of the current class
+		// It is possible to qualify 'this' by the name of the current class
 		int depth = 0;
 		this.currentCompatibleType = scope.referenceType().binding;
 		while (this.currentCompatibleType != null

@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -80,6 +80,9 @@ public class ElementChangedEvent extends EventObject {
 	 * @since 2.0
 	 */
 	public static final int 	POST_RECONCILE = 4;	
+	
+	private static final long serialVersionUID = -8947240431612844420L; // backward compatible
+	
 	/*
 	 * Event type indicating the nature of this event. 
 	 * It can be a combination either:
@@ -93,6 +96,7 @@ public class ElementChangedEvent extends EventObject {
 	 * Creates an new element changed event (based on a <code>IJavaElementDelta</code>).
 	 *
 	 * @param delta the Java element delta.
+	 * @param type the type of delta (ADDED, REMOVED, CHANGED) this event contains
 	 */
 	public ElementChangedEvent(IJavaElementDelta delta, int type) {
 		super(delta);
@@ -104,7 +108,7 @@ public class ElementChangedEvent extends EventObject {
 	 * @return the delta describing the change
 	 */
 	public IJavaElementDelta getDelta() {
-		return (IJavaElementDelta) source;
+		return (IJavaElementDelta) this.source;
 	}
 	
 	/**

@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -30,14 +30,19 @@ package org.eclipse.jdt.internal.compiler;
  * specific fields and methods which were referenced, but does contain their 
  * declaring types and any other types used to locate such fields or methods.
  */
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 
-import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
-import org.eclipse.jdt.internal.compiler.env.*;
+import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
 import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
 import org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding;
-
-import java.util.*;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 
 public class CompilationResult {
 	
@@ -47,17 +52,21 @@ public class CompilationResult {
 	public int taskCount;
 	public ICompilationUnit compilationUnit;
 	private Map problemsMap;
-	private Map firstErrorsMap;
+	private Set firstErrors;
 	private int maxProblemPerUnit;
 	public char[][][] qualifiedReferences;
 	public char[][] simpleNameReferences;
 
 	public int lineSeparatorPositions[];
-	public Hashtable compiledTypes = new Hashtable(11);
+	public Map compiledTypes = new Hashtable(11);
 	public int unitIndex, totalUnitsKnown;
 	public boolean hasBeenAccepted = false;
 	public char[] fileName;
 	public boolean hasInconsistentToplevelHierarchies = false; // record the fact some toplevel types have inconsistent hierarchies
+	public boolean hasSyntaxError = false;
+	long[] suppressWarningIrritants;  // irritant for suppressed warnings
+	long[] suppressWarningScopePositions; // (start << 32) + end 
+	int suppressWarningsCount;
 	
 	public CompilationResult(
 		char[] fileName,
@@ -104,17 +113,57 @@ public class CompilationResult {
 					priority += P_STATIC;
 				}
 			} else {
-			priority += P_OUTSIDE_METHOD;
+				priority += P_OUTSIDE_METHOD;
 			}
 		} else {
 			priority += P_OUTSIDE_METHOD;
 		}
-		if (firstErrorsMap.containsKey(problem)){
+		if (firstErrors.contains(problem)){
 			priority += P_FIRST_ERROR;
 		}
 		return priority;
 	}
 
+	public void discardSuppressedWarnings() {
+
+		if (this.suppressWarningsCount == 0) return;
+		int removed = 0;
+		nextProblem: for (int i = 0, length = this.problemCount; i < length; i++) {
+			IProblem problem = this.problems[i];
+			if (!problem.isWarning()) 
+				continue nextProblem;
+			int start = problem.getSourceStart();
+			int end = problem.getSourceEnd();
+			int problemID = problem.getID();
+			nextSuppress: for (int j = 0, max = this.suppressWarningsCount; j < max; j++) {
+				long position = this.suppressWarningScopePositions[j];
+				int startSuppress = (int) (position >>> 32);
+				int endSuppress = (int) position;
+				if (start < startSuppress) continue nextSuppress;
+				if (end > endSuppress) continue nextSuppress;
+				if ((ProblemReporter.getIrritant(problemID) & this.suppressWarningIrritants[j]) == 0)
+					continue nextSuppress;
+				// discard suppressed warning
+				removed++;
+				problems[i] = null;
+				if (problemsMap != null) problemsMap.remove(problem);
+				continue nextProblem;
+			}
+		}
+		if (removed > 0) {
+			for (int i = 0, index = 0; i < this.problemCount; i++) {
+				IProblem problem;
+				if ((problem = this.problems[i]) != null) {
+					if (i > index) {
+						this.problems[index++] = problem;
+					} else {
+						index++;
+					}
+				}
+			}
+			this.problemCount -= removed;
+		}
+	}
 	
 	public IProblem[] getAllProblems() {
 		IProblem[] onlyProblems = this.getProblems();
@@ -169,12 +218,8 @@ public class CompilationResult {
 	}
 	
 	public ClassFile[] getClassFiles() {
-		Enumeration files = compiledTypes.elements();
 		ClassFile[] classFiles = new ClassFile[compiledTypes.size()];
-		int index = 0;
-		while (files.hasMoreElements()){
-			classFiles[index++] = (ClassFile)files.nextElement();
-		}
+		compiledTypes.values().toArray(classFiles);
 		return classFiles;	
 	}
 
@@ -223,6 +268,7 @@ public class CompilationResult {
 		
 		// Re-adjust the size of the problems if necessary.
 		if (problems != null) {
+			discardSuppressedWarnings();
 	
 			if (this.problemCount != problems.length) {
 				System.arraycopy(problems, 0, (problems = new IProblem[problemCount]), 0, problemCount);
@@ -274,17 +320,6 @@ public class CompilationResult {
 	public boolean hasProblems() {
 
 		return problemCount != 0;
-	}
-
-	public boolean hasSyntaxError(){
-
-		if (problems != null)
-			for (int i = 0; i < problemCount; i++) {
-				IProblem problem = problems[i];
-				if ((problem.getID() & IProblem.Syntax) != 0 && problem.isError())
-					return true;
-			}
-		return false;
 	}
 
 	public boolean hasTasks() {
@@ -369,9 +404,10 @@ public class CompilationResult {
 
 	public void record(IProblem newProblem, ReferenceContext referenceContext) {
 
-		if (newProblem.getID() == IProblem.Task) {
-			recordTask(newProblem);
-			return;
+		//new Exception("VERBOSE PROBLEM REPORTING").printStackTrace();
+		if(newProblem.getID() == IProblem.Task) {
+				recordTask(newProblem);
+				return;
 		}
 		if (problemCount == 0) {
 			problems = new IProblem[5];
@@ -380,11 +416,25 @@ public class CompilationResult {
 		}
 		problems[problemCount++] = newProblem;
 		if (referenceContext != null){
-			if (problemsMap == null) problemsMap = new Hashtable(5);
-			if (firstErrorsMap == null) firstErrorsMap = new Hashtable(5);
-			if (newProblem.isError() && !referenceContext.hasErrors()) firstErrorsMap.put(newProblem, newProblem);
+			if (problemsMap == null) problemsMap = new HashMap(5);
+			if (firstErrors == null) firstErrors = new HashSet(5);
+			if (newProblem.isError() && !referenceContext.hasErrors()) firstErrors.add(newProblem);
 			problemsMap.put(newProblem, referenceContext);
 		}
+		if ((newProblem.getID() & IProblem.Syntax) != 0 && newProblem.isError())
+			this.hasSyntaxError = true;
+	}
+
+	public void recordSuppressWarnings(long irritant, int scopeStart, int scopeEnd) {
+		if (this.suppressWarningIrritants == null) {
+			this.suppressWarningIrritants = new long[3];
+			this.suppressWarningScopePositions = new long[3];
+		} else if (this.suppressWarningIrritants.length == this.suppressWarningsCount) {
+			System.arraycopy(this.suppressWarningIrritants, 0,this.suppressWarningIrritants = new long[2*this.suppressWarningsCount], 0, this.suppressWarningsCount);
+			System.arraycopy(this.suppressWarningScopePositions, 0,this.suppressWarningScopePositions = new long[2*this.suppressWarningsCount], 0, this.suppressWarningsCount);
+		}
+		this.suppressWarningIrritants[this.suppressWarningsCount] = irritant;
+		this.suppressWarningScopePositions[this.suppressWarningsCount++] = ((long)scopeStart<<32) + scopeEnd;
 	}
 
 	private void recordTask(IProblem newProblem) {
@@ -411,9 +461,9 @@ public class CompilationResult {
 		}
 		if (this.compiledTypes != null){
 			buffer.append("COMPILED type(s)	\n");  //$NON-NLS-1$
-			Enumeration typeNames = this.compiledTypes.keys();
-			while (typeNames.hasMoreElements()) {
-				char[] typeName = (char[]) typeNames.nextElement();
+			Iterator keys = this.compiledTypes.keySet().iterator();
+			while (keys.hasNext()) {
+				char[] typeName = (char[]) keys.next();
 				buffer.append("\t - ").append(typeName).append('\n');   //$NON-NLS-1$
 				
 			}
@@ -421,7 +471,7 @@ public class CompilationResult {
 			buffer.append("No COMPILED type\n");  //$NON-NLS-1$
 		}
 		if (problems != null){
-			buffer.append(this.problemCount).append(" PROBLEM(s) detected \n"); //$NON-NLS-1$//$NON-NLS-2$
+			buffer.append(this.problemCount).append(" PROBLEM(s) detected \n"); //$NON-NLS-1$
 			for (int i = 0; i < this.problemCount; i++){
 				buffer.append("\t - ").append(this.problems[i]).append('\n'); //$NON-NLS-1$
 			}

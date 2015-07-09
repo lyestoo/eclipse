@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -34,8 +34,10 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 		this.typeArguments = typeArguments;
 	}
 	public void checkBounds(Scope scope) {
+		if (this.resolvedType == null) return;
+
 		checkBounds(
-			(ReferenceBinding) (this.resolvedType.isArrayType() ? this.resolvedType.leafComponentType() : this.resolvedType),
+			(ReferenceBinding) this.resolvedType.leafComponentType(),
 			scope,
 			this.typeArguments.length - 1);
 	}
@@ -48,9 +50,9 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 			ReferenceBinding currentType = parameterizedType.type;
 			TypeVariableBinding[] typeVariables = currentType.typeVariables();
 			TypeBinding[] argTypes = parameterizedType.arguments;
-			for (int i = 0, argLength = typeVariables.length; i < argLength; i++)
-			    if (!typeVariables[i].boundCheck(parameterizedType, argTypes[i]))
-					scope.problemReporter().typeMismatchError(argTypes[i], typeVariables[i], currentType, this.typeArguments[index][i]);
+			if (argTypes != null && typeVariables != null) { // argTypes may be null in error cases
+				parameterizedType.boundCheck(scope, this.typeArguments[index]);
+			}
 		}
 	}
 	public TypeReference copyDims(int dim){
@@ -107,7 +109,7 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
     /*
      * No need to check for reference to raw type per construction
      */
-	private TypeBinding internalResolveType(Scope scope) {
+	private TypeBinding internalResolveType(Scope scope, boolean checkBounds) {
 
 		// handle the error here
 		this.constant = NotAConstant;
@@ -125,19 +127,34 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 		}
 
 	    PackageBinding packageBinding = binding == null ? null : (PackageBinding) binding;
-		ReferenceBinding qualifiedType = null;
 	    boolean isClassScope = scope.kind == Scope.CLASS_SCOPE;
-		for (int i = packageBinding == null ? 0 : packageBinding.compoundName.length, max = this.tokens.length; i < max; i++) {
+		boolean typeIsConsistent = true;
+		ReferenceBinding qualifiedType = null;
+	    for (int i = packageBinding == null ? 0 : packageBinding.compoundName.length, max = this.tokens.length; i < max; i++) {
 			findNextTypeBinding(i, scope, packageBinding);
 			if (!(this.resolvedType.isValidBinding())) {
 				reportInvalidType(scope);
 				return null;
 			}
 			ReferenceBinding currentType = (ReferenceBinding) this.resolvedType;
-
+			if (qualifiedType == null) {
+				qualifiedType = currentType.enclosingType(); // if member type
+				if (qualifiedType != null && currentType.isStatic() && (qualifiedType.isGenericType() || qualifiedType.isParameterizedType())) {
+					qualifiedType = scope.environment().createRawType((ReferenceBinding)qualifiedType.erasure(), qualifiedType.enclosingType());
+				}
+			}				
+			if (typeIsConsistent && currentType.isStatic() && qualifiedType != null && (qualifiedType.isParameterizedType() || qualifiedType.isGenericType())) {
+				scope.problemReporter().staticMemberOfParameterizedType(this, scope.environment().createParameterizedType((ReferenceBinding)currentType.erasure(), null, qualifiedType));
+				typeIsConsistent = false;
+			}			
 			// check generic and arity
 		    TypeReference[] args = this.typeArguments[i];
 		    if (args != null) {
+			    TypeReference keep = null;
+			    if (isClassScope) {
+			    	keep = ((ClassScope) scope).superTypeReference;
+			    	((ClassScope) scope).superTypeReference = null;
+			    }
 				int argLength = args.length;
 				TypeBinding[] argTypes = new TypeBinding[argLength];
 				boolean argHasError = false;
@@ -151,12 +168,15 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 					} else {
 						argTypes[j] = argType;
 					}			    
+				}				
+				if (argHasError) {
+					return null;
 				}
-				if (argHasError) return null;
-// TODO (philippe)	if ((this.bits & ASTNode.IsSuperType) != 0)
-				if (isClassScope)
-					if (((ClassScope) scope).detectCycle(currentType, this, argTypes))
+				if (isClassScope) {
+					((ClassScope) scope).superTypeReference = keep;
+					if (((ClassScope) scope).detectHierarchyCycle(currentType, this, argTypes))
 						return null;
+				}
 
 			    TypeVariableBinding[] typeVariables = currentType.typeVariables();
 				if (typeVariables == NoTypeVariables) { // check generic
@@ -166,27 +186,48 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 					scope.problemReporter().incorrectArityForParameterizedType(this, currentType, argTypes);
 					return null;
 				}
-				ParameterizedTypeBinding parameterizedType = scope.createParameterizedType(currentType, argTypes, qualifiedType);
-				// check argument type compatibility now if not a class scope
-				if (!isClassScope) // otherwise will do it in Scope.connectTypeVariables()
-					for (int j = 0; j < argLength; j++)
-					    if (!typeVariables[j].boundCheck(parameterizedType, argTypes[j]))
-							scope.problemReporter().typeMismatchError(argTypes[j], typeVariables[j], currentType, args[j]);
-				qualifiedType = parameterizedType;
+				// check parameterizing non-static member type of raw type
+				if (typeIsConsistent && !currentType.isStatic() && qualifiedType != null && qualifiedType.isRawType()) {
+					scope.problemReporter().rawMemberTypeCannotBeParameterized(
+							this, scope.environment().createRawType((ReferenceBinding)currentType.erasure(), qualifiedType), argTypes);
+					typeIsConsistent = false;				
+				}
+				// if generic type X<T> is referred to as parameterized X<T>, then answer itself
+				boolean isIdentical = (qualifiedType == null) || (qualifiedType instanceof SourceTypeBinding);
+				if (isIdentical) {
+				    for (int j = 0; j < argLength; j++) {
+						if (typeVariables[j] != argTypes[j]) {
+							isIdentical = false;
+						    break;
+						}
+					}
+				}
+			    if (isIdentical) {
+			    	qualifiedType = (ReferenceBinding) currentType.erasure();
+			    } else {
+					ParameterizedTypeBinding parameterizedType = scope.environment().createParameterizedType((ReferenceBinding)currentType.erasure(), argTypes, qualifiedType);
+					// check argument type compatibility
+					if (checkBounds) // otherwise will do it in Scope.connectTypeVariables() or generic method resolution
+						parameterizedType.boundCheck(scope, args);
+					qualifiedType = parameterizedType;
+			    }
 		    } else {
-// TODO (philippe)	if ((this.bits & ASTNode.IsSuperType) != 0)
 				if (isClassScope)
-					if (((ClassScope) scope).detectCycle(currentType, this, null))
+					if (((ClassScope) scope).detectHierarchyCycle(currentType, this, null))
 						return null;
-
-				if (currentType.isGenericType()) { // check raw type
-   			    	qualifiedType = scope.environment().createRawType(currentType, qualifiedType); // raw type
-   			    } else if (qualifiedType != null && (qualifiedType.isParameterizedType() || qualifiedType.isRawType())) {
-   			    	qualifiedType = scope.createParameterizedType(currentType, null, qualifiedType);
-   			    }
+				if (currentType.isGenericType()) {
+	   			    if (typeIsConsistent && qualifiedType != null && qualifiedType.isParameterizedType()) {
+						scope.problemReporter().parameterizedMemberTypeMissingArguments(this, scope.environment().createParameterizedType((ReferenceBinding)currentType.erasure(), null, qualifiedType));
+						typeIsConsistent = false;
+					}
+	   			    qualifiedType = scope.environment().createRawType(currentType, qualifiedType); // raw type
+				} else {
+					qualifiedType = (qualifiedType != null && qualifiedType.isParameterizedType())
+													? scope.environment().createParameterizedType((ReferenceBinding)currentType.erasure(), null, qualifiedType)
+													: currentType;
+				}
 			}
 		}
-
 		this.resolvedType = qualifiedType;
 		if (isTypeUseDeprecated(this.resolvedType, scope))
 			reportDeprecatedType(scope);
@@ -194,7 +235,7 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 		if (this.dimensions > 0) {
 			if (dimensions > 255)
 				scope.problemReporter().tooManyDimensions(this);
-			this.resolvedType = scope.createArrayType(qualifiedType, dimensions);
+			this.resolvedType = scope.createArrayType(this.resolvedType, dimensions);
 		}
 		return this.resolvedType;
 	}
@@ -205,7 +246,7 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 			output.append(tokens[i]);
 			TypeReference[] typeArgument = typeArguments[i];
 			if (typeArgument != null) {
-				output.append('<');//$NON-NLS-1$
+				output.append('<');
 				int max = typeArgument.length - 1;
 				for (int j = 0; j < max; j++) {
 					typeArgument[j].print(0, output);
@@ -219,7 +260,7 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 		output.append(tokens[length - 1]);
 		TypeReference[] typeArgument = typeArguments[length - 1];
 		if (typeArgument != null) {
-			output.append('<');//$NON-NLS-1$
+			output.append('<');
 			int max = typeArgument.length - 1;
 			for (int j = 0; j < max; j++) {
 				typeArgument[j].print(0, output);
@@ -228,17 +269,24 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 			typeArgument[max].print(0, output);
 			output.append('>');
 		}
-		for (int i= 0 ; i < dimensions ; i++) {
-			output.append("[]"); //$NON-NLS-1$
+		if ((this.bits & IsVarArgs) != 0) {
+			for (int i= 0 ; i < dimensions - 1; i++) {
+				output.append("[]"); //$NON-NLS-1$
+			}
+			output.append("..."); //$NON-NLS-1$
+		} else {
+			for (int i= 0 ; i < dimensions; i++) {
+				output.append("[]"); //$NON-NLS-1$
+			}
 		}
 		return output;
 	}	
 	
-	public TypeBinding resolveType(BlockScope scope) {
-	    return internalResolveType(scope);
+	public TypeBinding resolveType(BlockScope scope, boolean checkBounds) {
+	    return internalResolveType(scope, checkBounds);
 	}	
 	public TypeBinding resolveType(ClassScope scope) {
-	    return internalResolveType(scope);
+	    return internalResolveType(scope, false);
 	}
 	public void traverse(ASTVisitor visitor, BlockScope scope) {
 		if (visitor.visit(this, scope)) {

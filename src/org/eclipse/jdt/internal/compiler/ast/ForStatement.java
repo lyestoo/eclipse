@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -83,14 +83,15 @@ public class ForStatement extends Statement {
 		
 		// process the condition
 		LoopingFlowContext condLoopContext = null;
+		FlowInfo condInfo = flowInfo.copy().unconditionalInits().discardNullRelatedInitializations();
 		if (condition != null) {
 			if (!isConditionTrue) {
-				flowInfo =
+				condInfo =
 					condition.analyseCode(
 						scope,
 						(condLoopContext =
 							new LoopingFlowContext(flowContext, this, null, null, scope)),
-						flowInfo);
+						condInfo);
 			}
 		}
 
@@ -98,30 +99,30 @@ public class ForStatement extends Statement {
 		LoopingFlowContext loopingContext;
 		FlowInfo actionInfo;
 		if (action == null 
-			|| (action.isEmptyBlock() && currentScope.environment().options.complianceLevel <= ClassFileConstants.JDK1_3)) {
+			|| (action.isEmptyBlock() && currentScope.compilerOptions().complianceLevel <= ClassFileConstants.JDK1_3)) {
 			if (condLoopContext != null)
-				condLoopContext.complainOnFinalAssignmentsInLoop(scope, flowInfo);
+				condLoopContext.complainOnDeferredChecks(scope, condInfo);
 			if (isConditionTrue) {
 				return FlowInfo.DEAD_END;
 			} else {
 				if (isConditionFalse){
 					continueLabel = null; // for(;false;p());
 				}
-				actionInfo = flowInfo.initsWhenTrue().copy();
+				actionInfo = condInfo.initsWhenTrue().copy().unconditionalInits().discardNullRelatedInitializations();
 				loopingContext =
 					new LoopingFlowContext(flowContext, this, breakLabel, continueLabel, scope);
 			}
 		} else {
 			loopingContext =
 				new LoopingFlowContext(flowContext, this, breakLabel, continueLabel, scope);
-			FlowInfo initsWhenTrue = flowInfo.initsWhenTrue();
+			FlowInfo initsWhenTrue = condInfo.initsWhenTrue();
 			condIfTrueInitStateIndex =
 				currentScope.methodScope().recordInitializationStates(initsWhenTrue);
 
 				if (isConditionFalse) {
 					actionInfo = FlowInfo.DEAD_END;
 				} else {
-					actionInfo = initsWhenTrue.copy();
+					actionInfo = initsWhenTrue.copy().unconditionalInits().discardNullRelatedInitializations();
 					if (isConditionOptimizedFalse){
 						actionInfo.setReachMode(FlowInfo.UNREACHABLE);
 					}
@@ -135,26 +136,31 @@ public class ForStatement extends Statement {
 				continueLabel = null;
 			} else {
 				if (condLoopContext != null)
-					condLoopContext.complainOnFinalAssignmentsInLoop(scope, flowInfo);
+					condLoopContext.complainOnDeferredChecks(scope, condInfo);
 				actionInfo = actionInfo.mergedWith(loopingContext.initsOnContinue.unconditionalInits());
-				loopingContext.complainOnFinalAssignmentsInLoop(scope, actionInfo);
+				loopingContext.complainOnDeferredChecks(scope, actionInfo);
 			}
 		}
 		// for increments
-		if ((continueLabel != null) && (increments != null)) {
-			LoopingFlowContext loopContext =
-				new LoopingFlowContext(flowContext, this, null, null, scope);
-			for (int i = 0, count = increments.length; i < count; i++) {
-				actionInfo = increments[i].analyseCode(scope, loopContext, actionInfo);
+		FlowInfo exitBranch = condInfo.initsWhenFalse();
+		exitBranch.addInitializationsFrom(flowInfo); // recover null inits from before condition analysis
+		if (continueLabel != null) {
+			if (increments != null) {
+				LoopingFlowContext loopContext =
+					new LoopingFlowContext(flowContext, this, null, null, scope);
+				for (int i = 0, count = increments.length; i < count; i++) {
+					actionInfo = increments[i].analyseCode(scope, loopContext, actionInfo);
+				}
+				loopContext.complainOnDeferredChecks(scope, actionInfo);
 			}
-			loopContext.complainOnFinalAssignmentsInLoop(scope, actionInfo);
+			exitBranch.addPotentialInitializationsFrom(actionInfo.unconditionalInits());
 		}
 
 		//end of loop
 		FlowInfo mergedInfo = FlowInfo.mergedOptimizedBranches(
 				loopingContext.initsOnBreak, 
 				isConditionOptimizedTrue, 
-				flowInfo.initsWhenFalse(), 
+				exitBranch, 
 				isConditionOptimizedFalse, 
 				!isConditionTrue /*for(;;){}while(true); unreachable(); */);
 		mergedInitStateIndex = currentScope.methodScope().recordInitializationStates(mergedInfo);
@@ -274,7 +280,7 @@ public class ForStatement extends Statement {
 			output.append(';');
 		else {
 			output.append('\n');
-			action.printStatement(tab + 1, output); //$NON-NLS-1$
+			action.printStatement(tab + 1, output);
 		}
 		return output.append(';');
 	}

@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -79,12 +79,19 @@ public abstract class AbstractMethodDeclaration
 
 		if (this.arguments != null) {
 			// by default arguments in abstract/native methods are considered to be used (no complaint is expected)
-			boolean used = this.binding == null || this.binding.isAbstract() || this.binding.isNative();
-
-			int length = this.arguments.length;
-			for (int i = 0; i < length; i++) {
-				TypeBinding argType = this.binding == null ? null : this.binding.parameters[i];
-				this.arguments[i].bind(this.scope, argType, used);
+			if (this.binding == null) {
+				for (int i = 0, length = this.arguments.length; i < length; i++) {
+					this.arguments[i].bind(this.scope, null, true);
+				}
+				return;
+			}
+			boolean used = this.binding.isAbstract() || this.binding.isNative();
+			for (int i = 0, length = this.arguments.length; i < length; i++) {
+				Argument argument = this.arguments[i];
+				argument.bind(this.scope, this.binding.parameters[i], used);
+				if (argument.annotations != null) {
+					this.binding.tagBits |= TagBits.HasParameterAnnotations;
+				}
 			}
 		}
 	}
@@ -109,6 +116,7 @@ public abstract class AbstractMethodDeclaration
 					TypeReference thrownException = this.thrownExceptions[i];
 					ReferenceBinding thrownExceptionBinding = this.binding.thrownExceptions[bindingIndex];
 					char[][] bindingCompoundName = thrownExceptionBinding.compoundName;
+					if (bindingCompoundName == null) continue; // skip problem case
 					if (thrownException instanceof SingleTypeReference) {
 						// single type reference
 						int lengthName = bindingCompoundName.length;
@@ -188,7 +196,7 @@ public abstract class AbstractMethodDeclaration
 		}
 	}
 
-	private void generateCode(ClassFile classFile) {
+	public void generateCode(ClassFile classFile) {
 
 		classFile.generateMethodInfoHeader(this.binding);
 		int methodAttributeOffset = classFile.contentsOffset;
@@ -259,6 +267,11 @@ public abstract class AbstractMethodDeclaration
 		return (this.modifiers & AccAbstract) != 0;
 	}
 
+	public boolean isAnnotationMethod() {
+
+		return false;
+	}
+	
 	public boolean isClinit() {
 
 		return false;
@@ -309,12 +322,16 @@ public abstract class AbstractMethodDeclaration
 
 	public StringBuffer print(int tab, StringBuffer output) {
 
+		if (this.javadoc != null) {
+			this.javadoc.print(tab, output);
+		}
 		printIndent(tab, output);
 		printModifiers(this.modifiers, output);
+		if (this.annotations != null) printAnnotations(this.annotations, output);
 		
 		TypeParameter[] typeParams = typeParameters();
 		if (typeParams != null) {
-			output.append('<');//$NON-NLS-1$
+			output.append('<');
 			int max = typeParams.length - 1;
 			for (int j = 0; j < max; j++) {
 				typeParams[j].print(0, output);
@@ -355,7 +372,7 @@ public abstract class AbstractMethodDeclaration
 				this.statements[i].printStatement(indent, output); 
 			}
 		}
-		output.append('\n'); //$NON-NLS-1$
+		output.append('\n');
 		printIndent(indent == 0 ? 0 : indent - 1, output).append('}');
 		return output;
 	}
@@ -375,6 +392,7 @@ public abstract class AbstractMethodDeclaration
 			bindArguments(); 
 			bindThrownExceptions();
 			resolveJavadoc();
+			resolveAnnotations(scope, this.annotations, this.binding);
 			resolveStatements();
 		} catch (AbortMethod e) {	// ========= abort on fatal error =============
 			this.ignoreFurtherInvestigation = true;

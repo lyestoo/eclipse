@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -34,14 +34,11 @@ public class SyntheticArgumentBinding extends LocalVariableBinding {
 	public LocalVariableBinding actualOuterLocalVariable;
 	// if the argument has a matching synthetic field
 	public FieldBinding matchingField;
-
-	final static char[] OuterLocalPrefix = { 'v', 'a', 'l', '$' };
-	final static char[] EnclosingInstancePrefix = { 't', 'h', 'i', 's', '$' };
 	
 	public SyntheticArgumentBinding(LocalVariableBinding actualOuterLocalVariable) {
 
 		super(
-			CharOperation.concat(OuterLocalPrefix, actualOuterLocalVariable.name), 
+			CharOperation.concat(TypeConstants.SYNTHETIC_OUTER_LOCAL_PREFIX, actualOuterLocalVariable.name), 
 			actualOuterLocalVariable.type, 
 			AccFinal,
 			true);
@@ -52,7 +49,7 @@ public class SyntheticArgumentBinding extends LocalVariableBinding {
 
 		super(
 			CharOperation.concat(
-				SyntheticArgumentBinding.EnclosingInstancePrefix,
+				TypeConstants.SYNTHETIC_ENCLOSING_INSTANCE_PREFIX,
 				String.valueOf(enclosingType.depth()).toCharArray()),
 			enclosingType, 
 			AccFinal,

@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -14,11 +14,12 @@ import java.util.Map;
 
 import org.eclipse.core.resources.*;
 import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.core.compiler.InvalidInputException;
-import org.eclipse.jdt.core.compiler.IProblem;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
 import org.eclipse.jdt.internal.compiler.parser.*;
-import org.eclipse.jdt.internal.core.*;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
+import org.eclipse.jdt.internal.core.util.Messages;
+import org.eclipse.jdt.internal.core.util.Util;
 
 /**
  * This class is the entry point for source corrections.
@@ -97,13 +98,12 @@ public class CorrectionEngine implements ProblemReasons {
 	 * 
 	 * @param marker
 	 * 		the marker which describe the problem to correct.
-	 * 
 	 * @param targetUnit
 	 * 		replace the compilation unit given by the marker. Ignored if null.
-	 * 
 	 * @param positionOffset
 	 * 		the offset of position given by the marker.
-	 *
+	 * @param requestor
+	 * 		the given correction requestor
 	 * @exception IllegalArgumentException if <code>requestor</code> is <code>null</code>
 	 * @exception JavaModelException currently this exception is never thrown, but the opportunity to thrown an exception
 	 * 	when the correction failed is kept for later. 
@@ -134,10 +134,10 @@ public class CorrectionEngine implements ProblemReasons {
 	 * 
 	 * @param problem
 	 * 		the problem which describe the problem to correct.
-	 * 
 	 * @param targetUnit
 	 * 		denote the compilation unit in which correction occurs. Cannot be null.
-	 * 
+	 * @param requestor
+	 * 		the given correction requestor
 	 * @exception IllegalArgumentException if <code>targetUnit</code> or <code>requestor</code> is <code>null</code>
 	 * @exception JavaModelException currently this exception is never thrown, but the opportunity to thrown an exception
 	 * 	when the correction failed is kept for later.
@@ -145,7 +145,7 @@ public class CorrectionEngine implements ProblemReasons {
 	 */
 	public void computeCorrections(IProblem problem, ICompilationUnit targetUnit, ICorrectionRequestor requestor) throws JavaModelException {
 		if (requestor == null) {
-			throw new IllegalArgumentException(Util.bind("correction.nullUnit")); //$NON-NLS-1$
+			throw new IllegalArgumentException(Messages.correction_nullUnit);
 		}
 		this.computeCorrections(
 			targetUnit, problem.getID(), 
@@ -155,7 +155,7 @@ public class CorrectionEngine implements ProblemReasons {
 			requestor);
 	}
 
-	/**
+	/*
 	 * Ask the engine to compute a correction for the specified problem
 	 * of the given compilation unit.
 	 * Correction results are answered through a requestor.
@@ -185,7 +185,7 @@ public class CorrectionEngine implements ProblemReasons {
 		if(id == -1 || arguments == null || start == -1 || end == -1)
 			return;		
 		if (requestor == null) {
-			throw new IllegalArgumentException(Util.bind("correction.nullRequestor")); //$NON-NLS-1$
+			throw new IllegalArgumentException(Messages.correction_nullRequestor);
 		}
 		
 		this.correctionRequestor = requestor;
@@ -197,49 +197,28 @@ public class CorrectionEngine implements ProblemReasons {
 		try {
 			switch (id) {
 				// Type correction
-				case IProblem.FieldTypeNotFound :
-				case IProblem.ArgumentTypeNotFound :
-					filter = CLASSES | INTERFACES;
-					argument = arguments[2];
-					break;
-				case IProblem.SuperclassNotFound :
-					filter = CLASSES;
-					argument = arguments[0];
-					break;
-				case IProblem.InterfaceNotFound :
-					filter = INTERFACES;
-					argument = arguments[0];
-					break;
-				case IProblem.ExceptionTypeNotFound :
-					filter = CLASSES;
-					argument = arguments[1];
-					break;
-				case IProblem.ReturnTypeNotFound :
-					filter = CLASSES | INTERFACES;
-					argument = arguments[1];
-					break;
 				case IProblem.ImportNotFound :
-					filter = IMPORT;
+					this.filter = IMPORT;
 					argument = arguments[0];
 					break;
 				case IProblem.UndefinedType :
-					filter = CLASSES | INTERFACES;
+					this.filter = CLASSES | INTERFACES;
 					argument = arguments[0];
 					break;
 					
 				// Method correction
 				case IProblem.UndefinedMethod :
-					filter = METHOD;
+					this.filter = METHOD;
 					argument = arguments[1];
 					break;
 					
 				// Field and local variable correction
 				case IProblem.UndefinedField :
-					filter = FIELD;
+					this.filter = FIELD;
 					argument = arguments[0];
 					break;
 				case IProblem.UndefinedName :
-					filter = FIELD | LOCAL;
+					this.filter = FIELD | LOCAL;
 					argument = arguments[0];
 					break;
 			}
@@ -253,11 +232,11 @@ public class CorrectionEngine implements ProblemReasons {
 
 	private void correct(char[] argument) {
 		try {
-			String source = compilationUnit.getSource();
+			String source = this.compilationUnit.getSource();
 			Scanner scanner = new Scanner();
 			scanner.setSource(source.toCharArray());
 			
-			scanner.resetTo(correctionStart, correctionEnd);
+			scanner.resetTo(this.correctionStart, this.correctionEnd);
 			int token = 0;
 			char[] argumentSource = CharOperation.NO_CHAR;
 			
@@ -273,17 +252,17 @@ public class CorrectionEngine implements ProblemReasons {
 					return;
 				
 				if(CharOperation.equals(argument, argumentSource)) {
-					correctionStart = scanner.startPosition;
-					correctionEnd = scanner.currentPosition;
-					prefixLength = CharOperation.lastIndexOf('.', argument) + 1;
+					this.correctionStart = scanner.startPosition;
+					this.correctionEnd = scanner.currentPosition;
+					this.prefixLength = CharOperation.lastIndexOf('.', argument) + 1;
 					break;
 				}
 				
 			}
 		
 			// search completion position
-			int completionPosition = correctionStart;
-			scanner.resetTo(completionPosition, correctionEnd);
+			int completionPosition = this.correctionStart;
+			scanner.resetTo(completionPosition, this.correctionEnd);
 			int position = completionPosition;
 			
 			for (int i = 0; i < 4; i++) {
@@ -295,9 +274,9 @@ public class CorrectionEngine implements ProblemReasons {
 				}
 			}
 			
-			compilationUnit.codeComplete(
+			this.compilationUnit.codeComplete(
 				completionPosition,
-				completionRequestor
+				this.completionRequestor
 			);
 		} catch (JavaModelException e) {
 			return;
@@ -309,106 +288,103 @@ public class CorrectionEngine implements ProblemReasons {
 	/**
 	 * This field is not intended to be used by client.
 	 */
-	protected ICompletionRequestor completionRequestor = new ICompletionRequestor() {
-		public void acceptAnonymousType(char[] superTypePackageName,char[] superTypeName,char[][] parameterPackageNames,char[][] parameterTypeNames,char[][] parameterNames,char[] completionName,int modifiers,int completionStart,int completionEnd, int relevance) {}
-		public void acceptClass(char[] packageName,char[] className,char[] completionName,int modifiers,int completionStart,int completionEnd, int relevance) {
-			if((filter & (CLASSES | INTERFACES)) != 0) {
-				correctionRequestor.acceptClass(
-					packageName,
-					className,
-					CharOperation.subarray(completionName, prefixLength, completionName.length),
-					modifiers,
-					correctionStart,
-					correctionEnd);
-			} else if((filter & IMPORT) != 0) {
-				char[] fullName = CharOperation.concat(packageName, className, '.');
-				correctionRequestor.acceptClass(
-					packageName,
-					className,
-					CharOperation.subarray(fullName, prefixLength, fullName.length),
-					modifiers,
-					correctionStart,
-					correctionEnd);
+	protected CompletionRequestor completionRequestor = new CompletionRequestor() {
+		public void accept(CompletionProposal proposal) {
+			switch (proposal.getKind()) {
+				case CompletionProposal.TYPE_REF:
+					int flags = proposal.getFlags();
+					if (!(Flags.isEnum(flags) || Flags.isAnnotation(flags))) {
+						if((CorrectionEngine.this.filter & (CLASSES | INTERFACES)) != 0) {
+							char[] completionName = proposal.getCompletion();
+							CorrectionEngine.this.correctionRequestor.acceptClass(
+								proposal.getDeclarationSignature(),
+								Signature.getSignatureSimpleName(proposal.getSignature()),
+								CharOperation.subarray(completionName, CorrectionEngine.this.prefixLength, completionName.length),
+								proposal.getFlags(),
+								CorrectionEngine.this.correctionStart,
+								CorrectionEngine.this.correctionEnd);
+						} else if((CorrectionEngine.this.filter & IMPORT) != 0) {
+							char[] packageName = proposal.getDeclarationSignature();
+							char[] className = Signature.getSignatureSimpleName(proposal.getSignature());
+							char[] fullName = CharOperation.concat(packageName, className, '.');
+							CorrectionEngine.this.correctionRequestor.acceptClass(
+								packageName,
+								className,
+								CharOperation.subarray(fullName, CorrectionEngine.this.prefixLength, fullName.length),
+								proposal.getFlags(),
+								CorrectionEngine.this.correctionStart,
+								CorrectionEngine.this.correctionEnd);
+						}					
+					}
+					break;
+				case CompletionProposal.FIELD_REF:
+					if((CorrectionEngine.this.filter & FIELD) != 0) {
+						char[] declaringSignature = proposal.getDeclarationSignature();
+						char[] signature = proposal.getSignature();
+						CorrectionEngine.this.correctionRequestor.acceptField(
+							Signature.getSignatureQualifier(declaringSignature),
+							Signature.getSignatureSimpleName(declaringSignature),
+							proposal.getName(),
+							Signature.getSignatureQualifier(signature),
+							Signature.getSignatureSimpleName(signature),
+							proposal.getName(),
+							proposal.getFlags(),
+							CorrectionEngine.this.correctionStart,
+							CorrectionEngine.this.correctionEnd);
+					}
+					break;
+				case CompletionProposal.LOCAL_VARIABLE_REF:
+					if((CorrectionEngine.this.filter & LOCAL) != 0) {
+						char[] signature = proposal.getSignature();
+						CorrectionEngine.this.correctionRequestor.acceptLocalVariable(
+							proposal.getName(),
+							Signature.getSignatureQualifier(signature),
+							Signature.getSignatureSimpleName(signature),
+							proposal.getFlags(),
+							CorrectionEngine.this.correctionStart,
+							CorrectionEngine.this.correctionEnd);
+					}
+					break;
+				case CompletionProposal.METHOD_REF:
+					if((CorrectionEngine.this.filter & METHOD) != 0) {
+						char[] declaringSignature = proposal.getDeclarationSignature();
+						char[] signature = proposal.getSignature();
+						char[][] parameterTypeSignatures = Signature.getParameterTypes(signature);
+						int length = parameterTypeSignatures.length;
+						char[][] parameterPackageNames = new char[length][];
+						char[][] parameterTypeNames = new char[length][];
+						for (int i = 0; i < length; i++) {
+							parameterPackageNames[i] = Signature.getSignatureQualifier(parameterTypeSignatures[i]);
+							parameterTypeNames[i] = Signature.getSignatureSimpleName(parameterTypeSignatures[i]);
+						}
+						char[] returnTypeSignature = Signature.getReturnType(signature);
+						CorrectionEngine.this.correctionRequestor.acceptMethod(
+							Signature.getSignatureQualifier(declaringSignature),
+							Signature.getSignatureSimpleName(declaringSignature),
+							proposal.getName(),
+							parameterPackageNames,
+							parameterTypeNames,
+							proposal.findParameterNames(null),
+							Signature.getSignatureQualifier(returnTypeSignature),
+							Signature.getSignatureSimpleName(returnTypeSignature),
+							proposal.getName(),
+							proposal.getFlags(),
+							CorrectionEngine.this.correctionStart,
+							CorrectionEngine.this.correctionEnd);
+					}
+					break;
+				case CompletionProposal.PACKAGE_REF:
+					if((CorrectionEngine.this.filter & (CLASSES | INTERFACES | IMPORT)) != 0) {
+						char[] packageName = proposal.getDeclarationSignature();
+						CorrectionEngine.this.correctionRequestor.acceptPackage(
+							packageName,
+							CharOperation.subarray(packageName, CorrectionEngine.this.prefixLength, packageName.length),
+							CorrectionEngine.this.correctionStart,
+							CorrectionEngine.this.correctionEnd);
+					}
+					break;
 			}
 		}
-		public void acceptError(IProblem error) {}
-		public void acceptField(char[] declaringTypePackageName,char[] declaringTypeName,char[] name,char[] typePackageName,char[] typeName,char[] completionName,int modifiers,int completionStart,int completionEnd, int relevance) {
-			if((filter & FIELD) != 0) {
-				correctionRequestor.acceptField(
-					declaringTypePackageName,
-					declaringTypeName,
-					name,
-					typePackageName,
-					typeName,
-					name,
-					modifiers,
-					correctionStart,
-					correctionEnd);
-			}
-		}
-		public void acceptInterface(char[] packageName,char[] interfaceName,char[] completionName,int modifiers,int completionStart,int completionEnd, int relevance) {
-			if((filter & (CLASSES | INTERFACES)) != 0) {
-				correctionRequestor.acceptInterface(
-					packageName,
-					interfaceName,
-					CharOperation.subarray(completionName, prefixLength, completionName.length),
-					modifiers,
-					correctionStart,
-					correctionEnd);
-			} else if((filter & IMPORT) != 0) {
-				char[] fullName = CharOperation.concat(packageName, interfaceName, '.');
-				correctionRequestor.acceptInterface(
-					packageName,
-					interfaceName,
-					CharOperation.subarray(fullName, prefixLength, fullName.length),
-					modifiers,
-					correctionStart,
-					correctionEnd);
-			}
-		}
-		public void acceptKeyword(char[] keywordName,int completionStart,int completionEnd, int relevance) {}
-		public void acceptLabel(char[] labelName,int completionStart,int completionEnd, int relevance) {}
-		public void acceptLocalVariable(char[] name,char[] typePackageName,char[] typeName,int modifiers,int completionStart,int completionEnd, int relevance) {
-			if((filter & LOCAL) != 0) {
-				correctionRequestor.acceptLocalVariable(
-					name,
-					typePackageName,
-					typeName,
-					modifiers,
-					correctionStart,
-					correctionEnd);
-			}
-		}
-		public void acceptMethod(char[] declaringTypePackageName,char[] declaringTypeName,char[] selector,char[][] parameterPackageNames,char[][] parameterTypeNames,char[][] parameterNames,char[] returnTypePackageName,char[] returnTypeName,char[] completionName,int modifiers,int completionStart,int completionEnd, int relevance) {
-			if((filter & METHOD) != 0) {
-				correctionRequestor.acceptMethod(
-					declaringTypePackageName,
-					declaringTypeName,
-					selector,
-					parameterPackageNames,
-					parameterTypeNames,
-					parameterNames,
-					returnTypePackageName,
-					returnTypeName,
-					selector,
-					modifiers,
-					correctionStart,
-					correctionEnd);
-			}
-		}
-		public void acceptMethodDeclaration(char[] declaringTypePackageName,char[] declaringTypeName,char[] selector,char[][] parameterPackageNames,char[][] parameterTypeNames,char[][] parameterNames,char[] returnTypePackageName,char[] returnTypeName,char[] completionName,int modifiers,int completionStart,int completionEnd, int relevance) {}
-		public void acceptModifier(char[] modifierName,int completionStart,int completionEnd, int relevance) {}
-		public void acceptPackage(char[] packageName,char[] completionName,int completionStart,int completionEnd, int relevance) {
-			if((filter & (CLASSES | INTERFACES | IMPORT)) != 0) {
-				correctionRequestor.acceptPackage(
-					packageName,
-					CharOperation.subarray(packageName, prefixLength, packageName.length),
-					correctionStart,
-					correctionEnd);
-			}
-		}
-		public void acceptType(char[] packageName,char[] typeName,char[] completionName,int completionStart,int completionEnd, int relevance) {}
-		public void acceptVariableName(char[] typePackageName,char[] typeName,char[] name,char[] completionName,int completionStart,int completionEnd, int relevance) {}
 	};
 	
 	/**
@@ -425,4 +401,39 @@ public class CorrectionEngine implements ProblemReasons {
 		String argumentsString = problemMarker.getAttribute(IJavaModelMarker.ARGUMENTS, null);
 		return Util.getProblemArgumentsFromMarker(argumentsString);
 	}	
+	
+	/**
+	 * Returns a token which can be used to suppress a given warning using 
+	 * <code>@SuppressWarnings</code> annotation, for a given problem ID 
+	 * ({@link IProblem }). If a particular problem is not suppressable, 
+	 * <code>null</code> will be returned. 
+	 * <p>
+	 * <b>Note:</b> <code>@SuppressWarnings</code> can only suppress warnings, 
+	 * which means that if some problems got promoted to ERROR using custom compiler 
+	 * settings ({@link IJavaProject#setOption(String, String)}), the 
+	 * <code>@SuppressWarnings</code> annotation will be ineffective.
+	 * </p>
+	 * <p>
+	 * <b>Note:</b> <code>@SuppressWarnings</code> can be argumented with 
+	 * <code>"all"</code> so as to suppress all possible warnings at once.
+	 * </p>
+	 * <p>
+	 * <b>Note:</b> The tokens returned are not necessarily standardized across Java 
+	 * compilers. If you were to use one of these tokens in an @SuppressWarnings 
+	 * annotation in the Java source code, the effects (if any) may vary from 
+	 * compiler to compiler.
+	 * </p>
+	 * @param problemID
+	 *         the ID of a given warning to suppress
+	 * @return a String which can be used in <code>@SuppressWarnings</code> annotation, 
+	 * or <code>null</code> if unable to suppress this warning.
+	 * @since 3.1
+	 */
+	public static String getWarningToken(int problemID){
+		long irritant = ProblemReporter.getIrritant(problemID);
+		if (irritant != 0) {
+			return CompilerOptions.warningTokenFromIrritant(irritant);
+		}
+		return null;
+	}
 }

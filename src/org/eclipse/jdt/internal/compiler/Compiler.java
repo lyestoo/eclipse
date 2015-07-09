@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -108,7 +108,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 		this.problemReporter =
 			new ProblemReporter(policy, this.options, problemFactory);
 		this.lookupEnvironment =
-			new LookupEnvironment(this, options, problemReporter, environment);
+			new LookupEnvironment(this, this.options, this.problemReporter, environment);
 		initializeParser();
 	}
 	
@@ -173,31 +173,28 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			};
 		}
 		this.problemReporter = new ProblemReporter(policy, this.options, problemFactory);
-		this.lookupEnvironment = new LookupEnvironment(this, options, problemReporter, environment);
+		this.lookupEnvironment = new LookupEnvironment(this, this.options, problemReporter, environment);
 		initializeParser();
 	}
 	
 	/**
 	 * Add an additional binary type
 	 */
-	public void accept(IBinaryType binaryType, PackageBinding packageBinding) {
-		if (options.verbose) {
+	public void accept(IBinaryType binaryType, PackageBinding packageBinding, AccessRestriction accessRestriction) {
+		if (this.options.verbose) {
 			System.out.println(
-				Util.bind(
-					"compilation.loadBinary" , //$NON-NLS-1$
-					new String[] {
-						new String(binaryType.getName())}));
+				Messages.bind(Messages.compilation_loadBinary, new String(binaryType.getName())));
 //			new Exception("TRACE BINARY").printStackTrace(System.out);
 //		    System.out.println();
 		}
-		lookupEnvironment.createBinaryTypeFrom(binaryType, packageBinding);
+		lookupEnvironment.createBinaryTypeFrom(binaryType, packageBinding, accessRestriction);
 	}
 
 	/**
 	 * Add an additional compilation unit into the loop
 	 *  ->  build compilation unit declarations, their bindings and record their results.
 	 */
-	public void accept(ICompilationUnit sourceUnit) {
+	public void accept(ICompilationUnit sourceUnit, AccessRestriction accessRestriction) {
 		// Switch the current policy and compilation result for this unit to the requested one.
 		CompilationResult unitResult =
 			new CompilationResult(sourceUnit, totalUnits, totalUnits, this.options.maxProblemsPerUnit);
@@ -205,12 +202,12 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			if (options.verbose) {
 				String count = String.valueOf(totalUnits + 1);
 				System.out.println(
-					Util.bind(
-						"compilation.request" , //$NON-NLS-1$
+					Messages.bind(Messages.compilation_request,
 						new String[] {
 							count,
 							count,
-							new String(sourceUnit.getFileName())}));
+							new String(sourceUnit.getFileName())
+						}));
 			}
 			// diet parsing for large collection of unit
 			CompilationUnitDeclaration parsedUnit;
@@ -220,7 +217,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 				parsedUnit = parser.dietParse(sourceUnit, unitResult);
 			}
 			// initial type binding creation
-			lookupEnvironment.buildTypeBindings(parsedUnit);
+			lookupEnvironment.buildTypeBindings(parsedUnit, accessRestriction);
 			this.addCompilationUnit(sourceUnit, parsedUnit);
 
 			// binding resolution
@@ -239,12 +236,9 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 	/**
 	 * Add additional source types
 	 */
-	public void accept(ISourceType[] sourceTypes, PackageBinding packageBinding) {
+	public void accept(ISourceType[] sourceTypes, PackageBinding packageBinding, AccessRestriction accessRestriction) {
 		problemReporter.abortDueToInternalError(
-			Util.bind(
-				"abort.againstSourceModel" , //$NON-NLS-1$
-				String.valueOf(sourceTypes[0].getName()),
-				String.valueOf(sourceTypes[0].getFileName())));
+			Messages.bind(Messages.abort_againstSourceModel, new String[] { String.valueOf(sourceTypes[0].getName()), String.valueOf(sourceTypes[0].getFileName()) })); 
 	}
 
 	protected void addCompilationUnit(
@@ -281,12 +275,12 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			try {
 				if (options.verbose) {
 					System.out.println(
-						Util.bind(
-							"compilation.request" , //$NON-NLS-1$
-							new String[] {
-								String.valueOf(i + 1),
-								String.valueOf(maxUnits),
-								new String(sourceUnits[i].getFileName())}));
+						Messages.bind(Messages.compilation_request,
+						new String[] {
+							String.valueOf(i + 1),
+							String.valueOf(maxUnits),
+							new String(sourceUnits[i].getFileName())
+						}));
 				}
 				// diet parsing for large collection of units
 				if (totalUnits < parseThreshold) {
@@ -295,7 +289,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 					parsedUnit = parser.dietParse(sourceUnits[i], unitResult);
 				}
 				// initial type binding creation
-				lookupEnvironment.buildTypeBindings(parsedUnit);
+				lookupEnvironment.buildTypeBindings(parsedUnit, null /*no access restriction*/);
 				this.addCompilationUnit(sourceUnits[i], parsedUnit);
 				//} catch (AbortCompilationUnit e) {
 				//	requestor.acceptResult(unitResult.tagAsAccepted());
@@ -321,17 +315,17 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			beginToCompile(sourceUnits);
 
 			// process all units (some more could be injected in the loop by the lookup environment)
-			for (; i < totalUnits; i++) {
+			for (; i < this.totalUnits; i++) {
 				unit = unitsToProcess[i];
 				try {
 					if (options.verbose)
 						System.out.println(
-							Util.bind(
-								"compilation.process" , //$NON-NLS-1$
-								new String[] {
-									String.valueOf(i + 1),
-									String.valueOf(totalUnits),
-									new String(unitsToProcess[i].getFileName())}));
+							Messages.bind(Messages.compilation_process,
+							new String[] {
+								String.valueOf(i + 1),
+								String.valueOf(this.totalUnits),
+								new String(unitsToProcess[i].getFileName())
+							}));
 					process(unit, i);
 				} finally {
 					// cleanup compilation unit result
@@ -340,11 +334,13 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 				unitsToProcess[i] = null; // release reference to processed unit declaration
 				requestor.acceptResult(unit.compilationResult.tagAsAccepted());
 				if (options.verbose)
-					System.out.println(Util.bind("compilation.done", //$NON-NLS-1$
-				new String[] {
-					String.valueOf(i + 1),
-					String.valueOf(totalUnits),
-					new String(unit.getFileName())}));
+					System.out.println(
+						Messages.bind(Messages.compilation_done,
+						new String[] {
+							String.valueOf(i + 1),
+							String.valueOf(this.totalUnits),
+							new String(unit.getFileName())
+						}));
 			}
 		} catch (AbortCompilation e) {
 			this.handleInternalException(e, unit);
@@ -358,12 +354,12 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			this.reset();
 		}
 		if (options.verbose) {
-			if (totalUnits > 1) {
+			if (this.totalUnits > 1) {
 				System.out.println(
-					Util.bind("compilation.units" , String.valueOf(totalUnits))); //$NON-NLS-1$
+					Messages.bind(Messages.compilation_units, String.valueOf(this.totalUnits))); 
 			} else {
 				System.out.println(
-					Util.bind("compilation.unit" , String.valueOf(totalUnits))); //$NON-NLS-1$
+					Messages.bind(Messages.compilation_unit, String.valueOf(this.totalUnits))); 
 			}
 		}
 	}
@@ -376,9 +372,17 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 		CompilationUnitDeclaration unit,
 		CompilationResult result) {
 
-		/* find a compilation result */
-		if ((unit != null)) // basing result upon the current unit if available
+		if ((result == null) && (unit != null)) {
 			result = unit.compilationResult; // current unit being processed ?
+		}
+		// Lookup environment may be in middle of connecting types
+		if ((result == null) && lookupEnvironment.unitBeingCompleted != null) {
+		    result = lookupEnvironment.unitBeingCompleted.compilationResult;
+		}		
+		// Lookup environment may be in middle of connecting types
+		if ((result == null) && lookupEnvironment.unitBeingCompleted != null) {
+		    result = lookupEnvironment.unitBeingCompleted.compilationResult;
+		}		
 		if ((result == null) && (unitsToProcess != null) && (totalUnits > 0))
 			result = unitsToProcess[totalUnits - 1].compilationResult;
 		// last unit in beginToCompile ?
@@ -392,7 +396,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			StringBuffer buffer = stringWriter.getBuffer();
 
 			String[] pbArguments = new String[] {
-				Util.bind("compilation.internalError" ) //$NON-NLS-1$
+				Messages.compilation_internalError
 					+ "\n"  //$NON-NLS-1$
 					+ buffer.toString()};
 
@@ -466,7 +470,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 					if (distantProblem instanceof DefaultProblem) { // fixup filename TODO (philippe) should improve API to make this official
 						((DefaultProblem) distantProblem).setOriginatingFileName(result.getFileName());
 					}
-					result	.record(distantProblem, unit);
+					result.record(distantProblem, unit);
 				}
 			} else {
 				/* distant internal exception which could not be reported back there */
@@ -546,7 +550,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 				unit = unitsToProcess[0];
 			} else {
 				// initial type binding creation
-				lookupEnvironment.buildTypeBindings(unit);
+				lookupEnvironment.buildTypeBindings(unit, null /*no access restriction*/);
 
 				// binding resolution
 				lookupEnvironment.completeTypeBindings();

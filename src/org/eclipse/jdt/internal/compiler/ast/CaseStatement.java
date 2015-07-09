@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -20,6 +20,8 @@ public class CaseStatement extends Statement {
 	
 	public Expression constantExpression;
 	public CaseLabel targetLabel;
+	public boolean isEnumConstant;
+	
 	public CaseStatement(Expression constantExpression, int sourceEnd, int sourceStart) {
 		this.constantExpression = constantExpression;
 		this.sourceEnd = sourceEnd;
@@ -32,7 +34,7 @@ public class CaseStatement extends Statement {
 		FlowInfo flowInfo) {
 
 		if (constantExpression != null) {
-			if (constantExpression.constant == NotAConstant) {
+			if (!this.isEnumConstant && constantExpression.constant == NotAConstant) {
 				currentScope.problemReporter().caseExpressionMustBeConstant(constantExpression);
 			}
 			this.constantExpression.analyseCode(currentScope, flowContext, flowInfo);
@@ -73,12 +75,16 @@ public class CaseStatement extends Statement {
 		// no-op : should use resolveCase(...) instead.
 	}
 
+	/**
+	 * Returns the constant intValue or ordinal for enum constants. If constant is NotAConstant, then answers Float.MIN_VALUE
+	 * @see org.eclipse.jdt.internal.compiler.ast.Statement#resolveCase(org.eclipse.jdt.internal.compiler.lookup.BlockScope, org.eclipse.jdt.internal.compiler.lookup.TypeBinding, org.eclipse.jdt.internal.compiler.ast.SwitchStatement)
+	 */
 	public Constant resolveCase(
 		BlockScope scope,
-		TypeBinding switchType,
+		TypeBinding switchExpressionType,
 		SwitchStatement switchStatement) {
 
-	    scope.switchCase = this; // record entering in a switch case block
+	    scope.enclosingCase = this; // record entering in a switch case block
 	    
 		if (constantExpression == null) {
 			// remember the default case into the associated switch statement
@@ -87,18 +93,40 @@ public class CaseStatement extends Statement {
 	
 			// on error the last default will be the selected one ...	
 			switchStatement.defaultCase = this;
-			return null;
+			return NotAConstant;
 		}
 		// add into the collection of cases of the associated switch statement
 		switchStatement.cases[switchStatement.caseCount++] = this;
+		// tag constant name with enum type for privileged access to its members
+		if (switchExpressionType.isEnum() && (constantExpression instanceof SingleNameReference)) {
+			((SingleNameReference) constantExpression).setActualReceiverType((ReferenceBinding)switchExpressionType);
+		}
 		TypeBinding caseType = constantExpression.resolveType(scope);
-		if (caseType == null || switchType == null) return null;
-		if (constantExpression.isConstantValueOfTypeAssignableToType(caseType, switchType))
+		if (caseType == null || switchExpressionType == null) return NotAConstant;
+		if (constantExpression.isConstantValueOfTypeAssignableToType(caseType, switchExpressionType)
+				|| caseType.isCompatibleWith(switchExpressionType)) {
+			if (caseType.isEnum()) {
+				this.isEnumConstant = true;
+				if (constantExpression instanceof NameReference
+						&& (constantExpression.bits & RestrictiveFlagMASK) == Binding.FIELD) {
+					NameReference reference = (NameReference) constantExpression;
+					FieldBinding field = reference.fieldBinding();
+					if ((field.modifiers & AccEnum) == 0) {
+						 scope.problemReporter().enumSwitchCannotTargetField(reference, field);
+					} else 	if (reference instanceof QualifiedNameReference) {
+						 scope.problemReporter().cannotUseQualifiedEnumConstantInCaseLabel(reference, field);
+					}
+					return Constant.fromValue(field.original().id); // ordinal value
+				}
+			} else {
+				return constantExpression.constant;
+			}
+		} else if (scope.isBoxingCompatibleWith(switchExpressionType, caseType)) {
+			constantExpression.computeConversion(scope, caseType, switchExpressionType);
 			return constantExpression.constant;
-		if (caseType.isCompatibleWith(switchType))
-			return constantExpression.constant;
-		scope.problemReporter().typeMismatchError(caseType, switchType, constantExpression);
-		return null;
+		}
+		scope.problemReporter().typeMismatchError(caseType, switchExpressionType, constantExpression);
+		return NotAConstant;
 	}
 
 

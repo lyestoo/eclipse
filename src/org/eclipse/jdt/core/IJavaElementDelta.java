@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -120,7 +120,7 @@ public interface IJavaElementDelta {
 	 * Status constant indicating that the element has been changed,
 	 * as described by the change flags.
 	 * 
-	 * @see #getFlags
+	 * @see #getFlags()
 	 */
 	public int CHANGED = 4;
 
@@ -233,7 +233,7 @@ public interface IJavaElementDelta {
 	 * This flag is only valid if the element is an <code>IPackageFragmentRoot</code>
 	 * which is an archive.
 	 * 
-	 * @see IPackageFragmentRoot#isArchive
+	 * @see IPackageFragmentRoot#isArchive()
 	 * @since 2.0
 	 */
 	public int F_ARCHIVE_CONTENT_CHANGED = 0x08000;
@@ -246,6 +246,22 @@ public interface IJavaElementDelta {
 	 * @since 3.0
 	 */
 	public int F_PRIMARY_WORKING_COPY = 0x10000;
+
+	/**
+	 * Change flag indicating that the raw classpath (or the output folder) of a project has changed. 
+	 * This flag is only valid if the element is an <code>IJavaProject</code>.
+	 *
+	 * @since 3.0
+	 */
+	public int F_CLASSPATH_CHANGED = 0x20000;
+
+	/**
+	 * Change flag indicating that the resource of a primary compilation unit has changed.
+	 * This flag is only valid if the element is a primary <code>ICompilationUnit</code>.
+	 * 
+	 * @since 3.0
+	 */
+	public int F_PRIMARY_RESOURCE = 0x40000;
 
 	/**
 	 * Returns deltas for the children that have been added.

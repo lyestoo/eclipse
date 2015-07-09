@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -19,9 +19,7 @@ import org.eclipse.jdt.internal.compiler.problem.*;
 public class CompilationUnitDeclaration
 	extends ASTNode
 	implements ProblemSeverities, ReferenceContext {
-	
-	private static final char[] PACKAGE_INFO_FILE_NAME = "package-info.java".toCharArray(); //$NON-NLS-1$
-		
+
 	public ImportReference currentPackage;
 	public ImportReference[] imports;
 	public TypeDeclaration[] types;
@@ -38,6 +36,8 @@ public class CompilationUnitDeclaration
 	
 	public boolean isPropagatingInnerClassEmulation;
 
+	public Javadoc javadoc; // 1.5 addition for package-info.java
+	
 	public CompilationUnitDeclaration(
 		ProblemReporter problemReporter,
 		CompilationResult compilationResult,
@@ -101,6 +101,7 @@ public class CompilationUnitDeclaration
 			    LocalTypeBinding localType = localTypes[i];
 				// null out the type's scope backpointers
 				localType.scope = null; // local members are already in the list
+				localType.enclosingCase = null;
 			}
 		}
 		ClassFile[] classFiles = compilationResult.getClassFiles();
@@ -139,9 +140,9 @@ public class CompilationUnitDeclaration
 	}
 	
 	public CompilationResult compilationResult() {
-		return compilationResult;
+		return this.compilationResult;
 	}
-	
+
 	/*
 	 * Finds the matching type amoung this compilation unit types.
 	 * Returns null if no type with this name is found.
@@ -173,6 +174,9 @@ public class CompilationUnitDeclaration
 				}
 			}
 			return;
+		}
+		if (this.isPackageInfo() && this.types != null && this.currentPackage.annotations != null) {
+			types[0].annotations = this.currentPackage.annotations;
 		}
 		try {
 			if (types != null) {
@@ -213,6 +217,12 @@ public class CompilationUnitDeclaration
 		return (currentPackage == null) && (imports == null) && (types == null);
 	}
 
+	public boolean isPackageInfo() {
+		return CharOperation.equals(this.getMainTypeName(), TypeConstants.PACKAGE_INFO_NAME)
+			&& this.currentPackage != null
+			&& (this.currentPackage.annotations != null || this.javadoc != null);
+	}
+	
 	public boolean hasErrors() {
 		return this.ignoreFurtherInvestigation;
 	}
@@ -268,19 +278,34 @@ public class CompilationUnitDeclaration
 	}
 
 	public void resolve() {
-		if (this.currentPackage != null) {
-			if (this.currentPackage.annotations != null
-					&& !CharOperation.endsWith(getFileName(), PACKAGE_INFO_FILE_NAME)) {
-				scope.problemReporter().invalidFileNameForPackageAnnotations(this.currentPackage.annotations[0]);
+		int startingTypeIndex = 0;
+		boolean isPackageInfo = isPackageInfo();
+		if (this.types != null && isPackageInfo) {
+            // resolve synthetic type declaration
+			final TypeDeclaration syntheticTypeDeclaration = types[0];
+			// set empty javadoc to avoid missing warning (see bug https://bugs.eclipse.org/bugs/show_bug.cgi?id=95286)
+			syntheticTypeDeclaration.javadoc = new Javadoc(syntheticTypeDeclaration.declarationSourceStart, syntheticTypeDeclaration.declarationSourceStart);
+			syntheticTypeDeclaration.resolve(this.scope);
+			// resolve annotations if any
+			if (this.currentPackage.annotations != null) {
+				resolveAnnotations(syntheticTypeDeclaration.staticInitializerScope, this.currentPackage.annotations, this.scope.fPackage);
 			}
+			// resolve javadoc package if any
+			if (this.javadoc != null) {
+				this.javadoc.resolve(syntheticTypeDeclaration.staticInitializerScope);
+    		}
+			startingTypeIndex = 1;
+		}
+		if (this.currentPackage != null && this.currentPackage.annotations != null && !isPackageInfo) {
+			scope.problemReporter().invalidFileNameForPackageAnnotations(this.currentPackage.annotations[0]);
 		}
 		try {
 			if (types != null) {
-				for (int i = 0, count = types.length; i < count; i++) {
+				for (int i = startingTypeIndex, count = types.length; i < count; i++) {
 					types[i].resolve(scope);
 				}
 			}
-			if (!this.compilationResult.hasSyntaxError()) checkUnusedImports();
+			if (!this.compilationResult.hasErrors()) checkUnusedImports();
 		} catch (AbortCompilationUnit e) {
 			this.ignoreFurtherInvestigation = true;
 			return;

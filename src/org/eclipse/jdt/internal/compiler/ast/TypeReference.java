@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -110,69 +110,48 @@ public TypeBinding resolveSuperType(ClassScope scope) {
 	}
 	return this.resolvedType;
 }
-public TypeBinding resolveType(BlockScope blockScope) {
+
+public final TypeBinding resolveType(BlockScope blockScope) {
+	return resolveType(blockScope, true /* checkbounds if any */);
+}
+
+public TypeBinding resolveType(BlockScope blockScope, boolean checkBounds) {
 	// handle the error here
 	this.constant = NotAConstant;
-	TypeBinding type;
-	if ((type = this.resolvedType) != null) { // is a shared type reference which was already resolved
-		if (!type.isValidBinding())
-			return null; // already reported error
-	} else {
-		type = this.resolvedType = getTypeBinding(blockScope);
-		if (type == null)
-			return null; // detected cycle while resolving hierarchy	
-		if (!type.isValidBinding()) {
-			reportInvalidType(blockScope);
-			return null;
-		}
-		if (isTypeUseDeprecated(type, blockScope)) {
-			reportDeprecatedType(blockScope);
-		}
-		// check raw type
-		if (type.isArrayType()) {
-		    TypeBinding leafComponentType = type.leafComponentType();
-		    if (leafComponentType.isGenericType()) { // raw type
-		        return this.resolvedType = blockScope.createArrayType(blockScope.environment().createRawType((ReferenceBinding)leafComponentType, null), type.dimensions());
-		    }
-		} else if (type.isGenericType()) {
-	        return this.resolvedType = blockScope.environment().createRawType((ReferenceBinding)type, null); // raw type
-		}
+	if (this.resolvedType != null) // is a shared type reference which was already resolved
+		return this.resolvedType.isValidBinding() ? this.resolvedType : null; // already reported error
+
+	this.resolvedType = getTypeBinding(blockScope);
+	if (this.resolvedType == null)
+		return null; // detected cycle while resolving hierarchy	
+	if (!this.resolvedType.isValidBinding()) {
+		reportInvalidType(blockScope);
+		return null;
 	}
-	return this.resolvedType;
+	if (isTypeUseDeprecated(this.resolvedType, blockScope))
+		reportDeprecatedType(blockScope);
+	return this.resolvedType = blockScope.environment().convertToRawType(this.resolvedType);
 }
 public TypeBinding resolveType(ClassScope classScope) {
 	// handle the error here
 	this.constant = NotAConstant;
-	TypeBinding type;
-	if ((type = this.resolvedType) != null) { // is a shared type reference which was already resolved
-		if (!type.isValidBinding())
-			return null; // already reported error
-	} else {
-		type = this.resolvedType = getTypeBinding(classScope);
-		if (type == null)
-			return null; // detected cycle while resolving hierarchy	
-		if (!type.isValidBinding()) {
-			reportInvalidType(classScope);
-			return null;
-		}
-		if (isTypeUseDeprecated(type, classScope)) {
-			reportDeprecatedType(classScope);
-		}
-		// check raw type
-		if (type.isArrayType()) {
-		    TypeBinding leafComponentType = type.leafComponentType();
-		    if (leafComponentType.isGenericType()) { // raw type
-		        return this.resolvedType = classScope.createArrayType(classScope.environment().createRawType((ReferenceBinding)leafComponentType, null), type.dimensions());
-		    }
-		} else if (type.isGenericType()) {
-	        return this.resolvedType = classScope.environment().createRawType((ReferenceBinding)type, null); // raw type
-		}
+	if (this.resolvedType != null) // is a shared type reference which was already resolved
+		return this.resolvedType.isValidBinding() ? this.resolvedType : null; // already reported error
+
+	this.resolvedType = getTypeBinding(classScope);
+	if (this.resolvedType == null)
+		return null; // detected cycle while resolving hierarchy	
+	if (!this.resolvedType.isValidBinding()) {
+		reportInvalidType(classScope);
+		return null;
 	}
-	return this.resolvedType;
+	if (isTypeUseDeprecated(this.resolvedType, classScope))
+		reportDeprecatedType(classScope);
+	return this.resolvedType = classScope.environment().convertToRawType(this.resolvedType);
 }
 
 public TypeBinding resolveTypeArgument(BlockScope blockScope, ReferenceBinding genericType, int rank) {
-    return resolveType(blockScope);
+    return resolveType(blockScope, true /* check bounds*/);
 }
 
 public TypeBinding resolveTypeArgument(ClassScope classScope, ReferenceBinding genericType, int rank) {

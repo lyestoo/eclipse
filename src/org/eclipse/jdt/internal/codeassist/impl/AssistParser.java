@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -32,6 +32,7 @@ import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.NameReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
+import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.parser.RecoveredBlock;
 import org.eclipse.jdt.internal.compiler.parser.RecoveredElement;
@@ -72,10 +73,16 @@ public abstract class AssistParser extends Parser {
 	protected static final int K_TYPE_DELIMITER = ASSIST_PARSER + 2; // whether we are inside a type declaration
 	protected static final int K_METHOD_DELIMITER = ASSIST_PARSER + 3; // whether we are inside a method declaration
 	protected static final int K_FIELD_INITIALIZER_DELIMITER = ASSIST_PARSER + 4; // whether we are inside a field initializer
+	protected static final int K_ATTRIBUTE_VALUE_DELIMITER = ASSIST_PARSER + 5; // whether we are inside a annotation attribute valuer
+	protected static final int K_ENUM_CONSTANT_DELIMITER = ASSIST_PARSER + 6; // whether we are inside a field initializer
 	
 	// selector constants
 	protected static final int THIS_CONSTRUCTOR = -1;
 	protected static final int SUPER_CONSTRUCTOR = -2;
+	
+	// enum constant constants
+	protected static final int NO_BODY = 0;
+	protected static final int WITH_BODY = 1;
 	
 	protected boolean isFirst = false;
 
@@ -117,7 +124,7 @@ public RecoveredElement buildInitialRecoveryState(){
 			for (int i = 0; i < type.fields.length; i++){
 				FieldDeclaration field = type.fields[i];					
 				if (field != null
-						&& !field.isField()
+						&& field.getKind() == AbstractVariableDeclaration.INITIALIZER
 						&& field.declarationSourceStart <= scanner.initialPosition
 						&& scanner.initialPosition <= field.declarationSourceEnd
 						&& scanner.eofPosition <= field.declarationSourceEnd+1){
@@ -244,6 +251,10 @@ public RecoveredElement buildInitialRecoveryState(){
 	
 	return element;
 }
+protected void consumeAnnotationTypeDeclarationHeader() {
+	super.consumeAnnotationTypeDeclarationHeader();
+	pushOnElementStack(K_TYPE_DELIMITER);
+}
 protected void consumeClassBodyDeclaration() {
 	popElement(K_METHOD_DELIMITER);
 	super.consumeClassBodyDeclaration();
@@ -269,10 +280,40 @@ protected void consumeEnterAnonymousClassBody() {
 	popElement(K_SELECTOR);
 	pushOnElementStack(K_TYPE_DELIMITER);
 }
-protected void consumeEnterAnonymousClassBodySimpleName() {
-	super.consumeEnterAnonymousClassBodySimpleName();
-	popElement(K_SELECTOR);
+protected void consumeEnterMemberValue() {
+	super.consumeEnterMemberValue();
+	pushOnElementStack(K_ATTRIBUTE_VALUE_DELIMITER, this.identifierPtr);
+}
+protected void consumeEnumConstantHeader() {
+	if(this.currentToken == TokenNameLBRACE) {
+		popElement(K_ENUM_CONSTANT_DELIMITER);
+		pushOnElementStack(K_ENUM_CONSTANT_DELIMITER, WITH_BODY);
+		pushOnElementStack(K_FIELD_INITIALIZER_DELIMITER);
+		pushOnElementStack(K_TYPE_DELIMITER);
+	}
+	super.consumeEnumConstantHeader();
+}
+protected void consumeEnumConstantHeaderName() {
+	super.consumeEnumConstantHeaderName();
+	pushOnElementStack(K_ENUM_CONSTANT_DELIMITER);
+}
+protected void consumeEnumConstantWithClassBody() {
+	popElement(K_TYPE_DELIMITER);
+	popElement(K_FIELD_INITIALIZER_DELIMITER);
+	popElement(K_ENUM_CONSTANT_DELIMITER);
+	super.consumeEnumConstantWithClassBody();
+}
+protected void consumeEnumConstantNoClassBody() {
+	popElement(K_ENUM_CONSTANT_DELIMITER);
+	super.consumeEnumConstantNoClassBody();
+}
+protected void consumeEnumHeader() {
+	super.consumeEnumHeader();
 	pushOnElementStack(K_TYPE_DELIMITER);
+}
+protected void consumeExitMemberValue() {
+	super.consumeExitMemberValue();
+	popElement(K_ATTRIBUTE_VALUE_DELIMITER);
 }
 protected void consumeExplicitConstructorInvocation(int flag, int recFlag) {
 	super.consumeExplicitConstructorInvocation(flag, recFlag);
@@ -283,7 +324,17 @@ protected void consumeForceNoDiet() {
 	// if we are not in a method (ie. we are not in a local variable initializer)
 	// then we are entering a field initializer
 	if (!isInsideMethod()) {
-		pushOnElementStack(K_FIELD_INITIALIZER_DELIMITER);
+		if(topKnownElementKind(ASSIST_PARSER) != K_ENUM_CONSTANT_DELIMITER) {
+			if(topKnownElementKind(ASSIST_PARSER, 2) != K_ENUM_CONSTANT_DELIMITER) {
+				pushOnElementStack(K_FIELD_INITIALIZER_DELIMITER);
+			}
+		} else {
+			int info = topKnownElementInfo(ASSIST_PARSER);
+			if(info != NO_BODY) {
+				pushOnElementStack(K_FIELD_INITIALIZER_DELIMITER);
+			}
+		}
+		
 	}
 }
 protected void consumeInterfaceHeader() {
@@ -306,6 +357,14 @@ protected void consumeMethodInvocationName() {
 		this.lastCheckPoint = messageSend.sourceEnd + 1;
 	}
 }
+protected void consumeMethodInvocationNameWithTypeArguments() {
+	super.consumeMethodInvocationNameWithTypeArguments();
+	popElement(K_SELECTOR);
+	MessageSend messageSend = (MessageSend)expressionStack[expressionPtr];
+	if (messageSend == assistNode){
+		this.lastCheckPoint = messageSend.sourceEnd + 1;
+	}
+}
 protected void consumeMethodInvocationPrimary() {
 	super.consumeMethodInvocationPrimary();
 	popElement(K_SELECTOR);
@@ -314,8 +373,24 @@ protected void consumeMethodInvocationPrimary() {
 		this.lastCheckPoint = messageSend.sourceEnd + 1;
 	}
 }
+protected void consumeMethodInvocationPrimaryWithTypeArguments() {
+	super.consumeMethodInvocationPrimaryWithTypeArguments();
+	popElement(K_SELECTOR);
+	MessageSend messageSend = (MessageSend)expressionStack[expressionPtr];
+	if (messageSend == assistNode){
+		this.lastCheckPoint = messageSend.sourceEnd + 1;
+	}
+}
 protected void consumeMethodInvocationSuper() {
 	super.consumeMethodInvocationSuper();
+	popElement(K_SELECTOR);
+	MessageSend messageSend = (MessageSend)expressionStack[expressionPtr];
+	if (messageSend == assistNode){
+		this.lastCheckPoint = messageSend.sourceEnd + 1;
+	}
+}
+protected void consumeMethodInvocationSuperWithTypeArguments() {
+	super.consumeMethodInvocationSuperWithTypeArguments();
 	popElement(K_SELECTOR);
 	MessageSend messageSend = (MessageSend)expressionStack[expressionPtr];
 	if (messageSend == assistNode){
@@ -625,7 +700,7 @@ protected void consumeToken(int token) {
 	}
 	// register message send selector only if inside a method or if looking at a field initializer 
 	// and if the current token is an open parenthesis
-	if (isInsideMethod() || isInsideFieldInitialization()) {
+	if (isInsideMethod() || isInsideFieldInitialization() || isInsideAttributeValue()) {
 		switch (token) {
 			case TokenNameLPAREN :
 				switch (this.previousToken) {
@@ -637,6 +712,13 @@ protected void consumeToken(int token) {
 						break;
 					case TokenNamesuper: // explicit constructor invocation, eg. super(1, 2)
 						this.pushOnElementStack(K_SELECTOR, SUPER_CONSTRUCTOR);
+						break;
+					case TokenNameGREATER: // explicit constructor invocation, eg. Fred<X>[(]1, 2)
+					case TokenNameRIGHT_SHIFT: // or fred<X<X>>[(]1, 2) 
+					case TokenNameUNSIGNED_RIGHT_SHIFT: //or Fred<X<X<X>>>[(]1, 2)
+						if(this.identifierPtr > -1) {
+							this.pushOnElementStack(K_SELECTOR, this.identifierPtr);
+						}
 						break;
 				}
 				break;
@@ -711,9 +793,10 @@ public abstract ImportReference createAssistImportReference(char[][] tokens, lon
 public abstract ImportReference createAssistPackageReference(char[][] tokens, long[] positions);
 public abstract NameReference createQualifiedAssistNameReference(char[][] previousIdentifiers, char[] assistName, long[] positions);
 public abstract TypeReference createQualifiedAssistTypeReference(char[][] previousIdentifiers, char[] assistName, long[] positions);
-public abstract TypeReference createParameterizedQualifiedAssistTypeReference(char[][] previousIdentifiers, TypeReference[][] typeArguments, char[] asistIdentifier, long[] positions);
+public abstract TypeReference createParameterizedQualifiedAssistTypeReference(char[][] previousIdentifiers, TypeReference[][] typeArguments, char[] asistIdentifier, TypeReference[] assistTypeArguments, long[] positions);
 public abstract NameReference createSingleAssistNameReference(char[] assistName, long position);
 public abstract TypeReference createSingleAssistTypeReference(char[] assistName, long position);
+public abstract TypeReference createParameterizedSingleAssistTypeReference(TypeReference[] typeArguments, char[] assistName, long position);
 /*
  * Flush parser/scanner state regarding to code assist
  */
@@ -786,8 +869,10 @@ protected TypeReference getTypeReference(int dim) {
 protected TypeReference getAssistTypeReferenceForGenericType(int dim, int identifierLength, int numberOfIdentifiers) {
 	/* no need to take action if not inside completed identifiers */
 	if (/*(indexOfAssistIdentifier()) < 0 ||*/ (identifierLength == 1 && numberOfIdentifiers == 1)) {
-		int length = this.genericsLengthStack[this.genericsLengthPtr--];
-		this.genericsPtr -= length;
+		int currentTypeArgumentsLength = this.genericsLengthStack[this.genericsLengthPtr--];
+		TypeReference[] typeArguments = new TypeReference[currentTypeArgumentsLength];
+		this.genericsPtr -= currentTypeArgumentsLength;
+		System.arraycopy(this.genericsStack, this.genericsPtr + 1, typeArguments, 0, currentTypeArgumentsLength);
 		long[] positions = new long[identifierLength];
 		System.arraycopy(
 			identifierPositionStack, 
@@ -795,9 +880,14 @@ protected TypeReference getAssistTypeReferenceForGenericType(int dim, int identi
 			positions, 
 			0, 
 			identifierLength); 
-		TypeReference reference = this.createSingleAssistTypeReference(
-										assistIdentifier(), 
-										positions[0]);
+		
+		this.identifierPtr--;
+				
+		TypeReference reference = this.createParameterizedSingleAssistTypeReference(
+				typeArguments,
+				assistIdentifier(),
+				positions[0]);
+		
 		this.assistNode = reference;
 		this.lastCheckPoint = reference.sourceEnd + 1;
 		return reference;
@@ -841,8 +931,13 @@ protected TypeReference getAssistTypeReferenceForGenericType(int dim, int identi
 	}
 	TypeReference reference;
 	if(realLength == 0) {
-		reference = this.createSingleAssistTypeReference(assistIdentifier(), positions[0]);
+		if(typeArguments[0] != null && typeArguments[0].length > 0) {
+			reference = this.createParameterizedSingleAssistTypeReference(typeArguments[0], assistIdentifier(), positions[0]);
+		} else {
+			reference = this.createSingleAssistTypeReference(assistIdentifier(), positions[0]);
+		}
 	} else {
+		TypeReference[] assistTypeArguments = typeArguments[realLength];
 		System.arraycopy(tokens, 0, tokens = new char[realLength][], 0, realLength);
 		System.arraycopy(typeArguments, 0, typeArguments = new TypeReference[realLength][], 0, realLength);
 		
@@ -852,8 +947,8 @@ protected TypeReference getAssistTypeReferenceForGenericType(int dim, int identi
 				isParameterized = true;
 			}
 		}
-		if(isParameterized) {
-			reference = this.createParameterizedQualifiedAssistTypeReference(tokens, typeArguments, assistIdentifier(), positions);
+		if(isParameterized || (assistTypeArguments != null && assistTypeArguments.length > 0)) {
+			reference = this.createParameterizedQualifiedAssistTypeReference(tokens, typeArguments, assistIdentifier(), assistTypeArguments, positions);
 		} else {
 			reference = this.createQualifiedAssistTypeReference(tokens, assistIdentifier(), positions);
 		}
@@ -902,7 +997,7 @@ protected NameReference getUnspecifiedReferenceOptimized() {
 		reference = this.createQualifiedAssistNameReference(subset, assistIdentifier(), positions);
 	}
 	reference.bits &= ~ASTNode.RestrictiveFlagMASK;
-	reference.bits |= LOCAL | FIELD;
+	reference.bits |= Binding.LOCAL | Binding.FIELD;
 	
 	assistNode = reference;
 	lastCheckPoint = reference.sourceEnd + 1;
@@ -983,7 +1078,12 @@ public void initialize() {
 	this.flushElementStack();
 	this.previousIdentifierPtr = -1;
 }
-
+public void initialize(boolean initializeNLS) {
+	super.initialize(initializeNLS);
+	this.flushAssistState();
+	this.flushElementStack();
+	this.previousIdentifierPtr = -1;
+}
 public abstract void initializeScanner();
 protected boolean isIndirectlyInsideFieldInitialization(){
 	int i = elementPtr;
@@ -1008,6 +1108,19 @@ protected boolean isIndirectlyInsideType(){
 	while(i > -1) {
 		if(elementKindStack[i] == K_TYPE_DELIMITER)
 			return true;
+		i--;
+	}
+	return false;
+}
+protected boolean isInsideAttributeValue(){
+	int i = elementPtr;
+	while(i > -1) {
+		switch (elementKindStack[i]) {
+			case K_TYPE_DELIMITER : return false;
+			case K_METHOD_DELIMITER : return false;
+			case K_FIELD_INITIALIZER_DELIMITER : return false;
+			case K_ATTRIBUTE_VALUE_DELIMITER : return true;
+		}
 		i--;
 	}
 	return false;
@@ -1292,6 +1405,12 @@ protected void prepareForHeaders() {
 	realBlockStack[realBlockPtr = 0] = 0;
 	
 	popUntilElement(K_TYPE_DELIMITER);
+
+	if(this.topKnownElementKind(ASSIST_PARSER) != K_TYPE_DELIMITER) {
+		// is outside a type and inside a compilation unit.
+		// remove all elements.
+		this.flushElementStack();
+	}
 }
 protected void pushOnElementStack(int kind){
 	this.pushOnElementStack(kind, 0);
@@ -1346,10 +1465,11 @@ public void recoveryTokenCheck() {
 			break;
 		case TokenNameRBRACE :
 			super.recoveryTokenCheck();
-			if(currentElement != oldElement) {
+			if(currentElement != oldElement && !isInsideAttributeValue()) {
 				if(oldElement instanceof RecoveredInitializer
 					|| oldElement instanceof RecoveredMethod
-					|| (oldElement instanceof RecoveredBlock && oldElement.parent instanceof RecoveredInitializer)) {
+					|| (oldElement instanceof RecoveredBlock && oldElement.parent instanceof RecoveredInitializer)
+					|| (oldElement instanceof RecoveredBlock && oldElement.parent instanceof RecoveredMethod)) {
 					popUntilElement(K_METHOD_DELIMITER);
 					popElement(K_METHOD_DELIMITER);
 				} else if(oldElement instanceof RecoveredType) {
@@ -1393,6 +1513,9 @@ protected boolean resumeAfterRecovery() {
 	this.genericsIdentifiersLengthPtr = -1;
 	this.genericsLengthPtr = -1;
 	this.genericsPtr = -1;
+	
+	this.modifiers = AccDefault;
+	this.modifiersSourceStart = -1;
 
 	// if in diet mode, reset the diet counter because we're going to restart outside an initializer.
 	if (diet) dietInt = 0;

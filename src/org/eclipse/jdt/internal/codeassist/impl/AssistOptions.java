@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -38,10 +38,17 @@ public class AssistOptions {
 		"org.eclipse.jdt.core.codeComplete.localSuffixes"; 	//$NON-NLS-1$
 	public static final String OPTION_ArgumentSuffixes =
 		"org.eclipse.jdt.core.codeComplete.argumentSuffixes"; 	//$NON-NLS-1$
+	public static final String OPTION_PerformForbiddenReferenceCheck =
+		"org.eclipse.jdt.core.codeComplete.forbiddenReferenceCheck"; 	//$NON-NLS-1$
+	public static final String OPTION_PerformDiscouragedReferenceCheck =
+		"org.eclipse.jdt.core.codeComplete.discouragedReferenceCheck"; 	//$NON-NLS-1$
+	
 	public static final String ENABLED = "enabled"; //$NON-NLS-1$
 	public static final String DISABLED = "disabled"; //$NON-NLS-1$
-
+	
 	public boolean checkVisibility = false;
+	public boolean checkForbiddenReference = false;
+	public boolean checkDiscouragedReference = false;
 	public boolean forceImplicitQualification = false;
 	public char[][] fieldPrefixes = null;
 	public char[][] staticFieldPrefixes = null;
@@ -163,6 +170,20 @@ public class AssistOptions {
 				} else {
 					this.argumentSuffixes = null;
 				}
+			}
+		}
+		if ((optionValue = optionsMap.get(OPTION_PerformForbiddenReferenceCheck)) != null) {
+			if (ENABLED.equals(optionValue)) {
+				this.checkForbiddenReference = true;
+			} else if (DISABLED.equals(optionValue)) {
+				this.checkForbiddenReference = false;
+			}
+		}
+		if ((optionValue = optionsMap.get(OPTION_PerformDiscouragedReferenceCheck)) != null) {
+			if (ENABLED.equals(optionValue)) {
+				this.checkDiscouragedReference = true;
+			} else if (DISABLED.equals(optionValue)) {
+				this.checkDiscouragedReference = false;
 			}
 		}
 	}

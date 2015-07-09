@@ -1,17 +1,16 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
 import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
@@ -27,6 +26,7 @@ import org.eclipse.jdt.internal.compiler.lookup.ProblemReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Scope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
 import org.eclipse.jdt.internal.compiler.lookup.VariableBinding;
 import org.eclipse.jdt.internal.compiler.util.ObjectVector;
 
@@ -243,7 +243,7 @@ public final boolean canBeSeenByForCodeSnippet(ReferenceBinding referenceBinding
 }
 // Internal use only
 public MethodBinding findExactMethod(ReferenceBinding receiverType, char[] selector, TypeBinding[] argumentTypes, InvocationSite invocationSite) {
-	MethodBinding exactMethod = receiverType.getExactMethod(selector, argumentTypes);
+	MethodBinding exactMethod = receiverType.getExactMethod(selector, argumentTypes, null);
 	if (exactMethod != null){
 		if (receiverType.isInterface() || canBeSeenByForCodeSnippet(exactMethod, receiverType, invocationSite, this))
 			return exactMethod;
@@ -475,7 +475,7 @@ public MethodBinding findMethod(
 				candidates[0].declaringClass,
 				NotVisible);
 		}	
-		if (candidates[0].declaringClass.isClass()) {
+		if (!candidates[0].declaringClass.isInterface()) {
 			return mostSpecificClassMethodBinding(candidates, visiblesCount, invocationSite);
 		} else {
 			return mostSpecificInterfaceMethodBinding(candidates, visiblesCount, invocationSite);
@@ -485,11 +485,11 @@ public MethodBinding findMethod(
 // Internal use only
 public MethodBinding findMethodForArray(ArrayBinding receiverType, char[] selector, TypeBinding[] argumentTypes, InvocationSite invocationSite) {
 	ReferenceBinding object = getJavaLangObject();
-	MethodBinding methodBinding = object.getExactMethod(selector, argumentTypes);
+	MethodBinding methodBinding = object.getExactMethod(selector, argumentTypes, null);
 	if (methodBinding != null) {
 		// handle the method clone() specially... cannot be protected or throw exceptions
 		if (argumentTypes == NoParameters && CharOperation.equals(selector, CLONE))
-			return new MethodBinding((methodBinding.modifiers ^ AccProtected) | AccPublic, CLONE, methodBinding.returnType, argumentTypes, null, object);
+			return new MethodBinding((methodBinding.modifiers & ~AccProtected) | AccPublic, CLONE, methodBinding.returnType, argumentTypes, null, object);
 		if (canBeSeenByForCodeSnippet(methodBinding, receiverType, invocationSite, this))
 			return methodBinding;
 	}
@@ -541,7 +541,7 @@ public MethodBinding findMethodForArray(ArrayBinding receiverType, char[] select
 */
 
 public Binding getBinding(char[][] compoundName, int mask, InvocationSite invocationSite, ReferenceBinding receiverType) {
-	Binding binding = getBinding(compoundName[0], mask | TYPE | PACKAGE, invocationSite, true /*resolve*/);
+	Binding binding = getBinding(compoundName[0], mask | Binding.TYPE | Binding.PACKAGE, invocationSite, true /*resolve*/);
 	invocationSite.setFieldIndex(1);
 	if (!binding.isValidBinding() || binding instanceof VariableBinding)
 		return binding;
@@ -556,13 +556,16 @@ public Binding getBinding(char[][] compoundName, int mask, InvocationSite invoca
 			invocationSite.setFieldIndex(currentIndex);
  			if (binding == null) {
 	 			if (currentIndex == length) // must be a type if its the last name, otherwise we have no idea if its a package or type
-					return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), NotFound);
+					return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), null, NotFound);
 				else
 					return new ProblemBinding(CharOperation.subarray(compoundName, 0, currentIndex), NotFound);
  			}
  			if (binding instanceof ReferenceBinding) {
 	 			if (!binding.isValidBinding())
-					return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), binding.problemId());
+					return new ProblemReferenceBinding(
+									CharOperation.subarray(compoundName, 0, currentIndex), 
+									null, // TODO should improve
+									binding.problemId());
 	 			if (!this.canBeSeenByForCodeSnippet((ReferenceBinding) binding, receiverType))
 					return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), (ReferenceBinding) binding, NotVisible);
 	 			break foundType;
@@ -571,7 +574,7 @@ public Binding getBinding(char[][] compoundName, int mask, InvocationSite invoca
 		}
 
 		// It is illegal to request a PACKAGE from this method.
-		return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), NotFound);
+		return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), null, NotFound);
 	}
 
 	// know binding is now a ReferenceBinding
@@ -581,22 +584,25 @@ public Binding getBinding(char[][] compoundName, int mask, InvocationSite invoca
 		invocationSite.setFieldIndex(currentIndex);
 		if ((binding = findFieldForCodeSnippet(typeBinding, nextName, invocationSite)) != null) {
 			if (!binding.isValidBinding())
-				return new ProblemFieldBinding(((FieldBinding)binding).declaringClass, CharOperation.subarray(compoundName, 0, currentIndex), binding.problemId());
+				return new ProblemFieldBinding((FieldBinding)binding, CharOperation.subarray(compoundName, 0, currentIndex), binding.problemId());
 			break; // binding is now a field
 		}
 		if ((binding = findMemberType(nextName, typeBinding)) == null)
 			return new ProblemBinding(CharOperation.subarray(compoundName, 0, currentIndex), typeBinding, NotFound);
 		 if (!binding.isValidBinding())
-			return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), binding.problemId());
+			return new ProblemReferenceBinding(
+								CharOperation.subarray(compoundName, 0, currentIndex), 
+								null, // TODO should improve
+								binding.problemId());
 	}
 
-	if ((mask & FIELD) != 0 && (binding instanceof FieldBinding)) { // was looking for a field and found a field
+	if ((mask & Binding.FIELD) != 0 && (binding instanceof FieldBinding)) { // was looking for a field and found a field
 		FieldBinding field = (FieldBinding) binding;
 		if (!field.isStatic())
-			return new ProblemFieldBinding(field.declaringClass, CharOperation.subarray(compoundName, 0, currentIndex), NonStaticReferenceInStaticContext);
+			return new ProblemFieldBinding(field, CharOperation.subarray(compoundName, 0, currentIndex), NonStaticReferenceInStaticContext);
 		return binding;
 	}
-	if ((mask & TYPE) != 0 && (binding instanceof ReferenceBinding)) { // was looking for a type and found a type
+	if ((mask & Binding.TYPE) != 0 && (binding instanceof ReferenceBinding)) { // was looking for a type and found a type
 		return binding;
 	}
 
@@ -620,9 +626,9 @@ public MethodBinding getConstructor(ReferenceBinding receiverType, TypeBinding[]
 			return methodBinding;
 		}
 	}
-	MethodBinding[] methods = receiverType.getMethods(ConstructorDeclaration.ConstantPoolName);
+	MethodBinding[] methods = receiverType.getMethods(TypeConstants.INIT);
 	if (methods == NoMethods) {
-		return new ProblemMethodBinding(ConstructorDeclaration.ConstantPoolName, argumentTypes, NotFound);
+		return new ProblemMethodBinding(TypeConstants.INIT, argumentTypes, NotFound);
 	}
 	MethodBinding[] compatible = new MethodBinding[methods.length];
 	int compatibleIndex = 0;
@@ -632,7 +638,7 @@ public MethodBinding getConstructor(ReferenceBinding receiverType, TypeBinding[]
 			compatible[compatibleIndex++] = compatibleMethod;
 	}
 	if (compatibleIndex == 0)
-		return new ProblemMethodBinding(ConstructorDeclaration.ConstantPoolName, argumentTypes, NotFound); // need a more descriptive error... cannot convert from X to Y
+		return new ProblemMethodBinding(TypeConstants.INIT, argumentTypes, NotFound); // need a more descriptive error... cannot convert from X to Y
 
 	MethodBinding[] visible = new MethodBinding[compatibleIndex];
 	int visibleIndex = 0;
@@ -646,7 +652,7 @@ public MethodBinding getConstructor(ReferenceBinding receiverType, TypeBinding[]
 		return visible[0];
 	}
 	if (visibleIndex == 0) {
-		return new ProblemMethodBinding(compatible[0], ConstructorDeclaration.ConstantPoolName, compatible[0].parameters, NotVisible);
+		return new ProblemMethodBinding(compatible[0], TypeConstants.INIT, compatible[0].parameters, NotVisible);
 	}
 	return mostSpecificClassMethodBinding(visible, visibleIndex, invocationSite);
 }

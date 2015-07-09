@@ -1,12 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added J2SE 1.5 support
  *******************************************************************************/
 package org.eclipse.jdt.core;
 
@@ -31,20 +32,14 @@ String getElementName();
 /**
  * Returns the modifier flags for this import. The flags can be examined using class
  * <code>Flags</code>. Only the static flag is meaningful for import declarations.
- * <p>
- * Note: Static imports are an experimental language feature 
- * under discussion in JSR-201 and under consideration for inclusion
- * in the 1.5 release of J2SE. The support here is therefore tentative
- * and subject to change.
- * </p>
+ * 
+ * @return the modifier flags for this import
  * @exception JavaModelException if this element does not exist or if an
  *      exception occurs while accessing its corresponding resource.
- * @return the modifier flags for this import
  * @see Flags
  * @since 3.0
  */
-// TODO: 1.5 feature disabled for now, will re-enable at a later stage
-//int getFlags() throws JavaModelException;
+int getFlags() throws JavaModelException;
 
 /**
  * Returns whether the import is on-demand. An import is on-demand if it ends

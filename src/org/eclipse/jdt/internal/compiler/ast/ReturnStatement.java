@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -147,28 +147,9 @@ public class ReturnStatement extends Statement {
 	 */
 	public void generateReturnBytecode(CodeStream codeStream) {
 	
-		if (expression == null) {
-			codeStream.return_();
-		} else {
-			switch (expression.implicitConversion >> 4) {
-				case T_boolean :
-				case T_int :
-					codeStream.ireturn();
-					break;
-				case T_float :
-					codeStream.freturn();
-					break;
-				case T_long :
-					codeStream.lreturn();
-					break;
-				case T_double :
-					codeStream.dreturn();
-					break;
-				default :
-					codeStream.areturn();
-			}
-		}
+		codeStream.generateReturnBytecode(this.expression);
 	}
+	
 	public void generateStoreSaveValueIfNecessary(CodeStream codeStream){
 		if (saveValueVariable != null) codeStream.store(saveValueVariable, false);
 	}
@@ -219,16 +200,17 @@ public class ReturnStatement extends Statement {
 		if (methodType == null) 
 			return;
 	
-		if (expressionType.isRawType() && (methodType.isBoundParameterizedType() || methodType.isGenericType())) {
-		    scope.problemReporter().unsafeRawConversion(this.expression, expressionType, methodType);
-		}
-		
-		if (expression.isConstantValueOfTypeAssignableToType(expressionType, methodType)) {
-			// dealing with constant
+		if (methodType != expressionType) // must call before computeConversion() and typeMismatchError()
+			scope.compilationUnitScope().recordTypeConversion(methodType, expressionType);
+		if (expression.isConstantValueOfTypeAssignableToType(expressionType, methodType)
+				|| expressionType.isCompatibleWith(methodType)) {
+
 			expression.computeConversion(scope, methodType, expressionType);
+			if (expressionType.needsUncheckedConversion(methodType)) {
+			    scope.problemReporter().unsafeTypeConversion(this.expression, expressionType, methodType);
+			}
 			return;
-		}
-		if (expressionType.isCompatibleWith(methodType)) {
+		} else if (scope.isBoxingCompatibleWith(expressionType, methodType)) {
 			expression.computeConversion(scope, methodType, expressionType);
 			return;
 		}

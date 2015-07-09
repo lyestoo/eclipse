@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -31,22 +31,7 @@ public abstract class ASTVisitor {
 		// do nothing by default
 	}
 	public void endVisit(
-			AnnotationTypeDeclaration annotationTypeDeclaration,
-			BlockScope scope) {
-		// do nothing by default
-	}
-	public void endVisit(
-			AnnotationTypeDeclaration annotationTypeDeclaration,
-			ClassScope scope) {
-		// do nothing by default
-	}	
-	public void endVisit(
-			AnnotationTypeDeclaration annotationTypeDeclaration,
-			CompilationUnitScope scope) {
-		// do nothing by default
-	}
-	public void endVisit(
-			AnnotationTypeMemberDeclaration annotationTypeDeclaration,
+			AnnotationMethodDeclaration annotationTypeDeclaration,
 			ClassScope classScope) {
 			// do nothing by default
 	}	
@@ -138,18 +123,6 @@ public abstract class ASTVisitor {
 		// do nothing by default
 	}
 	public void endVisit(EmptyStatement emptyStatement, BlockScope scope) {
-		// do nothing by default
-	}
-	public void endVisit(EnumConstant enumDeclaration, ClassScope scope) {
-		// do nothing by default
-	}
-	public void endVisit(EnumDeclaration enumDeclaration, BlockScope scope) {
-		// do nothing by default
-	}
-	public void endVisit(EnumDeclaration enumDeclaration, ClassScope scope) {
-		// do nothing by default
-	}
-	public void endVisit(EnumDeclaration enumDeclaration, CompilationUnitScope scope) {
 		// do nothing by default
 	}
 	public void endVisit(EqualExpression equalExpression, BlockScope scope) {
@@ -249,14 +222,6 @@ public abstract class ASTVisitor {
 	 * @param scope
 	 * @since 3.1
 	 */
-	public void endVisit(MarkerAnnotation annotation, ClassScope scope) {
-		// do nothing by default
-	}
-	/**
-	 * @param annotation
-	 * @param scope
-	 * @since 3.1
-	 */
 	public void endVisit(MarkerAnnotation annotation, CompilationUnitScope scope) {
 		// do nothing by default
 	}
@@ -265,13 +230,6 @@ public abstract class ASTVisitor {
 	 * @param scope
 	 */
 	public void endVisit(MemberValuePair pair, BlockScope scope) {
-		// do nothing by default
-	}
-	/**
-	 * @param pair
-	 * @param scope
-	 */
-	public void endVisit(MemberValuePair pair, ClassScope scope) {
 		// do nothing by default
 	}
 	/**
@@ -296,14 +254,6 @@ public abstract class ASTVisitor {
 	 * @since 3.1
 	 */
 	public void endVisit(NormalAnnotation annotation, BlockScope scope) {
-		// do nothing by default
-	}
-	/**
-	 * @param annotation
-	 * @param scope
-	 * @since 3.1
-	 */
-	public void endVisit(NormalAnnotation annotation, ClassScope scope) {
 		// do nothing by default
 	}
 	/**
@@ -377,14 +327,6 @@ public abstract class ASTVisitor {
 	 * @since 3.1
 	 */
 	public void endVisit(SingleMemberAnnotation annotation, BlockScope scope) {
-		// do nothing by default
-	}
-	/**
-	 * @param annotation
-	 * @param scope
-	 * @since 3.1
-	 */
-	public void endVisit(SingleMemberAnnotation annotation, ClassScope scope) {
 		// do nothing by default
 	}
 	/**
@@ -478,22 +420,7 @@ public abstract class ASTVisitor {
 		return true; // do nothing by default, keep traversing
 	}
 	public boolean visit(
-			AnnotationTypeDeclaration annotationTypeDeclaration,
-			BlockScope scope) {
-		return true; // do nothing by default, keep traversing
-	}
-	public boolean visit(
-			AnnotationTypeDeclaration annotationTypeDeclaration,
-			ClassScope scope) {
-		return true; // do nothing by default, keep traversing
-	}	
-	public boolean visit(
-			AnnotationTypeDeclaration annotationTypeDeclaration,
-			CompilationUnitScope scope) {
-		return true; // do nothing by default, keep traversing
-	}
-	public boolean visit(
-			AnnotationTypeMemberDeclaration annotationTypeDeclaration,
+			AnnotationMethodDeclaration annotationTypeDeclaration,
 			ClassScope classScope) {
 		return true; // do nothing by default, keep traversing
 	}	
@@ -585,18 +512,6 @@ public abstract class ASTVisitor {
 		return true; // do nothing by default, keep traversing
 	}
 	public boolean visit(EmptyStatement emptyStatement, BlockScope scope) {
-		return true; // do nothing by default, keep traversing
-	}
-	public boolean visit(EnumConstant enumConstant, ClassScope scope) {
-		return true; // do nothing by default, keep traversing
-	}
-	public boolean visit(EnumDeclaration enumDeclaration, BlockScope scope) {
-		return true; // do nothing by default, keep traversing
-	}
-	public boolean visit(EnumDeclaration enumDeclaration, ClassScope scope) {
-		return true; // do nothing by default, keep traversing
-	}
-	public boolean visit(EnumDeclaration enumDeclaration, CompilationUnitScope scope) {
 		return true; // do nothing by default, keep traversing
 	}
 	public boolean visit(EqualExpression equalExpression, BlockScope scope) {
@@ -696,14 +611,6 @@ public abstract class ASTVisitor {
 	 * @param scope
 	 * @since 3.1
 	 */
-	public boolean visit(MarkerAnnotation annotation, ClassScope scope) {
-		return true;
-	}
-	/**
-	 * @param annotation
-	 * @param scope
-	 * @since 3.1
-	 */
 	public boolean visit(MarkerAnnotation annotation, CompilationUnitScope scope) {
 		return true;
 	}
@@ -713,14 +620,6 @@ public abstract class ASTVisitor {
 	 * @since 3.1
 	 */
 	public boolean visit(MemberValuePair pair, BlockScope scope) {
-		return true;
-	}
-	/**
-	 * @param pair
-	 * @param scope
-	 * @since 3.1
-	 */
-	public boolean visit(MemberValuePair pair, ClassScope scope) {
 		return true;
 	}
 	/**
@@ -748,14 +647,6 @@ public abstract class ASTVisitor {
 	 * @since 3.1
 	 */
 	public boolean visit(NormalAnnotation annotation, BlockScope scope) {
-		return true;
-	}
-	/**
-	 * @param annotation
-	 * @param scope
-	 * @since 3.1
-	 */
-	public boolean visit(NormalAnnotation annotation, ClassScope scope) {
 		return true;
 	}
 	/**
@@ -829,14 +720,6 @@ public abstract class ASTVisitor {
 	 * @since 3.1
 	 */
 	public boolean visit(SingleMemberAnnotation annotation, BlockScope scope) {
-		return true;
-	}
-	/**
-	 * @param annotation
-	 * @param scope
-	 * @since 3.1
-	 */
-	public boolean visit(SingleMemberAnnotation annotation, ClassScope scope) {
 		return true;
 	}
 	/**

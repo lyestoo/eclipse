@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -17,8 +17,10 @@ public class JavadocSingleNameReference extends SingleNameReference {
 
 	public int tagSourceStart, tagSourceEnd;
 
-	public JavadocSingleNameReference(char[] name, int startPosition, int endPosition) {
-		super(name, (((long) startPosition) << 32) + endPosition);
+	public JavadocSingleNameReference(char[] source, long pos, int tagStart, int tagEnd) {
+		super(source, pos);
+		this.tagSourceStart = tagStart;
+		this.tagSourceEnd = tagEnd;
 		this.bits |= InsideJavadoc;
 	}
 
@@ -39,10 +41,10 @@ public class JavadocSingleNameReference extends SingleNameReference {
 		if (warn) {
 			try {
 				MethodScope methScope = (MethodScope) scope;
-				scope.problemReporter().javadocInvalidParamName(this, methScope.referenceMethod().modifiers);
+				scope.problemReporter().javadocUndeclaredParamTagName(this.token, this.sourceStart, this.sourceEnd, methScope.referenceMethod().modifiers);
 			}
 			catch (Exception e) {
-				scope.problemReporter().javadocInvalidParamName(this, -1);
+				scope.problemReporter().javadocUndeclaredParamTagName(this.token, this.sourceStart, this.sourceEnd, -1);
 			}
 		}
 	}

@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *     IBM Corporation - specified that a source archive or a source folder can be attached to a binary
@@ -165,7 +165,7 @@ public interface IPackageFragmentRoot
 	 * classpath (NAME_COLLISION) and <code>updateModelFlags</code>
 	 * has not been specified as <code>REPLACE</code></li>
 	 * </ul>
-	 * @see org.eclipse.core.resources.IResource#copy
+	 * @see org.eclipse.core.resources.IResource#copy(IPath, boolean, IProgressMonitor)
 	 * @since 2.1
 	 */
 	void copy(IPath destination, int updateResourceFlags, int updateModelFlags, IClasspathEntry sibling, IProgressMonitor monitor) throws JavaModelException;
@@ -191,7 +191,7 @@ public interface IPackageFragmentRoot
 	 * <li> The name is not a valid package name (INVALID_NAME)
 	 * </ul>
 	 * @return a package fragment in this root with the given dot-separated package name
-	 * @see org.eclipse.core.resources.IFolder#create
+	 * @see org.eclipse.core.resources.IFolder#create(boolean, boolean, IProgressMonitor)
 	 */
 	IPackageFragment createPackageFragment(
 		String name,
@@ -239,7 +239,7 @@ public interface IPackageFragmentRoot
 	 * or updating a classpath
 	 * </li>
 	 * </ul>
-	 * @see org.eclipse.core.resources.IResource#delete
+	 * @see org.eclipse.core.resources.IResource#delete(boolean, IProgressMonitor)
 	 * @since 2.1
 	 */
 	void delete(int updateResourceFlags, int updateModelFlags, IProgressMonitor monitor) throws JavaModelException;
@@ -251,12 +251,11 @@ public interface IPackageFragmentRoot
 	 * In particular, <code>.class</code> files are ignored under a source package fragment root,
 	 * and <code>.java</code> files are ignored under a binary package fragment root.
 	 *
-	 * @see IPackageFragmentRoot#K_SOURCE
-	 * @see IPackageFragmentRoot#K_BINARY
-	 *
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
 	 * @return this package fragment root's kind encoded as an integer
+	 * @see IPackageFragmentRoot#K_SOURCE
+	 * @see IPackageFragmentRoot#K_BINARY
 	 */
 	int getKind() throws JavaModelException;
 	
@@ -266,7 +265,7 @@ public interface IPackageFragmentRoot
 	 * Non-Java resources includes other files and folders located in the same
 	 * directories as the compilation units or class files under this package
 	 * fragment root. Resources excluded from this package fragment root
-	 * by one or more exclusion patterns on the corresponding source classpath
+	 * by virtue of inclusion/exclusion patterns on the corresponding source classpath
 	 * entry are considered non-Java resources and will appear in the result
 	 * (possibly in a folder). Thus when a nested source folder is excluded, it will appear
 	 * in the non-Java resources of the outer folder.
@@ -275,7 +274,10 @@ public interface IPackageFragmentRoot
 	 *              <code>IFolder</code>s, or <code>IStorage</code>s if the
 	 *              package fragment root is in archive) contained in this package 
 	 *              fragment root
-	 * @see IClasspathEntry#getExclusionPatterns
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @see IClasspathEntry#getInclusionPatterns()
+	 * @see IClasspathEntry#getExclusionPatterns()
 	 */
 	Object[] getNonJavaResources() throws JavaModelException;
 	
@@ -332,6 +334,9 @@ public interface IPackageFragmentRoot
 	/**
 	 * Returns whether this package fragment root's underlying
 	 * resource is a binary archive (a JAR or zip file).
+	 * <p>
+	 * This is a handle-only method.
+	 * </p>
 	 * 
 	 * @return true if this package fragment root's underlying resource is a binary archive, false otherwise
 	 */
@@ -341,6 +346,9 @@ public interface IPackageFragmentRoot
 	 * Returns whether this package fragment root is external
 	 * to the workbench (that is, a local file), and has no
 	 * underlying resource.
+	 * <p>
+	 * This is a handle-only method.
+	 * </p>
 	 * 
 	 * @return true if this package fragment root is external
 	 * to the workbench (that is, a local file), and has no
@@ -387,7 +395,7 @@ public interface IPackageFragmentRoot
 	 * </p>
 	 * 
 	 * @param destination the destination path
-	 * @param updateFlags bit-wise or of update flag constants
+	 * @param updateResourceFlags bit-wise or of update flag constants
 	 * (<code>IResource.FORCE</code>, <code>IResource.KEEP_HISTORY</code> 
 	 * and <code>IResource.SHALLOW</code>)
 	 * @param updateModelFlags bit-wise or of update resource flag constants
@@ -416,7 +424,7 @@ public interface IPackageFragmentRoot
 	 * classpath (NAME_COLLISION) and <code>updateModelFlags</code>
 	 * has not been specified as <code>REPLACE</code></li>
 	 * </ul>
-	 * @see org.eclipse.core.resources.IResource#move
+	 * @see org.eclipse.core.resources.IResource#move(IPath, boolean, IProgressMonitor)
 	 * @since 2.1
 	 */
 	void move(IPath destination, int updateResourceFlags, int updateModelFlags, IClasspathEntry sibling, IProgressMonitor monitor) throws JavaModelException;

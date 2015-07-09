@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -79,7 +79,7 @@ public void generateCode(
 		if (this.arguments != null) {
 			int argsLength = this.arguments.length;
 			codeStream.generateInlinedValue(argsLength);
-			codeStream.newArray(currentScope, currentScope.createArrayType(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT, 3), 1));
+			codeStream.newArray(currentScope.createArrayType(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT, 3), 1));
 			codeStream.dup();
 			for (int i = 0; i < argsLength; i++) {
 				codeStream.generateInlinedValue(i);
@@ -95,7 +95,7 @@ public void generateCode(
 			}
 		} else {
 			codeStream.generateInlinedValue(0);
-			codeStream.newArray(currentScope, currentScope.createArrayType(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT, 3), 1));			
+			codeStream.newArray(currentScope.createArrayType(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT, 3), 1));			
 		}
 		((CodeSnippetCodeStream) codeStream).invokeJavaLangReflectConstructorNewInstance();
 		codeStream.checkcast(allocatedType);
@@ -121,7 +121,7 @@ public void manageSyntheticAccessIfNecessary(BlockScope currentScope, FlowInfo f
 public TypeBinding resolveType(BlockScope scope) {
 	// Propagate the type checking to the arguments, and check if the constructor is defined.
 	this.constant = NotAConstant;
-	this.resolvedType = this.type.resolveType(scope); // will check for null after args are resolved
+	this.resolvedType = this.type.resolveType(scope, true /* check bounds*/); // will check for null after args are resolved
 
 	// buffering the arguments' types
 	boolean argsContainCast = false;
@@ -198,8 +198,8 @@ public TypeBinding resolveType(BlockScope scope) {
 		    TypeBinding parameterType = binding.parameters[i];
 		    TypeBinding argumentType = argumentTypes[i];
 			arguments[i].computeConversion(scope, parameterType, argumentType);
-			if (argumentType != parameterType && argumentType.isRawType() && parameterType.isBoundParameterizedType()) {
-				scope.problemReporter().unsafeRawConversion(arguments[i], argumentType, parameterType);
+			if (argumentType.needsUncheckedConversion(parameterType)) {
+				scope.problemReporter().unsafeTypeConversion(arguments[i], argumentType, parameterType);
 			}
 		}
 		if (argsContainCast) {
@@ -207,7 +207,7 @@ public TypeBinding resolveType(BlockScope scope) {
 		}
 	}
 	if (allocatedType.isRawType() && this.binding.hasSubstitutedParameters()) {
-	    scope.problemReporter().unsafeRawInvocation(this, allocatedType, this.binding);
+	    scope.problemReporter().unsafeRawInvocation(this, this.binding);
 	}
 	return allocatedType;
 }

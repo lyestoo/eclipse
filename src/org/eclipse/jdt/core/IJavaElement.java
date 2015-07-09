@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -13,6 +13,7 @@ package org.eclipse.jdt.core;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IAdaptable;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.jobs.ISchedulingRule;
 
 /**
  * Common protocol for all elements provided by the Java model.
@@ -109,6 +110,20 @@ public interface IJavaElement extends IAdaptable {
 	 * A Java element with this type can be safely cast to <code>IImportDeclaration</code>.
 	 */
 	int IMPORT_DECLARATION = 13;
+	
+	/**
+	 * Constant representing a local variable declaration.
+	 * A Java element with this type can be safely cast to <code>ILocalVariable</code>.
+	 * @since 3.0
+	 */
+	int LOCAL_VARIABLE = 14;
+	
+	/**
+	 * Constant representing a type parameter declaration.
+	 * A Java element with this type can be safely cast to <code>ITypeParameter</code>.
+	 * @since 3.1
+	 */
+	int TYPE_PARAMETER = 15;
 
 	/**
 	 * Returns whether this Java element exists in the model.
@@ -272,6 +287,15 @@ public interface IJavaElement extends IAdaptable {
 	 * @since 2.0
 	 */
 	IResource getResource();
+	
+	/**
+	 * Returns the scheduling rule associated with this Java element.
+	 * This is a handle-only method.
+	 * 
+	 * @return the scheduling rule associated with this Java element
+	 * @since 3.0
+	 */
+	ISchedulingRule getSchedulingRule();
 
 	/**
 	 * Returns the smallest underlying resource that contains
@@ -311,6 +335,6 @@ public interface IJavaElement extends IAdaptable {
 	 * @return <code>true</code> if the structure of this element is known
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource
-	 */// TODO: (philippe) predicate shouldn't throw an exception
+	 */// TODO (philippe) predicate shouldn't throw an exception
 	boolean isStructureKnown() throws JavaModelException;
 }

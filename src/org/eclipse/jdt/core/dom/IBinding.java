@@ -1,15 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
+
+import org.eclipse.jdt.core.IJavaElement;
 
 /**
  * A binding represents a named entity in the Java language. The world of 
@@ -124,6 +126,35 @@ public interface IBinding {
 	public boolean isSynthetic();
 	
 	/**
+	 * Returns the Java element that corresponds to this binding.
+	 * Returns <code>null</code> if this binding has no corresponding
+	 * Java element.
+	 * <p>
+	 * For array types, this method returns the Java element that corresponds
+	 * to the array's element type. For raw and parameterized types, this method
+	 * returns the Java element of the erasure.
+	 * </p>
+	 * <p>
+	 * Here are the cases where a <code>null</code> should be expected:
+	 * <ul>
+	 * <li>primitive types, including void</li>
+	 * <li>null type</li>
+	 * <li>wildcard types</li>
+	 * <li>capture types</li>
+	 * <li>the "length" field of an array type</li>
+	 * <li>array types of any of the above</li>
+	 * </ul>
+	 * For all other kind of type, method, variable, and package bindings,
+	 * this method returns non-<code>null</code>.
+	 * </p>
+	 * 
+	 * @return the Java element that corresponds to this binding, 
+	 * 		or <code>null</code> if none
+	 * @since 3.1
+	 */
+	public IJavaElement getJavaElement();
+	
+	/**
 	 * Returns the key for this binding.
 	 * <p>
 	 * Within a connected cluster of bindings (for example, all bindings 
@@ -163,6 +194,7 @@ public interface IBinding {
 	 * the key of the generic type or generic method that declares that
 	 * type variable</li>
 	 * <li>wildcard types - the key of the optional wildcard type bound</li>
+     * <li>capture type bindings - the key of the wildcard captured</li>
 	 * <li>generic type instances - the key of the generic type and the keys
 	 * of the type arguments used to instantiate it, and whether the
 	 * instance is explicit (a parameterized type reference) or
@@ -177,7 +209,7 @@ public interface IBinding {
 	 * </ul>
 	 * </p>
 	 * 
-	 * @return the key for this binding, or <code>null</code> if none
+	 * @return the key for this binding
 	 */
 	public String getKey();
 	
@@ -187,13 +219,31 @@ public interface IBinding {
 	 * bindings, each binding is represented by a distinct object. However,
 	 * between different clusters of bindings, the binding objects may or may
 	 * not be different; in these cases, the client should compare bindings
-	 * via their binding keys (<code>getKey</code>) if available.
+	 * using {@link #isEqualTo(IBinding)}, which checks their keys.
 	 * 
 	 * @param obj {@inheritDoc}
 	 * @return {@inheritDoc}
-	 * @see #getKey()
 	 */
 	public boolean equals(Object obj);
+	
+	/**
+	 * Returns whether this binding has the same key as that of the given
+	 * binding. Within the context of a single cluster of bindings, each
+	 * binding is represented by a distinct object. However, between
+	 * different clusters of bindings, the binding objects may or may
+	 * not be different objects; in these cases, the binding keys
+	 * are used where available.
+	 * 
+	 * @param binding the other binding, or <code>null</code>
+	 * @return <code>true</code> if the given binding is the identical
+	 * object as this binding, or if the keys of both bindings are the
+	 * same string; <code>false</code> if the given binding is
+	 * <code>null</code>, or if the bindings do not have the same key,
+	 * or if one or both of the bindings have no key
+	 * @see #getKey()
+	 * @since 3.1
+	 */
+	public boolean isEqualTo(IBinding binding);
 	
 	/**
 	 * Returns a string representation of this binding suitable for debugging

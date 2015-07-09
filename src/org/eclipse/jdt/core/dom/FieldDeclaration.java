@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -12,7 +12,6 @@
 package org.eclipse.jdt.core.dom;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -49,13 +48,12 @@ public class FieldDeclaration extends BodyDeclaration {
 	 * The "modifiers" structural property of this node type (JLS2 API only).
 	 * @since 3.0
 	 */
-    // TODO (jeem) When JLS3 support is complete (post 3.0) - deprecated Replaced by {@link #MODIFIERS2_PROPERTY} in the JLS3 API.
 	public static final SimplePropertyDescriptor MODIFIERS_PROPERTY = 
 		internalModifiersPropertyFactory(FieldDeclaration.class);
 	
 	/**
 	 * The "modifiers" structural property of this node type (added in JLS3 API).
-	 * @since 3.0
+	 * @since 3.1
 	 */
 	public static final ChildListPropertyDescriptor MODIFIERS2_PROPERTY = 
 		internalModifiers2PropertyFactory(FieldDeclaration.class);
@@ -86,7 +84,7 @@ public class FieldDeclaration extends BodyDeclaration {
 	 * A list of property descriptors (element type: 
 	 * {@link StructuralPropertyDescriptor}),
 	 * or null if uninitialized.
-	 * @since 3.0
+	 * @since 3.1
 	 */
 	private static final List PROPERTY_DESCRIPTORS_3_0;
 	
@@ -120,7 +118,7 @@ public class FieldDeclaration extends BodyDeclaration {
 	 * @since 3.0
 	 */
 	public static List propertyDescriptors(int apiLevel) {
-		if (apiLevel == AST.JLS2) {
+		if (apiLevel == AST.JLS2_INTERNAL) {
 			return PROPERTY_DESCRIPTORS_2_0;
 		} else {
 			return PROPERTY_DESCRIPTORS_3_0;
@@ -171,7 +169,7 @@ public class FieldDeclaration extends BodyDeclaration {
 			if (get) {
 				return getModifiers();
 			} else {
-				setModifiers(value);
+				internalSetModifiers(value);
 				return 0;
 			}
 		}
@@ -253,8 +251,8 @@ public class FieldDeclaration extends BodyDeclaration {
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setJavadoc(
 			(Javadoc) ASTNode.copySubtree(target, getJavadoc()));
-		if (this.ast.apiLevel == AST.JLS2) {
-			result.setModifiers(getModifiers());
+		if (this.ast.apiLevel == AST.JLS2_INTERNAL) {
+			result.internalSetModifiers(getModifiers());
 		}
 		if (this.ast.apiLevel >= AST.JLS3) {
 			result.modifiers().addAll(ASTNode.copySubtrees(target, modifiers()));
@@ -348,24 +346,6 @@ public class FieldDeclaration extends BodyDeclaration {
 		return this.variableDeclarationFragments;
 	}
 		
-	/* (omit javadoc for this method)
-	 * Method declared on ASTNode.
-	 */
-	void appendDebugString(StringBuffer buffer) {
-		buffer.append("FieldDeclaration["); //$NON-NLS-1$
-		buffer.append("field "); //$NON-NLS-1$
-		getType().appendPrintString(buffer);
-		buffer.append(" "); //$NON-NLS-1$
-		for (Iterator it = fragments().iterator(); it.hasNext(); ) {
-			VariableDeclarationFragment d = (VariableDeclarationFragment) it.next();
-			d.getName().appendPrintString(buffer);
-			if (it.hasNext()) {
-				buffer.append(","); //$NON-NLS-1$
-			}
-		}
-		buffer.append("]"); //$NON-NLS-1$
-	}
-
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */

@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -22,7 +22,6 @@ import org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFormatException;
 import org.eclipse.jdt.internal.compiler.env.IBinaryType;
 import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
-import org.eclipse.jdt.internal.compiler.util.Util;
 
 /**
  * A variables evaluator compiles the global variables of an evaluation context and returns
@@ -151,7 +150,7 @@ Compiler getCompiler(ICompilerRequestor compilerRequestor) {
 	// Initialize the compiler's lookup environment with the already compiled super class
 	IBinaryType binaryType = this.context.getRootCodeSnippetBinary();
 	if (binaryType != null) {
-		compiler.lookupEnvironment.cacheBinaryType(binaryType);
+		compiler.lookupEnvironment.cacheBinaryType(binaryType, null /*no access restriction*/);
 	}
 
 	// and the installed global variable classes
@@ -166,7 +165,7 @@ Compiler getCompiler(ICompilerRequestor compilerRequestor) {
 			} catch (ClassFormatException e) {
 				e.printStackTrace(); // Should never happen since we compiled this type
 			}
-			compiler.lookupEnvironment.cacheBinaryType(binary);
+			compiler.lookupEnvironment.cacheBinaryType(binary, null /*no access restriction*/);
 		}
 	}
 	
@@ -190,7 +189,7 @@ protected char[] getSource() {
 	if (packageName.length != 0) {
 		buffer.append("package "); //$NON-NLS-1$
 		buffer.append(packageName);
-		buffer.append(';').append(Util.LINE_SEPARATOR);
+		buffer.append(';').append(this.context.lineSeparator);
 		lineNumberOffset++;
 	}
 
@@ -199,7 +198,7 @@ protected char[] getSource() {
 	for (int i = 0; i < imports.length; i++) {
 		buffer.append("import "); //$NON-NLS-1$
 		buffer.append(imports[i]);
-		buffer.append(';').append(Util.LINE_SEPARATOR);
+		buffer.append(';').append(this.context.lineSeparator);
 		lineNumberOffset++;
 	}
 
@@ -210,7 +209,7 @@ protected char[] getSource() {
 	buffer.append(PACKAGE_NAME);
 	buffer.append("."); //$NON-NLS-1$
 	buffer.append(ROOT_CLASS_NAME);
-	buffer.append(" {").append(Util.LINE_SEPARATOR); //$NON-NLS-1$
+	buffer.append(" {").append(this.context.lineSeparator); //$NON-NLS-1$
 	lineNumberOffset++;
 	this.startPosOffset = buffer.length();
 
@@ -225,12 +224,12 @@ protected char[] getSource() {
 		buffer.append(" "); //$NON-NLS-1$
 		char[] varName = var.name;
 		buffer.append(varName);
-		buffer.append(';').append(Util.LINE_SEPARATOR);
+		buffer.append(';').append(this.context.lineSeparator);
 		lineNumberOffset++;
 	}
 
 	// field initializations
-	buffer.append("\tstatic {").append(Util.LINE_SEPARATOR); //$NON-NLS-1$
+	buffer.append("\tstatic {").append(this.context.lineSeparator); //$NON-NLS-1$
 	lineNumberOffset++;
 	for (int i = 0; i < this.context.variableCount; i++){
 		GlobalVariable var = vars[i];
@@ -240,7 +239,7 @@ protected char[] getSource() {
 			// Initialize with initializer if there was no previous value
 			char[] initializer = var.initializer;
 			if (initializer != null) {
-				buffer.append("\t\ttry {").append(Util.LINE_SEPARATOR); //$NON-NLS-1$
+				buffer.append("\t\ttry {").append(this.context.lineSeparator); //$NON-NLS-1$
 				lineNumberOffset++;
 				var.initializerLineStart = lineNumberOffset;
 				buffer.append("\t\t\t"); //$NON-NLS-1$
@@ -250,10 +249,10 @@ protected char[] getSource() {
 				var.initExpressionStart = buffer.length();
 				buffer.append(initializer);
 				lineNumberOffset += numberOfCRs(initializer);
-				buffer.append(';').append(Util.LINE_SEPARATOR);
-				buffer.append("\t\t} catch (Throwable e) {").append(Util.LINE_SEPARATOR); //$NON-NLS-1$
-				buffer.append("\t\t\te.printStackTrace();").append(Util.LINE_SEPARATOR); //$NON-NLS-1$
-				buffer.append("\t\t}").append(Util.LINE_SEPARATOR); //$NON-NLS-1$
+				buffer.append(';').append(this.context.lineSeparator);
+				buffer.append("\t\t} catch (Throwable e) {").append(this.context.lineSeparator); //$NON-NLS-1$
+				buffer.append("\t\t\te.printStackTrace();").append(this.context.lineSeparator); //$NON-NLS-1$
+				buffer.append("\t\t}").append(this.context.lineSeparator); //$NON-NLS-1$
 				lineNumberOffset += 4; // 4 CRs
 			}
 		} else {
@@ -269,14 +268,14 @@ protected char[] getSource() {
 			buffer.append(installedVars.className);
 			buffer.append("."); //$NON-NLS-1$
 			buffer.append(varName);
-			buffer.append(';').append(Util.LINE_SEPARATOR);
+			buffer.append(';').append(this.context.lineSeparator);
 			lineNumberOffset++;
 		}
 	}
-	buffer.append("\t}").append(Util.LINE_SEPARATOR); //$NON-NLS-1$
+	buffer.append("\t}").append(this.context.lineSeparator); //$NON-NLS-1$
 	
 	// end of class declaration
-	buffer.append('}').append(Util.LINE_SEPARATOR);
+	buffer.append('}').append(this.context.lineSeparator);
 
 	// return result
 	int length = buffer.length();

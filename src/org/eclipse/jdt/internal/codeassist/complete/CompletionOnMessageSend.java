@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -47,20 +47,30 @@ public class CompletionOnMessageSend extends MessageSend {
 		if (receiver.isImplicitThis())
 			throw new CompletionNodeFound(this, null, scope);
 
-		this.receiverType = receiver.resolveType(scope);
-		if (this.receiverType == null || this.receiverType.isBaseType())
+		this.actualReceiverType = receiver.resolveType(scope);
+		if (this.actualReceiverType == null || this.actualReceiverType.isBaseType())
 			throw new CompletionNodeFound();
 
-		if (this.receiverType.isArrayType())
-			this.receiverType = scope.getJavaLangObject();
-		throw new CompletionNodeFound(this, this.receiverType, scope);
+		if (this.actualReceiverType.isArrayType())
+			this.actualReceiverType = scope.getJavaLangObject();
+		throw new CompletionNodeFound(this, this.actualReceiverType, scope);
 	}
 
 	public StringBuffer printExpression(int indent, StringBuffer output) {
 
 		output.append("<CompleteOnMessageSend:"); //$NON-NLS-1$
-		if (!receiver.isImplicitThis()) receiver.printExpression(0, output).append('.'); //$NON-NLS-1$
-		output.append(selector).append('('); //$NON-NLS-1$
+		if (!receiver.isImplicitThis()) receiver.printExpression(0, output).append('.');
+		if (this.typeArguments != null) {
+			output.append('<');
+			int max = typeArguments.length - 1;
+			for (int j = 0; j < max; j++) {
+				typeArguments[j].print(0, output);
+				output.append(", ");//$NON-NLS-1$
+			}
+			typeArguments[max].print(0, output);
+			output.append('>');
+		}
+		output.append(selector).append('(');
 		if (arguments != null) {
 			for (int i = 0; i < arguments.length; i++) {
 				if (i > 0) output.append(", "); //$NON-NLS-1$

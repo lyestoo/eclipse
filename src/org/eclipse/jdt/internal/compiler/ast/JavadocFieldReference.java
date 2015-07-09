@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -16,11 +16,23 @@ import org.eclipse.jdt.internal.compiler.lookup.*;
 public class JavadocFieldReference extends FieldReference {
 
 	public int tagSourceStart, tagSourceEnd;
+	public int tagValue;
+	public MethodBinding methodBinding;
+	public boolean superAccess = false;
 
 	public JavadocFieldReference(char[] source, long pos) {
 		super(source, pos);
 		this.bits |= InsideJavadoc;
 	}
+	
+	/*
+	public Binding getBinding() {
+		if (this.methodBinding != null) {
+			return this.methodBinding;
+		}
+		return this.binding;
+	}
+	*/
 
 	/*
 	 * Resolves type on a Block or Class scope.
@@ -53,22 +65,27 @@ public class JavadocFieldReference extends FieldReference {
 						fieldBinding = closestMatch; // ignore problem if can reach target field through it
 					}
 			}
-		}			
+		}
+		// When there's no valid field binding, try to resolve possible method reference without parenthesis
 		if (!fieldBinding.isValidBinding() || !(fieldBinding instanceof FieldBinding)) {
 			if (this.receiverType instanceof ReferenceBinding) {
 				ReferenceBinding refBinding = (ReferenceBinding) this.receiverType;
-				MethodBinding[] bindings = refBinding.getMethods(this.token);
-				if (bindings == null) {
+				MethodBinding[] methodBindings = refBinding.getMethods(this.token);
+				if (methodBindings == null) {
 					scope.problemReporter().javadocInvalidField(this.sourceStart, this.sourceEnd, fieldBinding, this.receiverType, scope.getDeclarationModifiers());
 				} else {
-					switch (bindings.length) {
+					switch (methodBindings.length) {
 						case 0:
+							// no method was found: report problem
 							scope.problemReporter().javadocInvalidField(this.sourceStart, this.sourceEnd, fieldBinding, this.receiverType, scope.getDeclarationModifiers());
 							break;
 						case 1:
-							this.binding = null;
+							// one method binding was found: store binding in specific field
+							this.methodBinding = methodBindings[0];
 							break;
 						default:
+							// several method binding were found: store first binding in specific field and report ambiguous error
+							this.methodBinding = methodBindings[0];
 							scope.problemReporter().javadocAmbiguousMethodReference(this.sourceStart, this.sourceEnd, fieldBinding, scope.getDeclarationModifiers());
 							break;
 					}
@@ -84,11 +101,8 @@ public class JavadocFieldReference extends FieldReference {
 		return this.resolvedType = this.binding.type;
 	}
 	
-	/* (non-Javadoc)
-	 * @see org.eclipse.jdt.internal.compiler.lookup.InvocationSite#isSuperAccess()
-	 */
 	public boolean isSuperAccess() {
-		return false;
+		return this.superAccess;
 	}
 
 	public StringBuffer printExpression(int indent, StringBuffer output) {
@@ -100,16 +114,10 @@ public class JavadocFieldReference extends FieldReference {
 		return output;
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.jdt.internal.compiler.ast.Expression#resolveType(org.eclipse.jdt.internal.compiler.lookup.BlockScope)
-	 */
 	public TypeBinding resolveType(BlockScope scope) {
 		return internalResolveType(scope);
 	}
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.jdt.internal.compiler.ast.Expression#resolveType(org.eclipse.jdt.internal.compiler.lookup.BlockScope)
-	 */
 	public TypeBinding resolveType(ClassScope scope) {
 		return internalResolveType(scope);
 	}

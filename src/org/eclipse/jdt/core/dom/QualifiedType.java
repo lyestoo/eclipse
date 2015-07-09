@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2004 IBM Corporation and others.
+ * Copyright (c) 2003, 2005 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Common Public License v1.0
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -41,20 +41,22 @@ import java.util.List;
  * became possible as of JLS3; only the second form existed in JLS2 API.)
  * </p>
  * 
- * @since 3.0
+ * @since 3.1
  */
 public class QualifiedType extends Type {
+    /**
+     * This index represents the position inside a parameterized qualified type.
+     */
+    int index;
 	
 	/**
 	 * The "qualifier" structural property of this node type.
-	 * @since 3.0
 	 */
 	public static final ChildPropertyDescriptor QUALIFIER_PROPERTY = 
 		new ChildPropertyDescriptor(QualifiedType.class, "qualifier", Type.class, MANDATORY, CYCLE_RISK); //$NON-NLS-1$
 
 	/**
 	 * The "name" structural property of this node type.
-	 * @since 3.0
 	 */
 	public static final ChildPropertyDescriptor NAME_PROPERTY = 
 		new ChildPropertyDescriptor(QualifiedType.class, "name", SimpleName.class, MANDATORY, NO_CYCLE_RISK); //$NON-NLS-1$
@@ -82,7 +84,6 @@ public class QualifiedType extends Type {
 	 * <code>AST.JLS&ast;</code> constants
 	 * @return a list of property descriptors (element type: 
 	 * {@link StructuralPropertyDescriptor})
-	 * @since 3.0
 	 */
 	public static List propertyDescriptors(int apiLevel) {
 		return PROPERTY_DESCRIPTORS;
@@ -267,7 +268,7 @@ public class QualifiedType extends Type {
 	 */
 	int memSize() {
 		// treat Code as free
-		return BASE_NODE_SIZE + 2 * 4;
+		return BASE_NODE_SIZE + 3 * 4;
 	}
 	
 	/* (omit javadoc for this method)

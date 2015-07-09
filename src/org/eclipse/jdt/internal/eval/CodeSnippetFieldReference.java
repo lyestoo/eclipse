@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -18,6 +18,7 @@ import org.eclipse.jdt.internal.compiler.ast.IntLiteral;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ParameterizedFieldBinding;
@@ -132,21 +133,25 @@ public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeS
 			codeStream.getfield(this.codegenBinding);
 		}
 		int operationTypeID;
-		if ((operationTypeID = this.implicitConversion >> 4) == T_String) {
-			codeStream.generateStringConcatenationAppend(currentScope, null, expression);
-		} else {
-			// promote the array reference to the suitable operation type
-			codeStream.generateImplicitConversion(this.implicitConversion);
-			// generate the increment value (will by itself  be promoted to the operation value)
-			if (expression == IntLiteral.One){ // prefix operation
-				codeStream.generateConstant(expression.constant, this.implicitConversion);			
-			} else {
-				expression.generateCode(currentScope, codeStream, true);
-			}		
-			// perform the operation
-			codeStream.sendOperator(operator, operationTypeID);
-			// cast the value back to the array reference type
-			codeStream.generateImplicitConversion(assignmentImplicitConversion);
+		switch(operationTypeID = (this.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4) {
+			case T_JavaLangString :
+			case T_JavaLangObject :
+			case T_undefined :
+				codeStream.generateStringConcatenationAppend(currentScope, null, expression);
+				break;
+			default :
+				// promote the array reference to the suitable operation type
+				codeStream.generateImplicitConversion(this.implicitConversion);
+				// generate the increment value (will by itself  be promoted to the operation value)
+				if (expression == IntLiteral.One){ // prefix operation
+					codeStream.generateConstant(expression.constant, this.implicitConversion);			
+				} else {
+					expression.generateCode(currentScope, codeStream, true);
+				}		
+				// perform the operation
+				codeStream.sendOperator(operator, operationTypeID);
+				// cast the value back to the array reference type
+				codeStream.generateImplicitConversion(assignmentImplicitConversion);
 		}
 		fieldStore(codeStream, this.codegenBinding, null, valueRequired);
 	} else {
@@ -170,7 +175,7 @@ public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeS
 							
 		}
 		int operationTypeID;
-		if ((operationTypeID = this.implicitConversion >> 4) == T_String) {
+		if ((operationTypeID = (this.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4) == T_JavaLangString) {
 			codeStream.generateStringConcatenationAppend(currentScope, null, expression);
 		} else {
 			// promote the array reference to the suitable operation type
@@ -227,7 +232,7 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 		}
 		codeStream.generateConstant(postIncrement.expression.constant, this.implicitConversion);
 		codeStream.sendOperator(postIncrement.operator, this.codegenBinding.type.id);
-		codeStream.generateImplicitConversion(postIncrement.assignmentImplicitConversion);
+		codeStream.generateImplicitConversion(postIncrement.preAssignImplicitConversion);
 		fieldStore(codeStream, this.codegenBinding, null, false);
 	} else {
 		this.receiver.generateCode(currentScope, codeStream, !(isStatic = this.codegenBinding.isStatic()));
@@ -275,7 +280,7 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 
 		codeStream.generateConstant(postIncrement.expression.constant, this.implicitConversion);
 		codeStream.sendOperator(postIncrement.operator, this.codegenBinding.type.id);
-		codeStream.generateImplicitConversion(postIncrement.assignmentImplicitConversion);
+		codeStream.generateImplicitConversion(postIncrement.preAssignImplicitConversion);
 		((CodeSnippetCodeStream) codeStream).generateEmulatedWriteAccessForField(this.codegenBinding);
 	}
 }
@@ -304,25 +309,24 @@ public void manageSyntheticAccessIfNecessary(BlockScope currentScope, FlowInfo f
 	// if the binding declaring class is not visible, need special action
 	// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
 	// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
-	if (this.delegateThis != null) {
-		if (this.binding.declaringClass != this.delegateThis.type
-			&& this.binding.declaringClass != null
-			&& !this.binding.isConstantValue()
-			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2 
-					&& !this.binding.isStatic()
-					&& this.binding.declaringClass.id != T_Object) // no change for Object fields (if there was any)
-				|| !this.codegenBinding.declaringClass.canBeSeenBy(currentScope))){
-			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(this.codegenBinding, (ReferenceBinding)this.delegateThis.type.erasure());
+	TypeBinding someReceiverType = this.delegateThis != null ? this.delegateThis.type : this.receiverType;
+	if (this.binding.declaringClass != someReceiverType
+			&& !someReceiverType.isArrayType()
+			&& this.binding.declaringClass != null // array.length
+			&& !this.binding.isConstantValue()) {
+	
+		CompilerOptions options = currentScope.compilerOptions();
+		if ((options.targetJDK >= ClassFileConstants.JDK1_2
+				&& (options.complianceLevel >= ClassFileConstants.JDK1_4 || !receiver.isImplicitThis() || !this.codegenBinding.isStatic())
+				&& this.binding.declaringClass.id != T_JavaLangObject) // no change for Object fields
+			|| !this.binding.declaringClass.canBeSeenBy(currentScope)) {
+
+			this.codegenBinding =
+				currentScope.enclosingSourceType().getUpdatedFieldBinding(
+					this.codegenBinding,
+					(ReferenceBinding) someReceiverType.erasure());
 		}
-	} else if (this.binding.declaringClass != this.receiverType
-		&& !this.receiverType.isArrayType()
-		&& this.binding.declaringClass != null // array.length
-		&& !this.binding.isConstantValue()
-		&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2
-				&& this.binding.declaringClass.id != T_Object) //no change for Object fields (in case there was)
-			|| !this.codegenBinding.declaringClass.canBeSeenBy(currentScope))){
-			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(this.codegenBinding, (ReferenceBinding) this.receiverType.erasure());
-	}
+	}	
 }
 public TypeBinding resolveType(BlockScope scope) {
 	// Answer the signature type of the field.

@@ -1,17 +1,20 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.LocalDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
+import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
 
 public class LocalVariableBinding extends VariableBinding {
 
@@ -47,9 +50,54 @@ public class LocalVariableBinding extends VariableBinding {
 	/* API
 	* Answer the receiver's binding type from Binding.BindingID.
 	*/
-	public final int bindingType() {
+	public final int kind() {
 
 		return LOCAL;
+	}
+	
+	/*
+	 * declaringUniqueKey # scopeIndex / varName
+	 * p.X { void foo() { int local; } } --> Lp/X;.foo()V#1/local
+	 */
+	public char[] computeUniqueKey(boolean isLeaf) {
+		StringBuffer buffer = new StringBuffer();
+		
+		// declaring method or type
+		BlockScope scope = this.declaringScope;
+		MethodScope methodScope = scope instanceof MethodScope ? (MethodScope) scope : scope.enclosingMethodScope();
+		ReferenceContext referenceContext = methodScope.referenceContext;
+		if (referenceContext instanceof AbstractMethodDeclaration) {
+			MethodBinding methodBinding = ((AbstractMethodDeclaration) referenceContext).binding;
+			if (methodBinding != null) {
+				buffer.append(methodBinding.computeUniqueKey(false/*not a leaf*/));
+			}
+		} else if (referenceContext instanceof TypeDeclaration) {
+			TypeBinding typeBinding = ((TypeDeclaration) referenceContext).binding;
+			if (typeBinding != null) {
+				buffer.append(typeBinding.computeUniqueKey(false/*not a leaf*/));
+			}
+		}
+
+		// scope index
+		getScopeKey(scope, buffer);
+
+		// variable name
+		buffer.append('#');
+		buffer.append(this.name);
+		
+		int length = buffer.length();
+		char[] uniqueKey = new char[length];
+		buffer.getChars(0, length, uniqueKey, 0);
+		return uniqueKey;
+	}
+	
+	private void getScopeKey(BlockScope scope, StringBuffer buffer) {
+		int scopeIndex = scope.scopeIndex();
+		if (scopeIndex != -1) {
+			getScopeKey((BlockScope)scope.parent, buffer);
+			buffer.append('#');
+			buffer.append(scopeIndex);
+		}
 	}
 	
 	// Answer whether the variable binding is a secret variable added for code gen purposes

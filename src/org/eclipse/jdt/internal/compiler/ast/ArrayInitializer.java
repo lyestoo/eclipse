@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -47,7 +47,7 @@ public class ArrayInitializer extends Expression {
 		int pc = codeStream.position;
 		int expressionLength = (expressions == null) ? 0: expressions.length;
 		codeStream.generateInlinedValue(expressionLength);
-		codeStream.newArray(currentScope, binding);
+		codeStream.newArray(binding);
 		if (expressions != null) {
 			// binding is an ArrayType, so I can just deal with the dimension
 			int elementsTypeID = binding.dimensions > 1 ? -1 : binding.leafComponentType.id;
@@ -101,7 +101,9 @@ public class ArrayInitializer extends Expression {
 				}
 			}
 		}
-		if (!valueRequired) {
+		if (valueRequired) {
+			codeStream.generateImplicitConversion(this.implicitConversion);
+		} else {
 			codeStream.pop();
 		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
@@ -133,9 +135,18 @@ public class ArrayInitializer extends Expression {
 	
 		// this method is recursive... (the test on isArrayType is the stop case)
 	
-		constant = NotAConstant;
+		this.constant = NotAConstant;
+		
+		// allow new List<?>[5]
+		if ((this.bits & IsAnnotationDefaultValue) == 0) { // annotation default value need only to be commensurate JLS9.7
+			TypeBinding leafComponentType = expectedTb.leafComponentType();
+			if (leafComponentType.isBoundParameterizedType() || leafComponentType.isGenericType() || leafComponentType.isTypeVariable()) {
+			    scope.problemReporter().illegalGenericArray(leafComponentType, this);
+			}
+		}
+			
 		if (expectedTb.isArrayType()) {
-			binding = (ArrayBinding) expectedTb;
+			this.resolvedType = this.binding = (ArrayBinding) expectedTb;
 			if (expressions == null)
 				return binding;
 			TypeBinding expectedElementsTb = binding.elementsType();
@@ -150,10 +161,12 @@ public class ArrayInitializer extends Expression {
 						return null;
 	
 					// Compile-time conversion required?
-					if (expression.isConstantValueOfTypeAssignableToType(expressionTb, expectedElementsTb)) {
-						expression.computeConversion(scope, expectedElementsTb, expressionTb);
-					} else if (BaseTypeBinding.isWidening(expectedElementsTb.id, expressionTb.id)) {
-						expression.computeConversion(scope, expectedElementsTb, expressionTb);
+					if (expectedElementsTb != expressionTb) // must call before computeConversion() and typeMismatchError()
+						scope.compilationUnitScope().recordTypeConversion(expectedElementsTb, expressionTb);
+					if (expression.isConstantValueOfTypeAssignableToType(expressionTb, expectedElementsTb)
+						|| BaseTypeBinding.isWidening(expectedElementsTb.id, expressionTb.id)
+						|| scope.isBoxingCompatibleWith(expressionTb, expectedElementsTb)) {
+							expression.computeConversion(scope, expectedElementsTb, expressionTb);
 					} else {
 						scope.problemReporter().typeMismatchError(expressionTb, expectedElementsTb, expression);
 						return null;

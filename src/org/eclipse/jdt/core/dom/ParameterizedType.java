@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2004 IBM Corporation and others.
+ * Copyright (c) 2003, 2005 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Common Public License v1.0
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -24,27 +24,23 @@ import java.util.List;
  * </pre>
  * The first type may be a simple type or a qualified type;
  * other kinds of types are meaningless.
- * <p>
- * Note: This API element is only needed for dealing with Java code that uses
- * new language features of J2SE 1.5. It is included in anticipation of J2SE
- * 1.5 support, which is planned for the next release of Eclipse after 3.0, and
- * may change slightly before reaching its final form.
- * </p>
  * 
- * @since 3.0
+ * @since 3.1
  */
 public class ParameterizedType extends Type {
+    /**
+     * This index represents the position inside a parameterized qualified type.
+     */
+    int index;
 	
 	/**
 	 * The "type" structural property of this node type.
-	 * @since 3.0
 	 */
 	public static final ChildPropertyDescriptor TYPE_PROPERTY = 
 		new ChildPropertyDescriptor(ParameterizedType.class, "type", Type.class, MANDATORY, CYCLE_RISK); //$NON-NLS-1$
 
 	/**
 	 * The "typeArguments" structural property of this node type.
-	 * @since 3.0
 	 */
 	public static final ChildListPropertyDescriptor TYPE_ARGUMENTS_PROPERTY = 
 		new ChildListPropertyDescriptor(ParameterizedType.class, "typeArguments", Type.class, CYCLE_RISK); //$NON-NLS-1$
@@ -73,7 +69,6 @@ public class ParameterizedType extends Type {
 
 	 * @return a list of property descriptors (element type: 
 	 * {@link StructuralPropertyDescriptor})
-	 * @since 3.0
 	 */
 	public static List propertyDescriptors(int apiLevel) {
 		return PROPERTY_DESCRIPTORS;
@@ -237,7 +232,7 @@ public class ParameterizedType extends Type {
 	 */
 	int memSize() {
 		// treat Code as free
-		return BASE_NODE_SIZE + 2 * 4;
+		return BASE_NODE_SIZE + 3 * 4;
 	}
 	
 	/* (omit javadoc for this method)

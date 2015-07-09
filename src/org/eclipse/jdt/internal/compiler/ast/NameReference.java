@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -12,11 +12,10 @@ package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
-public abstract class NameReference extends Reference implements InvocationSite, BindingIds {
+public abstract class NameReference extends Reference implements InvocationSite {
 
 	public Binding binding, codegenBinding; //may be aTypeBinding-aFieldBinding-aLocalVariableBinding
 	
-	public TypeBinding receiverType;		// raw receiver type
 	public TypeBinding actualReceiverType;	// modified receiver type - actual one according to namelookup
 
 	//the error printing
@@ -28,7 +27,7 @@ public abstract class NameReference extends Reference implements InvocationSite,
 	//no changeClass in java.
 public NameReference() {
 	super();
-	bits |= TYPE | VARIABLE; // restrictiveFlag
+	bits |= Binding.TYPE | Binding.VARIABLE; // restrictiveFlag
 	
 }
 public FieldBinding fieldBinding() {
@@ -48,6 +47,7 @@ public boolean isTypeReference() {
 	return binding instanceof ReferenceBinding;
 }
 public void setActualReceiverType(ReferenceBinding receiverType) {
+	if (receiverType == null) return; // error scenario only
 	this.actualReceiverType = receiverType;
 }
 public void setDepth(int depth) {

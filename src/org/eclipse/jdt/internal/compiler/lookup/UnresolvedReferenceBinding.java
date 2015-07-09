@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -48,8 +48,9 @@ ReferenceBinding resolve(LookupEnvironment environment, boolean convertGenericTo
 			return null; // will not get here since the above error aborts the compilation
 		}
 	}
-	if (convertGenericToRawType && targetType.isGenericType()) // raw reference to generic ?
-	    return environment.createRawType(targetType, null);
+	if (convertGenericToRawType) {
+		targetType = (ReferenceBinding) environment.convertToRawType(targetType);
+	}
 	return targetType;
 }
 void setResolvedType(ReferenceBinding targetType, LookupEnvironment environment) {

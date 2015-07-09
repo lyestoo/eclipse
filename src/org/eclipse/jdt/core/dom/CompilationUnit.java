@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -14,10 +14,10 @@ package org.eclipse.jdt.core.dom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
 import org.eclipse.jface.text.IDocument;
@@ -171,11 +171,18 @@ public class CompilationUnit extends ASTNode {
 	private IProblem[] problems = EMPTY_PROBLEMS;
 	
 	/**
-	 * The comment mapper, or <code>null</code> in none; 
+	 * The comment mapper, or <code>null</code> if none; 
 	 * initially <code>null</code>.
 	 * @since 3.0
 	 */
 	private DefaultCommentMapper commentMapper = null;
+	
+	/**
+	 * The Java element (an <code>org.eclipse.jdt.core.ICompilationUnit</code> or an <code>org.eclipse.jdt.core.IClassFile</code>) 
+	 * this compilation unit was created from, or <code>null</code> if it was not created from a Java element.
+	 * @since 3.1
+	 */
+	private IJavaElement element = null;
 	
 	/**
 	 * Sets the line end table for this compilation unit.
@@ -341,7 +348,7 @@ public class CompilationUnit extends ASTNode {
 	 * compilation unit, in order of appearance.
      * <p>
      * Note that in JLS3, the types may include both enum declarations
-     * and annotation type declarations introduced in J2SE 1.5.
+     * and annotation type declarations introduced in J2SE 5.
      * For JLS2, the elements are always <code>TypeDeclaration</code>.
      * </p>
 	 * 
@@ -362,7 +369,6 @@ public class CompilationUnit extends ASTNode {
 	 * The following table indicates the expected node type for the various
 	 * different kinds of bindings:
 	 * <ul>
-	 * <li></li>
 	 * <li>package - a <code>PackageDeclaration</code></li>
 	 * <li>class or interface - a <code>TypeDeclaration</code> or a
 	 *    <code>AnonymousClassDeclaration</code> (for anonymous classes)</li>
@@ -380,7 +386,13 @@ public class CompilationUnit extends ASTNode {
      * <li>annotation type member - an <code>AnnotationTypeMemberDeclaration</code></li>
      * <li>enum type - an <code>EnumDeclaration</code></li>
      * <li>enum constant - an <code>EnumConstantDeclaration</code></li>
+     * <li>type variable - a <code>TypeParameter</code></li>
+     * <li>capture binding - none</li>
 	 * </ul>
+     * For parameterized or raw type bindings, the declaring node is
+     * that of the corresponding generic type. And for parameterized or raw
+     * method bindings, the declaring node is that of the corresponding
+     * generic method.
 	 * </p>
 	 * <p>
 	 * Each call to {@link ASTParser#createAST(org.eclipse.core.runtime.IProgressMonitor)} with a request for bindings
@@ -428,12 +440,13 @@ public class CompilationUnit extends ASTNode {
      * <li>annotation type member - an <code>AnnotationTypeMemberDeclaration</code></li>
      * <li>enum type - an <code>EnumDeclaration</code></li>
      * <li>enum constant - an <code>EnumConstantDeclaration</code></li>
+	 * <li>type variable - a <code>TypeParameter</code></li>
+     * <li>capture binding - none</li>
 	 * </ul>
-	 * </p>
-	 * <p>
-	 * Note that as explained in {@link IBinding#getKey() IBinding.getkey}
-	 * there may be no keys for finding the declaring node for local variables,
-	 * local or anonymous classes, etc.
+     * For parameterized or raw type bindings, the declaring node is
+     * that of the corresponding generic type. And for parameterized or raw
+     * method bindings, the declaring node is that of the corresponding
+     * generic method.
 	 * </p>
 	 * 
 	 * @param key the binding key, or <code>null</code>
@@ -483,8 +496,12 @@ public class CompilationUnit extends ASTNode {
 	 * @since 3.0
 	 */
 	public int getExtendedStartPosition(ASTNode node) {
-		if (this.commentMapper == null) {
-			return -1;
+		if (node == null) {
+			throw new IllegalArgumentException();
+		}
+		if (this.commentMapper == null || node.getAST() != getAST()) {
+			// fall back: use best info available
+			return node.getStartPosition();
 		} else {
 			return this.commentMapper.getExtendedStartPosition(node);
 		}
@@ -503,8 +520,12 @@ public class CompilationUnit extends ASTNode {
 	 * @since 3.0
 	 */
 	public int getExtendedLength(ASTNode node) {
-		if (this.commentMapper == null) {
-			return 0;
+		if (node == null) {
+			throw new IllegalArgumentException();
+		}
+		if (this.commentMapper == null || node.getAST() != getAST()) {
+			// fall back: use best info available
+			return node.getLength();
 		} else {
 			return this.commentMapper.getExtendedLength(node);
 		}
@@ -582,6 +603,17 @@ public class CompilationUnit extends ASTNode {
 		}
 	}
 
+	/**
+	 * The Java element (an <code>org.eclipse.jdt.core.ICompilationUnit</code> or an <code>org.eclipse.jdt.core.IClassFile</code>) 
+	 * this compilation unit was created from, or <code>null</code> if it was not created from a Java element.
+	 * 
+	 * @return the Java element this compilation unit was created from, or <code>null</code> if none
+	 * @since 3.1
+	 */
+	public IJavaElement getJavaElement() {
+		return this.element;
+	}
+	
 	/**
 	 * Returns the list of messages reported by the compiler during the parsing 
 	 * or the type checking of this compilation unit. This list might be a subset of 
@@ -738,24 +770,18 @@ public class CompilationUnit extends ASTNode {
 		}
 	}
 	
-	
-	/* (omit javadoc for this method)
-	 * Method declared on ASTNode.
+	/**
+	 * Sets the Java element (an <code>org.eclipse.jdt.core.ICompilationUnit</code> or an <code>org.eclipse.jdt.core.IClassFile</code>) 
+	 * this compilation unit was created from, or <code>null</code> if it was not created from a Java element.
+	 * 
+	 * @param element the Java element this compilation unit was created from
+	 * @since 3.1
 	 */
-	void appendDebugString(StringBuffer buffer) {
-		buffer.append("CompilationUnit"); //$NON-NLS-1$
-		// include the type names
-		buffer.append("["); //$NON-NLS-1$
-		for (Iterator it = types().iterator(); it.hasNext(); ) {
-			AbstractTypeDeclaration d = (AbstractTypeDeclaration) it.next();
-			buffer.append(d.getName().getIdentifier());
-			if (it.hasNext()) {
-				buffer.append(","); //$NON-NLS-1$
-			}
-		}
-		buffer.append("]"); //$NON-NLS-1$
+	void setJavaElement(IJavaElement element) {
+		this.element = element;
 	}
-		
+
+
 	/* (omit javadoc for this method)
 	 * Method declared on ASTNode.
 	 */

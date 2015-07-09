@@ -1,16 +1,17 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
+import org.eclipse.jdt.internal.compiler.ast.Expression;
 import org.eclipse.jdt.internal.compiler.ast.Reference;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
@@ -23,9 +24,13 @@ import org.eclipse.jdt.internal.compiler.lookup.VariableBinding;
  */
 public class FinallyFlowContext extends FlowContext {
 	
-	Reference finalAssignments[];
-	VariableBinding finalVariables[];
+	Reference[] finalAssignments;
+	VariableBinding[] finalVariables;
 	int assignCount;
+
+	Expression[] nullReferences;
+	int[] nullStatus;
+	int nullCount;
 	
 	public FinallyFlowContext(FlowContext parent, ASTNode associatedNode) {
 		super(parent, associatedNode);
@@ -36,9 +41,9 @@ public class FinallyFlowContext extends FlowContext {
 	 * code will check that the subroutine context does not also initialize a final variable potentially set
 	 * redundantly.
 	 */
-	public void complainOnRedundantFinalAssignments(
-		FlowInfo flowInfo,
-		BlockScope scope) {
+	public void complainOnDeferredChecks(FlowInfo flowInfo, BlockScope scope) {
+		
+		// check redundant final assignments
 		for (int i = 0; i < assignCount; i++) {
 			VariableBinding variable = finalVariables[i];
 			if (variable == null) continue;
@@ -71,20 +76,43 @@ public class FinallyFlowContext extends FlowContext {
 				}
 			}
 		}
+		
+		// check inconsistent null checks
+		for (int i = 0; i < nullCount; i++) {
+			Expression expression = nullReferences[i];
+			if (expression == null) continue;
+			// final local variable
+			LocalVariableBinding local = expression.localVariableBinding();
+			switch (nullStatus[i]) {
+				case FlowInfo.NULL :
+					if (flowInfo.isDefinitelyNull(local)) {
+						nullReferences[i] = null;
+						this.parent.recordUsingNullReference(scope, local, expression, nullStatus[i], flowInfo);
+					}
+					break;
+				case FlowInfo.NON_NULL :
+					if (flowInfo.isDefinitelyNonNull(local)) {
+						nullReferences[i] = null;
+						this.parent.recordUsingNullReference(scope, local, expression, nullStatus[i], flowInfo);
+					}
+					break;
+			}
+		}
 	}
-
+	
 	public String individualToString() {
 		
 		StringBuffer buffer = new StringBuffer("Finally flow context"); //$NON-NLS-1$
-		buffer.append("[finalAssignments count -").append(assignCount).append(']'); //$NON-NLS-1$
+		buffer.append("[finalAssignments count - ").append(assignCount).append(']'); //$NON-NLS-1$
+		buffer.append("[nullReferences count - ").append(nullCount).append(']'); //$NON-NLS-1$
 		return buffer.toString();
 	}
 	
 	public boolean isSubRoutine() {
 		return true;
 	}
-
-	boolean recordFinalAssignment(
+	
+	protected boolean recordFinalAssignment(
 		VariableBinding binding,
 		Reference finalAssignment) {
 		if (assignCount == 0) {
@@ -118,5 +146,20 @@ public class FinallyFlowContext extends FlowContext {
 				return;
 			}
 		}
+	}
+
+	protected boolean recordNullReference(Expression expression, int status) {
+		if (nullCount == 0) {
+			nullReferences = new Expression[5];
+			nullStatus = new int[5];
+		} else {
+			if (nullCount == nullReferences.length) {
+				System.arraycopy(nullReferences, 0, nullReferences = new Expression[nullCount * 2], 0, nullCount);
+				System.arraycopy(nullStatus, 0, nullStatus = new int[nullCount * 2], 0, nullCount);
+			}
+		}
+		nullReferences[nullCount] = expression;
+		nullStatus[nullCount++] = status;
+		return true;
 	}
 }

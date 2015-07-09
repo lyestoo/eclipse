@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -126,10 +126,11 @@ Compiler getCompiler(ICompilerRequestor compilerRequestor) {
 				this.context,
 				getMapper().startPosOffset,
 				getMapper().startPosOffset + this.codeSnippet.length - 1);
+		((CodeSnippetParser) compiler.parser).lineSeparatorLength = this.context.lineSeparator.length();
 		// Initialize the compiler's lookup environment with the already compiled super classes
 		IBinaryType binary = this.context.getRootCodeSnippetBinary();
 		if (binary != null) {
-			compiler.lookupEnvironment.cacheBinaryType(binary);
+			compiler.lookupEnvironment.cacheBinaryType(binary, null /*no access restriction*/);
 		}
 		VariablesInfo installedVars = this.context.installedVars;
 		if (installedVars != null) {
@@ -141,7 +142,7 @@ Compiler getCompiler(ICompilerRequestor compilerRequestor) {
 				} catch (ClassFormatException e) {
 					e.printStackTrace(); // Should never happen since we compiled this type
 				}
-				compiler.lookupEnvironment.cacheBinaryType(binaryType);
+				compiler.lookupEnvironment.cacheBinaryType(binaryType, null /*no access restriction*/);
 			}
 		}
 	} else {
@@ -180,7 +181,8 @@ private CodeSnippetToCuMapper getMapper() {
 			this.context.localVariableNames, 
 			this.context.localVariableTypeNames, 
 			this.context.localVariableModifiers, 
-			this.context.declaringTypeName			
+			this.context.declaringTypeName,
+			this.context.lineSeparator
 		);
 
 	}

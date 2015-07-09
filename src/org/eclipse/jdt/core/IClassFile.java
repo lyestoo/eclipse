@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -29,7 +29,7 @@ import org.eclipse.core.runtime.IProgressMonitor;
  * This interface is not intended to be implemented by clients.
  * </p>
  *
- * @see IPackageFragmentRoot#attachSource
+ * @see IPackageFragmentRoot#attachSource(org.eclipse.core.runtime.IPath, org.eclipse.core.runtime.IPath, IProgressMonitor)
  */
  
 public interface IClassFile extends IJavaElement, IParent, IOpenable, ISourceReference, ICodeAssist {
@@ -59,6 +59,29 @@ IJavaElement getElementAt(int position) throws JavaModelException;
 IType getType() throws JavaModelException;
 /**
  * Returns a working copy on the source associated with this class file using the given 
+ * owner to create the buffer, or <code>null</code> if there is no source associated
+ * with the class file.
+ * <p>
+ * The buffer will be automatically initialized with the source of the class file
+ * upon creation.
+ * <p>
+ * The only valid operations on this working copy are <code>getBuffer()</code> or <code>getPrimary()</code>.
+ *
+ * @param owner the owner that creates a buffer that is used to get the content of the working copy
+ *                 or <code>null</code> if the primary owner should be used
+ * @param monitor a progress monitor used to report progress while opening this compilation unit
+ *                 or <code>null</code> if no progress should be reported 
+ * @return a  a working copy on the source associated with this class file
+ * @exception JavaModelException if the source of this class file can
+ *   not be determined. Reasons include:
+ * <ul>
+ * <li> This class file does not exist (ELEMENT_DOES_NOT_EXIST)</li>
+ * </ul>
+ * @since 3.0
+ */
+ICompilationUnit getWorkingCopy(WorkingCopyOwner owner, IProgressMonitor monitor) throws JavaModelException;
+/**
+ * Returns a working copy on the source associated with this class file using the given 
  * factory to create the buffer, or <code>null</code> if there is no source associated
  * with the class file.
  * <p>
@@ -71,15 +94,16 @@ IType getType() throws JavaModelException;
  *                 or <code>null</code> if no progress should be reported 
  * @param factory the factory that creates a buffer that is used to get the content of the working copy
  *                 or <code>null</code> if the internal factory should be used
+ * @return a  a working copy on the source associated with this class file
  * @exception JavaModelException if the source of this class file can
  *   not be determined. Reasons include:
  * <ul>
  * <li> This class file does not exist (ELEMENT_DOES_NOT_EXIST)</li>
  * </ul>
  * @since 2.0
+ * @deprecated Use getWorkingCopy(WorkingCopyOwner, IProgressMonitor) instead
  */
-IJavaElement getWorkingCopy(IProgressMonitor monitor, IBufferFactory factory) throws JavaModelException;
-/**
+IJavaElement getWorkingCopy(IProgressMonitor monitor, IBufferFactory factory) throws JavaModelException;/**
  * Returns whether this type represents a class. This is not guaranteed to be
  * instantaneous, as it may require parsing the underlying file.
  *

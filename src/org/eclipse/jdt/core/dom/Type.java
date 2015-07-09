@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -105,7 +105,7 @@ public abstract class Type extends ASTNode {
 	 * 
 	 * @return <code>true</code> if this is a parameterized type, and 
 	 *    <code>false</code> otherwise
-	 * @since 3.0
+	 * @since 3.1
 	 */
 	public final boolean isParameterizedType() {
 		return (this instanceof ParameterizedType);
@@ -133,7 +133,7 @@ public abstract class Type extends ASTNode {
 	 * 
 	 * @return <code>true</code> if this is a qualified type, and 
 	 *    <code>false</code> otherwise
-	 * @since 3.0
+	 * @since 3.1
 	 */
 	public final boolean isQualifiedType() {
 		return (this instanceof QualifiedType);
@@ -149,7 +149,7 @@ public abstract class Type extends ASTNode {
 	 * 
 	 * @return <code>true</code> if this is a wildcard type, and 
 	 *    <code>false</code> otherwise
-	 * @since 3.0
+	 * @since 3.1
 	 */
 	public final boolean isWildcardType() {
 		return (this instanceof WildcardType);

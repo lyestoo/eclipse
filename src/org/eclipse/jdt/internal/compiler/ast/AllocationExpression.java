@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -24,14 +24,15 @@ public class AllocationExpression extends Expression implements InvocationSite {
 	MethodBinding syntheticAccessor;						// synthetic accessor for inner-emulation
 	public TypeReference[] typeArguments;	
 	public TypeBinding[] genericTypeArguments;
-	
+	public FieldDeclaration enumConstant; // for enum constant initializations
+
 	public FlowInfo analyseCode(
 		BlockScope currentScope,
 		FlowContext flowContext,
 		FlowInfo flowInfo) {
 
 		// check captured variables are initialized in current context (26134)
-		checkCapturedLocalInitializationIfNecessary(this.binding.declaringClass, currentScope, flowInfo);
+		checkCapturedLocalInitializationIfNecessary((ReferenceBinding)this.binding.declaringClass.erasure(), currentScope, flowInfo);
 
 		// process arguments
 		if (arguments != null) {
@@ -74,7 +75,6 @@ public class AllocationExpression extends Expression implements InvocationSite {
 						currentScope.problemReporter().uninitializedLocalVariable(targetLocal, this);
 					}
 				}
-						
 		}
 	}
 	
@@ -95,7 +95,13 @@ public class AllocationExpression extends Expression implements InvocationSite {
 			codeStream.dup();
 		}
 		// better highlight for allocation: display the type individually
-		codeStream.recordPositionsFrom(pc, type.sourceStart);
+		if (this.type != null) { // null for enum constant body
+			codeStream.recordPositionsFrom(pc, this.type.sourceStart);
+		} else {
+			// push enum constant name and ordinal
+			codeStream.ldc(String.valueOf(enumConstant.name));
+			codeStream.generateInlinedValue(enumConstant.binding.id);
+		}
 
 		// handling innerclass instance allocation - enclosing instance arguments
 		if (allocatedType.isNestedType()) {
@@ -106,11 +112,7 @@ public class AllocationExpression extends Expression implements InvocationSite {
 				this);
 		}
 		// generate the arguments for constructor
-		if (arguments != null) {
-			for (int i = 0, count = arguments.length; i < count; i++) {
-				arguments[i].generateCode(currentScope, codeStream, true);
-			}
-		}
+		generateArguments(binding, arguments, currentScope, codeStream);
 		// handling innerclass instance allocation - outer local arguments
 		if (allocatedType.isNestedType()) {
 			codeStream.generateSyntheticOuterArgumentValues(
@@ -131,6 +133,7 @@ public class AllocationExpression extends Expression implements InvocationSite {
 			}
 			codeStream.invokespecial(syntheticAccessor);
 		}
+		codeStream.generateImplicitConversion(this.implicitConversion);
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 	/**
@@ -160,18 +163,18 @@ public class AllocationExpression extends Expression implements InvocationSite {
 	public void manageEnclosingInstanceAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
 
 		if (!flowInfo.isReachable()) return;
-		ReferenceBinding allocatedType;
+		ReferenceBinding allocatedTypeErasure = (ReferenceBinding) binding.declaringClass.erasure();
 
 		// perform some emulation work in case there is some and we are inside a local type only
-		if ((allocatedType = binding.declaringClass).isNestedType()
+		if (allocatedTypeErasure.isNestedType()
 			&& currentScope.enclosingSourceType().isLocalType()) {
 
-			if (allocatedType.isLocalType()) {
-				((LocalTypeBinding) allocatedType).addInnerEmulationDependent(currentScope, false);
+			if (allocatedTypeErasure.isLocalType()) {
+				((LocalTypeBinding) allocatedTypeErasure).addInnerEmulationDependent(currentScope, false);
 				// request cascade of accesses
 			} else {
 				// locally propagate, since we already now the desired shape for sure
-				currentScope.propagateInnerEmulation(allocatedType, false);
+				currentScope.propagateInnerEmulation(allocatedTypeErasure, false);
 				// request cascade of accesses
 			}
 		}
@@ -187,7 +190,7 @@ public class AllocationExpression extends Expression implements InvocationSite {
 		if (this.codegenBinding.isPrivate()
 			&& (currentScope.enclosingSourceType() != this.codegenBinding.declaringClass)) {
 
-			if (currentScope.environment().options.isPrivateConstructorAccessChangingVisibility) {
+			if (currentScope.compilerOptions().isPrivateConstructorAccessChangingVisibility) {
 				this.codegenBinding.tagForClearingPrivateModifier();
 				// constructor will not be dumped as private, no emulation required thus
 			} else {
@@ -200,9 +203,11 @@ public class AllocationExpression extends Expression implements InvocationSite {
 
 	public StringBuffer printExpression(int indent, StringBuffer output) {
 
-		output.append("new "); //$NON-NLS-1$
+		if (this.type != null) { // type null for enum constant initializations
+			output.append("new "); //$NON-NLS-1$
+		}
 		if (typeArguments != null) {
-			output.append('<');//$NON-NLS-1$
+			output.append('<');
 			int max = typeArguments.length - 1;
 			for (int j = 0; j < max; j++) {
 				typeArguments[j].print(0, output);
@@ -211,7 +216,9 @@ public class AllocationExpression extends Expression implements InvocationSite {
 			typeArguments[max].print(0, output);
 			output.append('>');
 		}
-		type.printExpression(0, output); 
+		if (type != null) { // type null for enum constant initializations
+			type.printExpression(0, output); 
+		}
 		output.append('(');
 		if (arguments != null) {
 			for (int i = 0; i < arguments.length; i++) {
@@ -226,7 +233,30 @@ public class AllocationExpression extends Expression implements InvocationSite {
 
 		// Propagate the type checking to the arguments, and check if the constructor is defined.
 		constant = NotAConstant;
-		this.resolvedType = type.resolveType(scope);
+		if (this.type == null) {
+			// initialization of an enum constant
+			this.resolvedType = scope.enclosingSourceType();
+		} else {
+			this.resolvedType = this.type.resolveType(scope, true /* check bounds*/);
+			checkParameterizedAllocation: {
+				if (this.type instanceof ParameterizedQualifiedTypeReference) { // disallow new X<String>.Y<Integer>()
+					ReferenceBinding currentType = (ReferenceBinding)this.resolvedType;
+					if (currentType == null) return null;
+					do {
+						// isStatic() is answering true for toplevel types
+						if ((currentType.modifiers & AccStatic) != 0) break checkParameterizedAllocation;
+						if (currentType.isRawType()) break checkParameterizedAllocation;
+					} while ((currentType = currentType.enclosingType())!= null);
+					ParameterizedQualifiedTypeReference qRef = (ParameterizedQualifiedTypeReference) this.type;
+					for (int i = qRef.typeArguments.length - 2; i >= 0; i--) {
+						if (qRef.typeArguments[i] != null) {
+							scope.problemReporter().illegalQualifiedParameterizedTypeAllocation(this.type, this.resolvedType);
+							break;
+						}
+					}
+				}
+			}
+		}
 		// will check for null after args are resolved
 
 		// resolve type arguments (for generic constructor call)
@@ -235,7 +265,7 @@ public class AllocationExpression extends Expression implements InvocationSite {
 			boolean argHasError = false; // typeChecks all arguments
 			this.genericTypeArguments = new TypeBinding[length];
 			for (int i = 0; i < length; i++) {
-				if ((this.genericTypeArguments[i] = this.typeArguments[i].resolveType(scope)) == null) {
+				if ((this.genericTypeArguments[i] = this.typeArguments[i].resolveType(scope, true /* check bounds*/)) == null) {
 					argHasError = true;
 				}
 			}
@@ -268,7 +298,8 @@ public class AllocationExpression extends Expression implements InvocationSite {
 		if (this.resolvedType == null)
 			return null;
 
-		if (!this.resolvedType.canBeInstantiated()) {
+		// null type denotes fake allocation for enum constant inits
+		if (this.type != null && !this.resolvedType.canBeInstantiated()) {
 			scope.problemReporter().cannotInstantiate(type, this.resolvedType);
 			return this.resolvedType;
 		}
@@ -281,8 +312,8 @@ public class AllocationExpression extends Expression implements InvocationSite {
 		}
 		if (isMethodUseDeprecated(binding, scope))
 			scope.problemReporter().deprecatedMethod(binding, this);
-		if (this.arguments != null)
-			checkInvocationArguments(scope, null, allocationType, this.binding, this.arguments, argumentTypes, argsContainCast, this);
+		checkInvocationArguments(scope, null, allocationType, this.binding, this.arguments, argumentTypes, argsContainCast, this);
+
 		return allocationType;
 	}
 
@@ -306,7 +337,9 @@ public class AllocationExpression extends Expression implements InvocationSite {
 					this.typeArguments[i].traverse(visitor, scope);
 				}
 			}
-			this.type.traverse(visitor, scope);
+			if (this.type != null) { // enum constant scenario
+				this.type.traverse(visitor, scope);
+			}
 			if (this.arguments != null) {
 				for (int i = 0, argumentsLength = this.arguments.length; i < argumentsLength; i++)
 					this.arguments[i].traverse(visitor, scope);

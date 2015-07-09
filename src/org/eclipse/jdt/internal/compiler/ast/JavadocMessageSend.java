@@ -1,15 +1,16 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
@@ -17,6 +18,7 @@ import org.eclipse.jdt.internal.compiler.lookup.*;
 public class JavadocMessageSend extends MessageSend {
 
 	public int tagSourceStart, tagSourceEnd;
+	public int tagValue;
 	public boolean superAccess = false;
 
 	public JavadocMessageSend(char[] name, long pos) {
@@ -39,15 +41,17 @@ public class JavadocMessageSend extends MessageSend {
 		// Base type promotion
 		this.constant = NotAConstant;
 		if (this.receiver == null) {
-			this.receiverType = scope.enclosingSourceType();
+			this.actualReceiverType = scope.enclosingSourceType();
 		} else if (scope.kind == Scope.CLASS_SCOPE) {
-			this.receiverType = this.receiver.resolveType((ClassScope) scope);
+			this.actualReceiverType = this.receiver.resolveType((ClassScope) scope);
 		} else {
-			this.receiverType = this.receiver.resolveType((BlockScope) scope);
+			this.actualReceiverType = this.receiver.resolveType((BlockScope) scope);
 		}
 
 		// will check for null after args are resolved
+		
 		TypeBinding[] argumentTypes = NoParameters;
+		boolean hasArgsTypeVar = false;
 		if (this.arguments != null) {
 			boolean argHasError = false; // typeChecks all arguments 
 			int length = this.arguments.length;
@@ -61,6 +65,8 @@ public class JavadocMessageSend extends MessageSend {
 				}
 				if (argumentTypes[i] == null) {
 					argHasError = true;
+				} else if (!hasArgsTypeVar) {
+					hasArgsTypeVar = argumentTypes[i].isTypeVariable();
 				}
 			}
 			if (argHasError) {
@@ -69,20 +75,44 @@ public class JavadocMessageSend extends MessageSend {
 		}
 
 		// check receiver type
-		if (this.receiverType == null) {
+		if (this.actualReceiverType == null) {
 			return null;
 		}
-		this.qualifyingType = this.receiverType;
-		this.superAccess = scope.enclosingSourceType().isCompatibleWith(this.receiverType);
+		this.actualReceiverType = scope.environment().convertToRawType(this.receiver.resolvedType);
+		SourceTypeBinding enclosingType = scope.enclosingSourceType();
+		this.superAccess = enclosingType==null ? false : enclosingType.isCompatibleWith(this.actualReceiverType);
 
 		// base type cannot receive any message
-		if (this.receiverType.isBaseType()) {
-			scope.problemReporter().javadocErrorNoMethodFor(this, this.receiverType, argumentTypes, scope.getDeclarationModifiers());
+		if (this.actualReceiverType.isBaseType()) {
+			scope.problemReporter().javadocErrorNoMethodFor(this, this.actualReceiverType, argumentTypes, scope.getDeclarationModifiers());
 			return null;
 		}
-		this.binding = (this.receiver != null && this.receiver.isThis())
-			? scope.getImplicitMethod(this.selector, argumentTypes, this)
-			: scope.getMethod(this.receiverType, this.selector, argumentTypes, this);
+		this.binding = scope.getMethod(this.actualReceiverType, this.selector, argumentTypes, this);
+		if (!this.binding.isValidBinding()) {
+			// Try method in enclosing types
+			TypeBinding enclosingTypeBinding = this.actualReceiverType;
+			MethodBinding methodBinding = this.binding;
+			while (!methodBinding.isValidBinding() && (enclosingTypeBinding.isMemberType() || enclosingTypeBinding.isLocalType())) {
+				enclosingTypeBinding = enclosingTypeBinding.enclosingType();
+				methodBinding = scope.getMethod(enclosingTypeBinding, this.selector, argumentTypes, this);
+			}
+			if (methodBinding.isValidBinding()) {
+				this.binding = methodBinding;
+			} else {
+				// Try to search a constructor instead
+				enclosingTypeBinding = this.actualReceiverType;
+				MethodBinding contructorBinding = this.binding;
+				while (!contructorBinding.isValidBinding() && (enclosingTypeBinding.isMemberType() || enclosingTypeBinding.isLocalType())) {
+					enclosingTypeBinding = enclosingTypeBinding.enclosingType();
+					if (CharOperation.equals(this.selector, enclosingTypeBinding.shortReadableName())) {
+						contructorBinding = scope.getConstructor((ReferenceBinding)enclosingTypeBinding, argumentTypes, this);
+					}
+				}
+				if (contructorBinding.isValidBinding()) {
+					this.binding = contructorBinding;
+				}
+			}
+		}
 		if (!this.binding.isValidBinding()) {
 			// implicit lookup may discover issues due to static/constructor contexts. javadoc must be resilient
 			switch (this.binding.problemId()) {
@@ -97,10 +127,10 @@ public class JavadocMessageSend extends MessageSend {
 		}
 		if (!this.binding.isValidBinding()) {
 			if (this.binding.declaringClass == null) {
-				if (this.receiverType instanceof ReferenceBinding) {
-					this.binding.declaringClass = (ReferenceBinding) this.receiverType;
+				if (this.actualReceiverType instanceof ReferenceBinding) {
+					this.binding.declaringClass = (ReferenceBinding) this.actualReceiverType;
 				} else { 
-					scope.problemReporter().javadocErrorNoMethodFor(this, this.receiverType, argumentTypes, scope.getDeclarationModifiers());
+					scope.problemReporter().javadocErrorNoMethodFor(this, this.actualReceiverType, argumentTypes, scope.getDeclarationModifiers());
 					return null;
 				}
 			}
@@ -111,6 +141,28 @@ public class JavadocMessageSend extends MessageSend {
 				if (closestMatch != null) this.binding = closestMatch;
 			}
 			return this.resolvedType = this.binding == null ? null : this.binding.returnType;
+		} else if (hasArgsTypeVar) {
+			MethodBinding problem = new ProblemMethodBinding(this.binding, this.selector, argumentTypes, ProblemReasons.NotFound);
+			scope.problemReporter().javadocInvalidMethod(this, problem, scope.getDeclarationModifiers());
+		} else if (binding.isVarargs()) {
+			int length = argumentTypes.length;
+			if (!(binding.parameters.length == length && argumentTypes[length-1].isArrayType())) {
+				MethodBinding problem = new ProblemMethodBinding(this.binding, this.selector, argumentTypes, ProblemReasons.NotFound);
+				scope.problemReporter().javadocInvalidMethod(this, problem, scope.getDeclarationModifiers());
+			}
+		} else if (this.binding instanceof ParameterizedMethodBinding && this.actualReceiverType instanceof ReferenceBinding) {
+			ParameterizedMethodBinding paramMethodBinding = (ParameterizedMethodBinding) this.binding;
+			if (paramMethodBinding.hasSubstitutedParameters()) {
+				int length = argumentTypes.length;
+				for (int i=0; i<length; i++) {
+					if (paramMethodBinding.parameters[i] != argumentTypes[i] &&
+							paramMethodBinding.parameters[i].erasure() != argumentTypes[i].erasure()) {
+						MethodBinding problem = new ProblemMethodBinding(this.binding, this.selector, argumentTypes, ProblemReasons.NotFound);
+						scope.problemReporter().javadocInvalidMethod(this, problem, scope.getDeclarationModifiers());
+						break;
+					}
+				}
+			}
 		}
 		if (isMethodUseDeprecated(this.binding, scope)) {
 			scope.problemReporter().javadocDeprecatedMethod(this.binding, this, scope.getDeclarationModifiers());

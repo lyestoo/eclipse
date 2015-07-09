@@ -1,15 +1,16 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
+import org.eclipse.jdt.internal.compiler.env.AccessRestriction;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
@@ -22,24 +23,24 @@ public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConst
 	public final static Constant NotAConstant = Constant.NotAConstant;
 
 	// storage for internal flags (32 bits)						BIT USAGE
-	public final static int Bit1 = 0x1; 							// return type (operator) | name reference kind (name ref) | add assertion (type decl) | useful empty statement (empty statement)
-	public final static int Bit2 = 0x2; 							// return type (operator) | name reference kind (name ref) | has local type (type, method, field decl)
-	public final static int Bit3 = 0x4; 							// return type (operator) | name reference kind (name ref) | implicit this (this ref)
-	public final static int Bit4 = 0x8; 							// return type (operator) | first assignment to local (local decl) | undocumented empty block (block, type and method decl)
+	public final static int Bit1 = 0x1; 						// return type (operator) | name reference kind (name ref) | add assertion (type decl) | useful empty statement (empty statement)
+	public final static int Bit2 = 0x2; 						// return type (operator) | name reference kind (name ref) | has local type (type, method, field decl)
+	public final static int Bit3 = 0x4; 						// return type (operator) | name reference kind (name ref) | implicit this (this ref)
+	public final static int Bit4 = 0x8; 						// return type (operator) | first assignment to local (local decl) | undocumented empty block (block, type and method decl)
 	public final static int Bit5 = 0x10; 						// value for return (expression) | has all method bodies (unit) | supertype ref (type ref)
 	public final static int Bit6 = 0x20; 						// depth (name ref, msg) | only value required (binary expression) | ignore need cast check (cast expression)
 	public final static int Bit7 = 0x40; 						// depth (name ref, msg) | operator (operator) | need runtime checkcast (cast expression)
-	public final static int Bit8 = 0x80; 						// depth (name ref, msg) | operator (operator) 
-	public final static int Bit9 = 0x100; 						// depth (name ref, msg) | operator (operator) | is local type (type decl)
+	public final static int Bit8 = 0x80; 						// depth (name ref, msg) | operator (operator) | unsafe cast (cast expression)
+	public final static int Bit9 = 0x100; 					// depth (name ref, msg) | operator (operator) | is local type (type decl)
 	public final static int Bit10= 0x200; 					// depth (name ref, msg) | operator (operator) | is anonymous type (type decl)
 	public final static int Bit11 = 0x400; 					// depth (name ref, msg) | operator (operator) | is member type (type decl)
-	public final static int Bit12 = 0x800; 					// depth (name ref, msg) | operator (operator)
+	public final static int Bit12 = 0x800; 					// depth (name ref, msg) | operator (operator) | has abstract methods (type decl)
 	public final static int Bit13 = 0x1000; 				// depth (name ref, msg) 
 	public final static int Bit14 = 0x2000; 				// strictly assigned (reference lhs)
 	public final static int Bit15 = 0x4000; 				// is unnecessary cast (expression)
 	public final static int Bit16 = 0x8000; 				// in javadoc comment (name ref, type ref, msg)
 	public final static int Bit17 = 0x10000; 				// compound assigned (reference lhs)
-	public final static int Bit18 = 0x20000; 
+	public final static int Bit18 = 0x20000; 				
 	public final static int Bit19 = 0x40000; 
 	public final static int Bit20 = 0x80000; 
 	public final static int Bit21 = 0x100000; 		
@@ -64,6 +65,22 @@ public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConst
 	public final static long Bit38L = 0x2000000000L;
 	public final static long Bit39L = 0x4000000000L;
 	public final static long Bit40L = 0x8000000000L;
+	public final static long Bit41L = 0x10000000000L;
+	public final static long Bit42L = 0x20000000000L;
+	public final static long Bit43L = 0x40000000000L;
+	public final static long Bit44L = 0x80000000000L;
+	public final static long Bit45L = 0x100000000000L;
+	public final static long Bit46L = 0x200000000000L;
+	public final static long Bit47L = 0x400000000000L;
+	public final static long Bit48L = 0x800000000000L;
+	public final static long Bit49L = 0x1000000000000L;
+	public final static long Bit50L = 0x2000000000000L;
+	public final static long Bit51L = 0x4000000000000L;
+	public final static long Bit52L = 0x8000000000000L;
+	public final static long Bit53L = 0x10000000000000L;
+	public final static long Bit54L = 0x20000000000000L;
+	public final static long Bit55L = 0x40000000000000L;
+	public final static long Bit56L = 0x80000000000000L;
 
 	public int bits = IsReachableMASK; 				// reachable by default
 
@@ -77,9 +94,10 @@ public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConst
 	public static final int OnlyValueRequiredMASK = Bit6; 
 
 	// for cast expressions
-	public static final int UnnecessaryCastMask = Bit15;
-	public static final int NeedRuntimeCheckCastMASK = Bit7;
+	public static final int UnnecessaryCastMASK = Bit15;
 	public static final int IgnoreNeedForCastCheckMASK = Bit6;
+	public static final int NeedRuntimeCheckCastMASK = Bit7;
+	public static final int UnsafeCastMask = Bit8;
 	
 	// for name references 
 	public static final int RestrictiveFlagMASK = Bit1|Bit2|Bit3;	
@@ -102,6 +120,7 @@ public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConst
 	public static final int IsAnonymousTypeMASK = Bit10; // used to test for anonymous 
 	public static final int AnonymousAndLocalMask = IsAnonymousTypeMASK | IsLocalTypeMASK; // used to set anonymous marker
 	public static final int IsMemberTypeMASK = Bit11; // local member do not know it is local at parse time (need to look at binding)
+	public static final int HasAbstractMethods = Bit12; // used to promote abstract enums
 	
 	// for type, method and field declarations 
 	public static final int HasLocalTypeMASK = Bit2; // cannot conflict with AddAssertionMASK
@@ -135,55 +154,129 @@ public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConst
 	// for type reference
 	public static final int IsSuperType = Bit5;
 	
+	// for variable argument
+	public static final int IsVarArgs = Bit15;
+	
+	// for array initializer
+	public static final int IsAnnotationDefaultValue = Bit1;
 	
 	public ASTNode() {
 
 		super();
 	}
-	public static void checkInvocationArguments(BlockScope scope, Expression receiver, TypeBinding receiverType, MethodBinding method, Expression[] arguments, TypeBinding[] argumentTypes, boolean argsContainCast, InvocationSite invocationSite) {
-		boolean unsafeWildcardInvocation = false;
-		for (int i = 0; i < arguments.length; i++) {
-		    TypeBinding parameterType = method.parameters[i];
-		    TypeBinding argumentType = argumentTypes[i];
-			arguments[i].computeConversion(scope, parameterType, argumentType);
-			if (argumentType != NullBinding && parameterType.isWildcard() && ((WildcardBinding)parameterType).kind != Wildcard.SUPER) {
-			    unsafeWildcardInvocation = true;
-			} else if (argumentType != parameterType 
-			        && argumentType.isRawType() 
-			        && (parameterType.isBoundParameterizedType() || parameterType.isGenericType())) {
-			    scope.problemReporter().unsafeRawConversion(arguments[i], argumentType, parameterType);
+	private static boolean checkInvocationArgument(BlockScope scope, Expression argument, TypeBinding parameterType, TypeBinding argumentType, TypeBinding originalParameterType) {
+		argument.computeConversion(scope, parameterType, argumentType);
+
+		if (argumentType != NullBinding && parameterType.isWildcard()) {
+			WildcardBinding wildcard = (WildcardBinding) parameterType;
+			if (wildcard.boundKind != Wildcard.SUPER && wildcard.otherBounds == null) // lub wildcards are tolerated
+		    	return true; // unsafeWildcardInvocation
+		}
+		TypeBinding checkedParameterType = originalParameterType == null ? parameterType : originalParameterType;
+		if (argumentType != checkedParameterType) {
+			if (argumentType.needsUncheckedConversion(checkedParameterType)) {
+				scope.problemReporter().unsafeTypeConversion(argument, argumentType, checkedParameterType);
 			}
 		}
-		if (argsContainCast) {
-			CastExpression.checkNeedForArgumentCasts(scope, receiver, receiverType, method, arguments, argumentTypes, invocationSite);
+		return false;
+	}
+	public static void checkInvocationArguments(BlockScope scope, Expression receiver, TypeBinding receiverType, MethodBinding method, Expression[] arguments, TypeBinding[] argumentTypes, boolean argsContainCast, InvocationSite invocationSite) {
+		boolean unsafeWildcardInvocation = false;
+		TypeBinding[] params = method.parameters;
+		int paramLength = params.length;
+		boolean isRawMemberInvocation = !method.isStatic() 
+				&& !receiverType.isUnboundWildcard() 
+				&& method.declaringClass.isRawType() 
+				&& method.hasSubstitutedParameters();
+		
+		MethodBinding rawOriginalGenericMethod = null;
+		if (!isRawMemberInvocation) {
+			if (method instanceof ParameterizedGenericMethodBinding) {
+				ParameterizedGenericMethodBinding paramMethod = (ParameterizedGenericMethodBinding) method;
+				if (paramMethod.isUnchecked || (paramMethod.isRaw && method.hasSubstitutedParameters())) {
+					rawOriginalGenericMethod = method.original();
+				}
+			}
+		}
+		if (arguments != null) {
+			if (method.isVarargs()) {
+				// 4 possibilities exist for a call to the vararg method foo(int i, long ... value) : foo(1), foo(1, 2), foo(1, 2, 3, 4) & foo(1, new long[] {1, 2})
+				int lastIndex = paramLength - 1;
+				for (int i = 0; i < lastIndex; i++) {
+					TypeBinding originalRawParam = rawOriginalGenericMethod == null ? null : rawOriginalGenericMethod.parameters[i];
+				    if (checkInvocationArgument(scope, arguments[i], params[i] , argumentTypes[i], originalRawParam)) {
+					    unsafeWildcardInvocation = true;
+				    }
+				}
+			   int argLength = arguments.length;
+			   if (lastIndex < argLength) { // vararg argument was provided
+				   	TypeBinding parameterType = params[lastIndex];
+					TypeBinding originalRawParam = null;
+	
+				    if (paramLength != argLength || parameterType.dimensions() != argumentTypes[lastIndex].dimensions()) {
+				    	parameterType = ((ArrayBinding) parameterType).elementsType(); // single element was provided for vararg parameter
+						originalRawParam = rawOriginalGenericMethod == null ? null : ((ArrayBinding)rawOriginalGenericMethod.parameters[lastIndex]).elementsType();
+				    }
+					for (int i = lastIndex; i < argLength; i++) {
+					    if (checkInvocationArgument(scope, arguments[i], parameterType, argumentTypes[i], originalRawParam))
+						    unsafeWildcardInvocation = true;
+					}
+				}
+	
+			   if (paramLength == argumentTypes.length) { // 70056
+					int varargIndex = paramLength - 1;
+					ArrayBinding varargType = (ArrayBinding) params[varargIndex];
+					TypeBinding lastArgType = argumentTypes[varargIndex];
+					if (lastArgType == NullBinding) {
+						if (!(varargType.leafComponentType().isBaseType() && varargType.dimensions() == 1))
+							scope.problemReporter().varargsArgumentNeedCast(method, lastArgType, invocationSite);
+					} else if (varargType.dimensions <= lastArgType.dimensions()) {
+						int dimensions = lastArgType.dimensions();
+						if (lastArgType.leafComponentType().isBaseType())
+							dimensions--;
+						if (varargType.dimensions < dimensions)
+							scope.problemReporter().varargsArgumentNeedCast(method, lastArgType, invocationSite);
+						else if (varargType.dimensions == dimensions && varargType.leafComponentType != lastArgType.leafComponentType())
+							scope.problemReporter().varargsArgumentNeedCast(method, lastArgType, invocationSite);
+					}
+				}
+			} else {
+				for (int i = 0; i < paramLength; i++) {
+					TypeBinding originalRawParam = rawOriginalGenericMethod == null ? null : rawOriginalGenericMethod.parameters[i];
+				    if (checkInvocationArgument(scope, arguments[i], params[i], argumentTypes[i], originalRawParam))
+					    unsafeWildcardInvocation = true;
+				}
+			}
+			if (argsContainCast) {
+				CastExpression.checkNeedForArgumentCasts(scope, receiver, receiverType, method, arguments, argumentTypes, invocationSite);
+			}
 		}
 		if (unsafeWildcardInvocation) {
 		    scope.problemReporter().wildcardInvocation((ASTNode)invocationSite, receiverType, method, argumentTypes);
-		} else if (receiverType.isRawType() && method.hasSubstitutedParameters()) {
-		    scope.problemReporter().unsafeRawInvocation((ASTNode)invocationSite, receiverType, method);
+		} else if (!method.isStatic() && !receiverType.isUnboundWildcard() && method.declaringClass.isRawType() && method.hasSubstitutedParameters()) {
+		    scope.problemReporter().unsafeRawInvocation((ASTNode)invocationSite, method);
+		} else if (rawOriginalGenericMethod != null) {
+		    scope.problemReporter().unsafeRawGenericMethodInvocation((ASTNode)invocationSite, method);
 		}
 	}
 	public ASTNode concreteStatement() {
 		return this;
 	}
-
-	/* Answer true if the field use is considered deprecated.
-	* An access in the same compilation unit is allowed.
-	*/
+	
 	public final boolean isFieldUseDeprecated(FieldBinding field, Scope scope, boolean isStrictlyAssigned) {
-
-		if (!isStrictlyAssigned && field.isPrivate() && !scope.isDefinedInField(field)) {
+	
+		if (!isStrictlyAssigned && (field.isPrivate() || (field.declaringClass != null && field.declaringClass.isLocalType())) && !scope.isDefinedInField(field)) {
 			// ignore cases where field is used from within inside itself 
-			field.modifiers |= AccPrivateUsed;
+			field.original().modifiers |= AccLocallyUsed;
 		}
-
+	
 		if (!field.isViewedAsDeprecated()) return false;
-
+	
 		// inside same unit - no report
 		if (scope.isDefinedInSameUnit(field.declaringClass)) return false;
 		
 		// if context is deprecated, may avoid reporting
-		if (!scope.environment().options.reportDeprecationInsideDeprecatedCode && scope.isInsideDeprecatedCode()) return false;
+		if (!scope.compilerOptions().reportDeprecationInsideDeprecatedCode && scope.isInsideDeprecatedCode()) return false;
 		return true;
 	}
 
@@ -197,9 +290,9 @@ public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConst
 	*/
 	public final boolean isMethodUseDeprecated(MethodBinding method, Scope scope) {
 
-		if (method.isPrivate() && !scope.isDefinedInMethod(method)) {
+		if ((method.isPrivate() || method.declaringClass.isLocalType()) && !scope.isDefinedInMethod(method)) {
 			// ignore cases where method is used from within inside itself (e.g. direct recursions)
-			method.modifiers |= AccPrivateUsed;
+			method.original().modifiers |= AccLocallyUsed;
 		}
 		
 		if (!method.isViewedAsDeprecated()) return false;
@@ -208,7 +301,7 @@ public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConst
 		if (scope.isDefinedInSameUnit(method.declaringClass)) return false;
 		
 		// if context is deprecated, may avoid reporting
-		if (!scope.environment().options.reportDeprecationInsideDeprecatedCode && scope.isInsideDeprecatedCode()) return false;
+		if (!scope.compilerOptions().reportDeprecationInsideDeprecatedCode && scope.isInsideDeprecatedCode()) return false;
 		return true;
 	}
 
@@ -234,23 +327,38 @@ public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConst
 
 		ReferenceBinding refType = (ReferenceBinding) type;
 
-		if (refType.isPrivate() && !scope.isDefinedInType(refType)) {
+		if ((refType.isPrivate() /*|| refType.isLocalType()*/) && !scope.isDefinedInType(refType)) {
 			// ignore cases where type is used from within inside itself 
-			refType.modifiers |= AccPrivateUsed;
+			((ReferenceBinding)refType.erasure()).modifiers |= AccLocallyUsed;
 		}
-
+		
+		if (refType.hasRestrictedAccess()) {
+			AccessRestriction restriction = scope.environment().getAccessRestriction(type);
+			if (restriction != null) {
+				scope.problemReporter().forbiddenReference(type, this, restriction.getMessageTemplate(), restriction.getProblemId());
+			}
+		}
 		if (!refType.isViewedAsDeprecated()) return false;
 		
 		// inside same unit - no report
 		if (scope.isDefinedInSameUnit(refType)) return false;
 		
 		// if context is deprecated, may avoid reporting
-		if (!scope.environment().options.reportDeprecationInsideDeprecatedCode && scope.isInsideDeprecatedCode()) return false;
+		if (!scope.compilerOptions().reportDeprecationInsideDeprecatedCode && scope.isInsideDeprecatedCode()) return false;
 		return true;
 	}
 
 	public abstract StringBuffer print(int indent, StringBuffer output);
 
+	public static StringBuffer printAnnotations(Annotation[] annotations, StringBuffer output) {
+		int length = annotations.length;
+		for (int i = 0; i < length; i++) {
+			annotations[i].print(0, output);
+			output.append(" "); //$NON-NLS-1$
+		}
+		return output;
+	}
+	
 	public static StringBuffer printIndent(int indent, StringBuffer output) {
 
 		for (int i = indent; i > 0; i--) output.append("  "); //$NON-NLS-1$
@@ -281,6 +389,71 @@ public abstract class ASTNode implements BaseTypes, CompilerModifiers, TypeConst
 			output.append("abstract "); //$NON-NLS-1$
 		return output;
 	}
+	
+	/**
+	 * Resolve annotations, and check duplicates, answers combined tagBits 
+	 * for recognized standard annotations
+	 */
+	public static void resolveAnnotations(BlockScope scope, Annotation[] annotations, Binding recipient) {
+		if (recipient != null) {
+			switch (recipient.kind()) {
+				case Binding.PACKAGE :
+					PackageBinding packageBinding = (PackageBinding) recipient;
+					if ((packageBinding.tagBits & TagBits.AnnotationResolved) != 0) return;
+					packageBinding.tagBits |= TagBits.AnnotationResolved;
+					break;
+				case Binding.TYPE :
+				case Binding.GENERIC_TYPE :
+				case Binding.TYPE_PARAMETER :
+					ReferenceBinding type = (ReferenceBinding) recipient;
+					if ((type.tagBits & TagBits.AnnotationResolved) != 0) return;
+					type.tagBits |= TagBits.AnnotationResolved;
+					break;
+				case Binding.METHOD :
+					MethodBinding method = (MethodBinding) recipient;
+					if ((method.tagBits & TagBits.AnnotationResolved) != 0) return;
+					method.tagBits |= TagBits.AnnotationResolved;
+					break;
+				case Binding.FIELD :
+					FieldBinding field = (FieldBinding) recipient;
+					if ((field.tagBits & TagBits.AnnotationResolved) != 0) return;
+					field.tagBits |= TagBits.AnnotationResolved;
+					break;
+				case Binding.LOCAL :
+					LocalVariableBinding local = (LocalVariableBinding) recipient;
+					if ((local.tagBits & TagBits.AnnotationResolved) != 0) return;
+					local.tagBits |= TagBits.AnnotationResolved;
+					break;
+			}			
+		}
+		if (annotations == null) 
+			return;
+		int length = annotations.length;
+		TypeBinding[] annotationTypes = new TypeBinding[length];
+		for (int i = 0; i < length; i++) {
+			Annotation annotation = annotations[i];
+			annotation.recipient = recipient;
+			annotationTypes[i] = annotation.resolveType(scope);
+			
+		}
+		// check duplicate annotations
+		for (int i = 0; i < length; i++) {
+			TypeBinding annotationType = annotationTypes[i];
+			if (annotationType == null) continue;
+			boolean foundDuplicate = false;
+			for (int j = i+1; j < length; j++) {
+				if (annotationTypes[j] == annotationType) {
+					foundDuplicate = true;
+					annotationTypes[j] = null; // report it only once
+					scope.problemReporter().duplicateAnnotation(annotations[j]);
+				}
+			}
+			if (foundDuplicate) {
+				scope.problemReporter().duplicateAnnotation(annotations[i]);
+			}
+		}
+	}
+	
 	public int sourceStart() {
 		return this.sourceStart;
 	}

@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -85,6 +85,15 @@ public final class TagElement extends ASTNode implements IDocElement {
 	public static final String TAG_AUTHOR = "@author"; //$NON-NLS-1$
 
 	/**
+	 * Standard inline doc tag name (value {@value}).
+	 * <p>
+	 * Note that this tag first appeared in J2SE 5.
+	 * </p>
+	 * @since 3.1
+	 */
+	public static final String TAG_CODE = "@code"; //$NON-NLS-1$
+
+	/**
 	 * Standard doc tag name (value {@value}).
 	 */
 	public static final String TAG_DEPRECATED = "@deprecated"; //$NON-NLS-1$
@@ -113,6 +122,15 @@ public final class TagElement extends ASTNode implements IDocElement {
 	 * Standard inline doc tag name (value {@value}).
 	 */
 	public static final String TAG_LINKPLAIN = "@linkplain"; //$NON-NLS-1$
+
+	/**
+	 * Standard inline doc tag name (value {@value}).
+	 * <p>
+	 * Note that this tag first appeared in J2SE 5.
+	 * </p>
+	 * @since 3.1
+	 */
+	public static final String TAG_LITERAL = "@literal"; //$NON-NLS-1$
 
 	/**
 	 * Standard doc tag name (value {@value}).

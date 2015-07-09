@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -42,8 +42,8 @@ import org.eclipse.jdt.internal.core.InternalNamingConventions;
  * instantiated or subclassed by clients.
  * </p>
  * 
- * @see JavaCore#setOptions
- * @see JavaCore#getDefaultOptions
+ * @see JavaCore#setOptions(java.util.Hashtable)
+ * @see JavaCore#getDefaultOptions()
  * @since 2.1
  */
 public final class NamingConventions {
@@ -81,148 +81,148 @@ public final class NamingConventions {
 		private int otherResultsCount = 0;
 		public void acceptNameWithPrefixAndSuffix(char[] name, boolean isFirstPrefix, boolean isFirstSuffix) {
 			if(isFirstPrefix && isFirstSuffix) {
-				int length = firstPrefixAndFirstSuffixResults.length;
-				if(length == firstPrefixAndFirstSuffixResultsCount) {
+				int length = this.firstPrefixAndFirstSuffixResults.length;
+				if(length == this.firstPrefixAndFirstSuffixResultsCount) {
 					System.arraycopy(
-						firstPrefixAndFirstSuffixResults,
+						this.firstPrefixAndFirstSuffixResults,
 						0,
-						firstPrefixAndFirstSuffixResults = new char[length * 2][],
+						this.firstPrefixAndFirstSuffixResults = new char[length * 2][],
 						0,
 						length);
 				}
-				firstPrefixAndFirstSuffixResults[firstPrefixAndFirstSuffixResultsCount++] = name;			
+				this.firstPrefixAndFirstSuffixResults[this.firstPrefixAndFirstSuffixResultsCount++] = name;			
 			} else if (isFirstPrefix) {
-				int length = firstPrefixAndSuffixResults.length;
-				if(length == firstPrefixAndSuffixResultsCount) {
+				int length = this.firstPrefixAndSuffixResults.length;
+				if(length == this.firstPrefixAndSuffixResultsCount) {
 					System.arraycopy(
-						firstPrefixAndSuffixResults,
+						this.firstPrefixAndSuffixResults,
 						0,
-						firstPrefixAndSuffixResults = new char[length * 2][],
+						this.firstPrefixAndSuffixResults = new char[length * 2][],
 						0,
 						length);
 				}
-				firstPrefixAndSuffixResults[firstPrefixAndSuffixResultsCount++] = name;
+				this.firstPrefixAndSuffixResults[this.firstPrefixAndSuffixResultsCount++] = name;
 			} else if(isFirstSuffix) {
-				int length = prefixAndFirstSuffixResults.length;
-				if(length == prefixAndFirstSuffixResultsCount) {
+				int length = this.prefixAndFirstSuffixResults.length;
+				if(length == this.prefixAndFirstSuffixResultsCount) {
 					System.arraycopy(
-						prefixAndFirstSuffixResults,
+						this.prefixAndFirstSuffixResults,
 						0,
-						prefixAndFirstSuffixResults = new char[length * 2][],
+						this.prefixAndFirstSuffixResults = new char[length * 2][],
 						0,
 						length);
 				}
-				prefixAndFirstSuffixResults[prefixAndFirstSuffixResultsCount++] = name;
+				this.prefixAndFirstSuffixResults[this.prefixAndFirstSuffixResultsCount++] = name;
 			} else {
-				int length = prefixAndSuffixResults.length;
-				if(length == prefixAndSuffixResultsCount) {
+				int length = this.prefixAndSuffixResults.length;
+				if(length == this.prefixAndSuffixResultsCount) {
 					System.arraycopy(
-						prefixAndSuffixResults,
+						this.prefixAndSuffixResults,
 						0,
-						prefixAndSuffixResults = new char[length * 2][],
+						this.prefixAndSuffixResults = new char[length * 2][],
 						0,
 						length);
 				}
-				prefixAndSuffixResults[prefixAndSuffixResultsCount++] = name;
+				this.prefixAndSuffixResults[this.prefixAndSuffixResultsCount++] = name;
 			}
 		}
 
 		public void acceptNameWithPrefix(char[] name, boolean isFirstPrefix) {
 			if(isFirstPrefix) {
-				int length = firstPrefixResults.length;
-				if(length == firstPrefixResultsCount) {
+				int length = this.firstPrefixResults.length;
+				if(length == this.firstPrefixResultsCount) {
 					System.arraycopy(
-						firstPrefixResults,
+						this.firstPrefixResults,
 						0,
-						firstPrefixResults = new char[length * 2][],
+						this.firstPrefixResults = new char[length * 2][],
 						0,
 						length);
 				}
-				firstPrefixResults[firstPrefixResultsCount++] = name;
+				this.firstPrefixResults[this.firstPrefixResultsCount++] = name;
 			} else{
-				int length = prefixResults.length;
-				if(length == prefixResultsCount) {
+				int length = this.prefixResults.length;
+				if(length == this.prefixResultsCount) {
 					System.arraycopy(
-						prefixResults,
+						this.prefixResults,
 						0,
-						prefixResults = new char[length * 2][],
+						this.prefixResults = new char[length * 2][],
 						0,
 						length);
 				}
-				prefixResults[prefixResultsCount++] = name;
+				this.prefixResults[this.prefixResultsCount++] = name;
 			}
 		}
 
 		public void acceptNameWithSuffix(char[] name, boolean isFirstSuffix) {
 			if(isFirstSuffix) {
-				int length = firstSuffixResults.length;
-				if(length == firstSuffixResultsCount) {
+				int length = this.firstSuffixResults.length;
+				if(length == this.firstSuffixResultsCount) {
 					System.arraycopy(
-						firstSuffixResults,
+						this.firstSuffixResults,
 						0,
-						firstSuffixResults = new char[length * 2][],
+						this.firstSuffixResults = new char[length * 2][],
 						0,
 						length);
 				}
-				firstSuffixResults[firstSuffixResultsCount++] = name;
+				this.firstSuffixResults[this.firstSuffixResultsCount++] = name;
 			} else {
-				int length = suffixResults.length;
-				if(length == suffixResultsCount) {
+				int length = this.suffixResults.length;
+				if(length == this.suffixResultsCount) {
 					System.arraycopy(
-						suffixResults,
+						this.suffixResults,
 						0,
-						suffixResults = new char[length * 2][],
+						this.suffixResults = new char[length * 2][],
 						0,
 						length);
 				}
-				suffixResults[suffixResultsCount++] = name;
+				this.suffixResults[this.suffixResultsCount++] = name;
 			}
 		}
 
 		public void acceptNameWithoutPrefixAndSuffix(char[] name) {
-			int length = otherResults.length;
-			if(length == otherResultsCount) {
+			int length = this.otherResults.length;
+			if(length == this.otherResultsCount) {
 				System.arraycopy(
-					otherResults,
+					this.otherResults,
 					0,
-					otherResults = new char[length * 2][],
+					this.otherResults = new char[length * 2][],
 					0,
 					length);
 			}
-			otherResults[otherResultsCount++] = name;
+			this.otherResults[this.otherResultsCount++] = name;
 		}
 		public char[][] getResults(){
 			int count = 
-				firstPrefixAndFirstSuffixResultsCount
-				+ firstPrefixAndSuffixResultsCount
-				+ prefixAndFirstSuffixResultsCount
-				+ prefixAndSuffixResultsCount
-				+ firstPrefixResultsCount
-				+ prefixResultsCount
-				+ firstSuffixResultsCount
-				+ suffixResultsCount
-				+ otherResultsCount;
+				this.firstPrefixAndFirstSuffixResultsCount
+				+ this.firstPrefixAndSuffixResultsCount
+				+ this.prefixAndFirstSuffixResultsCount
+				+ this.prefixAndSuffixResultsCount
+				+ this.firstPrefixResultsCount
+				+ this.prefixResultsCount
+				+ this.firstSuffixResultsCount
+				+ this.suffixResultsCount
+				+ this.otherResultsCount;
 				
 			char[][] results = new char[count][];
 			
 			int index = 0;
-			System.arraycopy(firstPrefixAndFirstSuffixResults, 0, results, index, firstPrefixAndFirstSuffixResultsCount);
-			index += firstPrefixAndFirstSuffixResultsCount;
-			System.arraycopy(firstPrefixAndSuffixResults, 0, results, index, firstPrefixAndSuffixResultsCount);
-			index += firstPrefixAndSuffixResultsCount;
-			System.arraycopy(prefixAndFirstSuffixResults, 0, results, index, prefixAndFirstSuffixResultsCount);
-			index += prefixAndFirstSuffixResultsCount;		
-			System.arraycopy(prefixAndSuffixResults, 0, results, index, prefixAndSuffixResultsCount);
-			index += prefixAndSuffixResultsCount;
-			System.arraycopy(firstPrefixResults, 0, results, index, firstPrefixResultsCount);
-			index += firstPrefixResultsCount;
-			System.arraycopy(prefixResults, 0, results, index, prefixResultsCount);
-			index += prefixResultsCount;
-			System.arraycopy(firstSuffixResults, 0, results, index, firstSuffixResultsCount);
-			index += firstSuffixResultsCount;
-			System.arraycopy(suffixResults, 0, results, index, suffixResultsCount);
-			index += suffixResultsCount;
-			System.arraycopy(otherResults, 0, results, index, otherResultsCount);
+			System.arraycopy(this.firstPrefixAndFirstSuffixResults, 0, results, index, this.firstPrefixAndFirstSuffixResultsCount);
+			index += this.firstPrefixAndFirstSuffixResultsCount;
+			System.arraycopy(this.firstPrefixAndSuffixResults, 0, results, index, this.firstPrefixAndSuffixResultsCount);
+			index += this.firstPrefixAndSuffixResultsCount;
+			System.arraycopy(this.prefixAndFirstSuffixResults, 0, results, index, this.prefixAndFirstSuffixResultsCount);
+			index += this.prefixAndFirstSuffixResultsCount;		
+			System.arraycopy(this.prefixAndSuffixResults, 0, results, index, this.prefixAndSuffixResultsCount);
+			index += this.prefixAndSuffixResultsCount;
+			System.arraycopy(this.firstPrefixResults, 0, results, index, this.firstPrefixResultsCount);
+			index += this.firstPrefixResultsCount;
+			System.arraycopy(this.prefixResults, 0, results, index, this.prefixResultsCount);
+			index += this.prefixResultsCount;
+			System.arraycopy(this.firstSuffixResults, 0, results, index, this.firstSuffixResultsCount);
+			index += this.firstSuffixResultsCount;
+			System.arraycopy(this.suffixResults, 0, results, index, this.suffixResultsCount);
+			index += this.suffixResultsCount;
+			System.arraycopy(this.otherResults, 0, results, index, this.otherResultsCount);
 			
 			return results;
 		}
@@ -293,8 +293,8 @@ public final class NamingConventions {
 	 * @param javaProject project which contains the argument.
 	 * @param argumentName argument's name.
 	 * @return char[] the name without prefix and suffix.
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static char[] removePrefixAndSuffixForArgumentName(IJavaProject javaProject, char[] argumentName) {
 		AssistOptions assistOptions = new AssistOptions(javaProject.getOptions(true));
@@ -324,8 +324,8 @@ public final class NamingConventions {
 	 * @param javaProject project which contains the argument.
 	 * @param argumentName argument's name.
 	 * @return char[] the name without prefix and suffix.
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static String removePrefixAndSuffixForArgumentName(IJavaProject javaProject, String argumentName) {
 		return String.valueOf(removePrefixAndSuffixForArgumentName(javaProject, argumentName.toCharArray()));
@@ -355,8 +355,8 @@ public final class NamingConventions {
 	 * <code>Flags</code>.
 	 * @return char[] the name without prefix and suffix.
 	 * @see Flags
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static char[] removePrefixAndSuffixForFieldName(IJavaProject javaProject, char[] fieldName, int modifiers) {
 		boolean isStatic = Flags.isStatic(modifiers);
@@ -391,8 +391,8 @@ public final class NamingConventions {
 	 * <code>Flags</code>.
 	 * @return char[] the name without prefix and suffix.
 	 * @see Flags
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static String removePrefixAndSuffixForFieldName(IJavaProject javaProject, String fieldName, int modifiers) {
 		return String.valueOf(removePrefixAndSuffixForFieldName(javaProject, fieldName.toCharArray(), modifiers));
@@ -417,15 +417,15 @@ public final class NamingConventions {
 	 * @param javaProject project which contains the variable.
 	 * @param localName variable's name.
 	 * @return char[] the name without prefix and suffix.
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static char[] removePrefixAndSuffixForLocalVariableName(IJavaProject javaProject, char[] localName) {
 		AssistOptions assistOptions = new AssistOptions(javaProject.getOptions(true));
 		return	removePrefixAndSuffix(
 			localName,
-			assistOptions.argumentPrefixes,
-			assistOptions.argumentSuffixes);
+			assistOptions.localPrefixes,
+			assistOptions.localSuffixes);
 	}
 	
 	/**
@@ -448,8 +448,8 @@ public final class NamingConventions {
 	 * @param javaProject project which contains the variable.
 	 * @param localName variable's name.
 	 * @return char[] the name without prefix and suffix.
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static String removePrefixAndSuffixForLocalVariableName(IJavaProject javaProject, String localName) {
 		return String.valueOf(removePrefixAndSuffixForLocalVariableName(javaProject, localName.toCharArray()));
@@ -480,8 +480,8 @@ public final class NamingConventions {
 	 * @param excludedNames a list of names which cannot be suggested (already used names).
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[][] an array of names.
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static char[][] suggestArgumentNames(IJavaProject javaProject, char[] packageName, char[] qualifiedTypeName, int dim, char[][] excludedNames) {
 		NamingRequestor requestor = new NamingRequestor();
@@ -521,8 +521,8 @@ public final class NamingConventions {
 	 * @param excludedNames a list of names which cannot be suggested (already used names).
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[][] an array of names.
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static String[] suggestArgumentNames(IJavaProject javaProject, String packageName, String qualifiedTypeName, int dim, String[] excludedNames) {
 		return convertCharsToString(
@@ -562,8 +562,8 @@ public final class NamingConventions {
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[][] an array of names.
 	 * @see Flags
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static char[][] suggestFieldNames(IJavaProject javaProject, char[] packageName, char[] qualifiedTypeName, int dim, int modifiers, char[][] excludedNames) {
 		NamingRequestor requestor = new NamingRequestor();
@@ -608,8 +608,8 @@ public final class NamingConventions {
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[][] an array of names.
 	 * @see Flags
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static String[] suggestFieldNames(IJavaProject javaProject, String packageName, String qualifiedTypeName, int dim, int modifiers, String[] excludedNames) {
 		return convertCharsToString(
@@ -647,8 +647,8 @@ public final class NamingConventions {
 	 * @param excludedNames a list of names which cannot be suggested (already used names).
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[][] an array of names.
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static char[][] suggestLocalVariableNames(IJavaProject javaProject, char[] packageName, char[] qualifiedTypeName, int dim, char[][] excludedNames) {
 		NamingRequestor requestor = new NamingRequestor();
@@ -688,8 +688,8 @@ public final class NamingConventions {
 	 * @param excludedNames a list of names which cannot be suggested (already used names).
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[][] an array of names.
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static String[] suggestLocalVariableNames(IJavaProject javaProject, String packageName, String qualifiedTypeName, int dim, String[] excludedNames) {
 		return convertCharsToString(
@@ -729,8 +729,8 @@ public final class NamingConventions {
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[] a name.
 	 * @see Flags
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static char[] suggestGetterName(IJavaProject project, char[] fieldName, int modifiers, boolean isBoolean, char[][] excludedNames) {
 		if (isBoolean) {
@@ -781,8 +781,8 @@ public final class NamingConventions {
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[] a name.
 	 * @see Flags
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static String suggestGetterName(IJavaProject project, String fieldName, int modifiers, boolean isBoolean, String[] excludedNames) {
 		return String.valueOf(
@@ -821,8 +821,8 @@ public final class NamingConventions {
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[] a name.
 	 * @see Flags
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static char[] suggestSetterName(IJavaProject project, char[] fieldName, int modifiers, boolean isBoolean, char[][] excludedNames) {
 
@@ -877,8 +877,8 @@ public final class NamingConventions {
 	 *         Can be <code>null</code> if there is no excluded names.
 	 * @return char[] a name.
 	 * @see Flags
-	 * @see JavaCore#setOptions
-	 * @see JavaCore#getDefaultOptions
+	 * @see JavaCore#setOptions(java.util.Hashtable)
+	 * @see JavaCore#getDefaultOptions()
 	 */
 	public static String suggestSetterName(IJavaProject project, String fieldName, int modifiers, boolean isBoolean, String[] excludedNames) {
 		return String.valueOf(

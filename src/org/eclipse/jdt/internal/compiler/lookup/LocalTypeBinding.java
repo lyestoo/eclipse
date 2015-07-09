@@ -1,16 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.CaseStatement;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 
@@ -19,7 +20,9 @@ public final class LocalTypeBinding extends NestedTypeBinding {
 
 	private InnerEmulationDependency[] dependents;
 	public ArrayBinding[] localArrayBindings; // used to cache array bindings of various dimensions for this local type
-	public CaseStatement switchCase; // from 1.4 on, local types should not be accessed across switch case blocks (52221)
+	public CaseStatement enclosingCase; // from 1.4 on, local types should not be accessed across switch case blocks (52221)
+	int sourceStart; // used by computeUniqueKey to uniquely identify this binding
+	public MethodBinding enclosingMethod;
 	
 public LocalTypeBinding(ClassScope scope, SourceTypeBinding enclosingType, CaseStatement switchCase) {
 	super(
@@ -31,7 +34,13 @@ public LocalTypeBinding(ClassScope scope, SourceTypeBinding enclosingType, CaseS
 		this.tagBits |= AnonymousTypeMask;
 	else
 		this.tagBits |= LocalTypeMask;
-	this.switchCase = switchCase;
+	this.enclosingCase = switchCase;
+	this.sourceStart = scope.referenceContext.sourceStart;
+	MethodScope methodScope = scope.enclosingMethodScope();
+	AbstractMethodDeclaration declaration = methodScope.referenceMethod();
+	if (declaration != null) {
+		this.enclosingMethod = declaration.binding;
+	}
 }
 /* Record a dependency onto a source target type which may be altered
 * by the end of the innerclass emulation. Later on, we will revisit
@@ -53,10 +62,19 @@ public void addInnerEmulationDependent(BlockScope dependentScope, boolean wasEnc
 	dependents[index] = new InnerEmulationDependency(dependentScope, wasEnclosingInstanceSupplied);
 	//  System.out.println("Adding dependency: "+ new String(scope.enclosingType().readableName()) + " --> " + new String(this.readableName()));
 }
-/* Answer the receiver's constant pool name.
-*
-* NOTE: This method should only be used during/after code gen.
-*/
+public char[] computeUniqueKey(boolean isLeaf) {
+	char[] outerKey = outermostEnclosingType().computeUniqueKey(isLeaf);
+	int semicolon = CharOperation.lastIndexOf(';', outerKey);
+
+	// insert $sourceStart
+	return CharOperation.concat(
+		CharOperation.concat(
+			CharOperation.subarray(outerKey, 0, semicolon),
+			String.valueOf(
+			this.sourceStart).toCharArray(),
+			'$'),
+		CharOperation.subarray(outerKey, semicolon, outerKey.length));
+}
 
 public char[] constantPoolName() /* java/lang/Object */ {
 	return constantPoolName;
@@ -77,6 +95,21 @@ ArrayBinding createArrayType(int dimensionCount) {
 	// no matching array
 	System.arraycopy(localArrayBindings, 0, localArrayBindings = new ArrayBinding[length + 1], 0, length); 
 	return localArrayBindings[length] = new ArrayBinding(this, dimensionCount, scope.environment());
+}
+
+/*
+ * Overriden for code assist. In this case, the constantPoolName() has not been computed yet.
+ * Slam the source name so that the signature is syntactically correct.
+ * (see https://bugs.eclipse.org/bugs/show_bug.cgi?id=99686)
+ */
+public char[] genericTypeSignature() {
+	if (this.genericReferenceTypeSignature == null && constantPoolName() == null) {
+		if (isAnonymousType())
+			setConstantPoolName(superclass().sourceName());
+		else
+			setConstantPoolName(sourceName());
+	}
+	return super.genericTypeSignature();
 }
 
 public char[] readableName() /*java.lang.Object,  p.X<T> */ {

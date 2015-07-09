@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -59,10 +59,8 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 		this.initsOnExceptions = new UnconditionalFlowInfo[count];
 		for (int i = 0; i < count; i++) {
 			this.indexes.put(handledExceptions[i], i); // key type  -> value index
-			boolean isUnchecked =
-				(scope.compareUncheckedException(handledExceptions[i]) != NotRelated);
 			int cacheIndex = i / BitCacheSize, bitMask = 1 << (i % BitCacheSize);
-			if (isUnchecked) {
+			if (handledExceptions[i].isUncheckedException(true)) {
 				isReached[cacheIndex] |= bitMask;
 				this.initsOnExceptions[i] = flowInfo.copy().unconditionalInits();
 			} else {
@@ -77,7 +75,7 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 		MethodScope scope = method.scope;
 		// can optionally skip overriding methods
 		if ((method.binding.modifiers & (CompilerModifiers.AccOverriding | CompilerModifiers.AccImplementing)) != 0
-		        && !scope.environment().options.reportUnusedDeclaredThrownExceptionWhenOverriding) {
+		        && !scope.compilerOptions().reportUnusedDeclaredThrownExceptionWhenOverriding) {
 		    return;
 		}
 		    

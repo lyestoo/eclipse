@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -12,8 +12,10 @@ package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
+import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
+import org.eclipse.jdt.internal.compiler.lookup.Scope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeVariableBinding;
 
 public class TypeParameter extends AbstractVariableDeclaration {
@@ -21,8 +23,44 @@ public class TypeParameter extends AbstractVariableDeclaration {
     public TypeVariableBinding binding;
 	public TypeReference[] bounds;
 
+	/**
+	 * @see org.eclipse.jdt.internal.compiler.ast.AbstractVariableDeclaration#getKind()
+	 */
+	public int getKind() {
+		return TYPE_PARAMETER;
+	}
+
+	public void checkBounds(Scope scope) {
+		
+		if (this.type != null) {
+			this.type.checkBounds(scope);
+		}
+		if (this.bounds != null) {
+			for (int i = 0, length = this.bounds.length; i < length; i++) {
+				this.bounds[i].checkBounds(scope);
+			}
+		}
+	}
+	
+	private void internalResolve(Scope scope, boolean staticContext) {
+	    // detect variable/type name collisions
+		if (this.binding != null) {
+			Binding existingType = scope.parent.getBinding(this.name, Binding.TYPE, this, false);
+			if (existingType != null 
+					&& this.binding != existingType 
+					&& existingType.isValidBinding()
+					&& (existingType.kind() != Binding.TYPE_PARAMETER || !staticContext)) {
+				scope.problemReporter().typeHiding(this, existingType);
+			}
+		}
+	}
+	
+	public void resolve(BlockScope scope) {
+		internalResolve(scope, scope.methodScope().isStatic);
+	}
+	
 	public void resolve(ClassScope scope) {
-	    // TODO (philippe) add warning for detecting variable name collisions
+		internalResolve(scope, scope.enclosingSourceType().isStatic());
 	}
 
 	/* (non-Javadoc)

@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -12,12 +12,16 @@ package org.eclipse.jdt.internal.compiler.lookup;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
 import org.eclipse.jdt.internal.compiler.problem.AbortCompilation;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
@@ -25,22 +29,22 @@ import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
 import org.eclipse.jdt.internal.compiler.util.ObjectVector;
 
 public abstract class Scope
-	implements BaseTypes, BindingIds, CompilerModifiers, ProblemReasons, TagBits, TypeConstants, TypeIds {
-
+	implements BaseTypes, CompilerModifiers, ProblemReasons, TagBits, TypeConstants, TypeIds {
+	
 	public final static int BLOCK_SCOPE = 1;
-	public final static int METHOD_SCOPE = 2;
 	public final static int CLASS_SCOPE = 3;
 	public final static int COMPILATION_UNIT_SCOPE = 4;
+	public final static int METHOD_SCOPE = 2;
+
+	public final static int NOT_COMPATIBLE = -1;
+	public final static int COMPATIBLE = 0;
+	public final static int AUTOBOX_COMPATIBLE = 1;
+	public final static int VARARGS_COMPATIBLE = 2;
 
 	public int kind;
 	public Scope parent;
 
-	protected Scope(int kind, Scope parent) {
-		this.kind = kind;
-		this.parent = parent;
-	}
-
-	/* Answer an int describing the relationship between the given types.
+   /* Answer an int describing the relationship between the given types.
 	*
 	* 		NotRelated 
 	* 		EqualOrMoreSpecific : left is compatible with right
@@ -53,16 +57,79 @@ public abstract class Scope
 			return MoreGeneric;
 		return NotRelated;
 	}
-
+	
+	public static TypeBinding getBaseType(char[] name) {
+		// list should be optimized (with most often used first)
+		int length = name.length;
+		if (length > 2 && length < 8) {
+			switch (name[0]) {
+				case 'i' :
+					if (length == 3 && name[1] == 'n' && name[2] == 't')
+						return IntBinding;
+					break;
+				case 'v' :
+					if (length == 4 && name[1] == 'o' && name[2] == 'i' && name[3] == 'd')
+						return VoidBinding;
+					break;
+				case 'b' :
+					if (length == 7
+						&& name[1] == 'o'
+						&& name[2] == 'o'
+						&& name[3] == 'l'
+						&& name[4] == 'e'
+						&& name[5] == 'a'
+						&& name[6] == 'n')
+						return BooleanBinding;
+					if (length == 4 && name[1] == 'y' && name[2] == 't' && name[3] == 'e')
+						return ByteBinding;
+					break;
+				case 'c' :
+					if (length == 4 && name[1] == 'h' && name[2] == 'a' && name[3] == 'r')
+						return CharBinding;
+					break;
+				case 'd' :
+					if (length == 6
+						&& name[1] == 'o'
+						&& name[2] == 'u'
+						&& name[3] == 'b'
+						&& name[4] == 'l'
+						&& name[5] == 'e')
+						return DoubleBinding;
+					break;
+				case 'f' :
+					if (length == 5
+						&& name[1] == 'l'
+						&& name[2] == 'o'
+						&& name[3] == 'a'
+						&& name[4] == 't')
+						return FloatBinding;
+					break;
+				case 'l' :
+					if (length == 4 && name[1] == 'o' && name[2] == 'n' && name[3] == 'g')
+						return LongBinding;
+					break;
+				case 's' :
+					if (length == 5
+						&& name[1] == 'h'
+						&& name[2] == 'o'
+						&& name[3] == 'r'
+						&& name[4] == 't')
+						return ShortBinding;
+			}
+		}
+		return null;
+	}
+	
 	/**
 	 * Returns an array of types, where original types got substituted given a substitution.
 	 * Only allocate an array if anything is different.
 	 */
 	public static ReferenceBinding[] substitute(Substitution substitution, ReferenceBinding[] originalTypes) {
+		if (originalTypes == null) return null;
 	    ReferenceBinding[] substitutedTypes = originalTypes;
 	    for (int i = 0, length = originalTypes.length; i < length; i++) {
 	        ReferenceBinding originalType = originalTypes[i];
-	        ReferenceBinding substitutedParameter = (ReferenceBinding)substitution.substitute(originalType);
+	        ReferenceBinding substitutedParameter = (ReferenceBinding)substitute(substitution, originalType);
 	        if (substitutedParameter != originalType) {
 	            if (substitutedTypes == originalTypes) {
 	                System.arraycopy(originalTypes, 0, substitutedTypes = new ReferenceBinding[length], 0, i);
@@ -76,14 +143,118 @@ public abstract class Scope
 	}
 
 	/**
+	 * Returns a type, where original type was substituted using the receiver
+	 * parameterized type.
+	 * In raw mode, all parameterized type denoting same original type are converted
+	 * to raw types. e.g. 
+	 * class X <T> {
+	 *   X<T> foo;
+	 *   X<String> bar;
+	 * } when used in raw fashion, then type of both foo and bar is raw type X.
+	 * 
+	 */
+	public static TypeBinding substitute(Substitution substitution, TypeBinding originalType) {
+		
+		switch (originalType.kind()) {
+			
+			case Binding.TYPE_PARAMETER:
+				return substitution.substitute( (TypeVariableBinding) originalType);
+				
+			case Binding.PARAMETERIZED_TYPE:
+				ParameterizedTypeBinding originalParameterizedType = (ParameterizedTypeBinding) originalType;
+				ReferenceBinding originalEnclosing = originalType.enclosingType();
+				ReferenceBinding substitutedEnclosing = originalEnclosing;
+				if (originalEnclosing != null) {
+					substitutedEnclosing = (ReferenceBinding) substitute(substitution, originalEnclosing);
+				}
+				if (substitution.isRawSubstitution()) {
+					return originalParameterizedType.environment.createRawType(originalParameterizedType.type, substitutedEnclosing);
+				}				
+				TypeBinding[] originalArguments = originalParameterizedType.arguments;
+				TypeBinding[] substitutedArguments = originalArguments;
+				if (originalArguments != null) {
+					substitutedArguments = substitute(substitution, originalArguments);
+				}
+				if (substitutedArguments != originalArguments || substitutedEnclosing != originalEnclosing) {
+					identicalVariables: { // if substituted with original variables, then answer the generic type itself
+						if (substitutedEnclosing != null) {
+							//if (!(substitutedEnclosing instanceof SourceTypeBinding)) break identicalVariables;
+							if (substitutedEnclosing != originalEnclosing) break identicalVariables;						
+						}
+						if (originalParameterizedType.type.isBinaryBinding()) break identicalVariables; // generic binary is never used as is, see 85262
+						TypeVariableBinding[] originalVariables = originalParameterizedType.type.typeVariables();
+						for (int i = 0, length = originalVariables.length; i < length; i++) {
+							if (substitutedArguments[i] != originalVariables[i]) break identicalVariables;
+						}
+						return originalParameterizedType.type;
+					}
+					return originalParameterizedType.environment.createParameterizedType(
+							originalParameterizedType.type, substitutedArguments, substitutedEnclosing);
+				}
+				break;
+				
+			case Binding.ARRAY_TYPE:
+				ArrayBinding originalArrayType = (ArrayBinding) originalType;
+				TypeBinding originalLeafComponentType = originalArrayType.leafComponentType;
+				TypeBinding substitute = substitute(substitution, originalLeafComponentType); // substitute could itself be array type
+				if (substitute != originalLeafComponentType) {
+					return originalArrayType.environment.createArrayType(substitute.leafComponentType(), substitute.dimensions() + originalType.dimensions());
+				}
+				break;
+
+			case Binding.WILDCARD_TYPE:
+		        WildcardBinding wildcard = (WildcardBinding) originalType;
+		        if (wildcard.boundKind != Wildcard.UNBOUND) {
+			        TypeBinding originalBound = wildcard.bound;
+			        TypeBinding substitutedBound = substitute(substitution, originalBound);
+			        TypeBinding[] originalOtherBounds = wildcard.otherBounds;
+			        TypeBinding[] substitutedOtherBounds = substitute(substitution, originalOtherBounds);
+			        if (substitutedBound != originalBound || originalOtherBounds != substitutedOtherBounds) {
+		        		return wildcard.environment.createWildcard(wildcard.genericType, wildcard.rank, substitutedBound, substitutedOtherBounds, wildcard.boundKind);
+			        }
+		        }
+				break;
+
+			case Binding.TYPE:
+				if (!originalType.isMemberType()) break;
+				// fall thru in case enclosing is generic
+			case Binding.GENERIC_TYPE:
+				ReferenceBinding originalReferenceType = (ReferenceBinding) originalType;
+				originalEnclosing = originalType.enclosingType();
+				substitutedEnclosing = originalEnclosing;
+				if (originalEnclosing != null) {
+					substitutedEnclosing = (ReferenceBinding) substitute(substitution, originalEnclosing);
+				}
+				if (substitution.isRawSubstitution()) {
+		            return substitution.environment().createRawType(originalReferenceType, substitutedEnclosing);
+	            }
+			    // treat as if parameterized with its type variables (non generic type gets 'null' arguments)
+				originalArguments = originalReferenceType.typeVariables();
+				if (originalArguments == NoTypeVariables) {
+					originalArguments = null;
+					substitutedArguments = null;
+				} else {
+					substitutedArguments = substitute(substitution, originalArguments);
+				}
+				if (substitutedArguments != originalArguments || substitutedEnclosing != originalEnclosing) {
+					return substitution.environment().createParameterizedType(
+							originalReferenceType, substitutedArguments, substitutedEnclosing);
+				}
+				break;
+		}
+		return originalType;
+	}	
+
+	/**
 	 * Returns an array of types, where original types got substituted given a substitution.
 	 * Only allocate an array if anything is different.
 	 */
 	public static TypeBinding[] substitute(Substitution substitution, TypeBinding[] originalTypes) {
+		if (originalTypes == null) return null;
 	    TypeBinding[] substitutedTypes = originalTypes;
 	    for (int i = 0, length = originalTypes.length; i < length; i++) {
 	        TypeBinding originalType = originalTypes[i];
-	        TypeBinding substitutedParameter = substitution.substitute(originalType);
+	        TypeBinding substitutedParameter = substitute(substitution, originalType);
 	        if (substitutedParameter != originalType) {
 	            if (substitutedTypes == originalTypes) {
 	                System.arraycopy(originalTypes, 0, substitutedTypes = new TypeBinding[length], 0, i);
@@ -96,6 +267,20 @@ public abstract class Scope
 	    return substitutedTypes;
 	}
 
+	protected Scope(int kind, Scope parent) {
+		this.kind = kind;
+		this.parent = parent;
+	}
+
+	/*
+	 * Boxing primitive
+	 */
+	public TypeBinding boxing(TypeBinding type) {
+		if (type.isBaseType())
+			return environment().computeBoxingType(type);
+		return type;
+	}	
+
 	public final ClassScope classScope() {
 		Scope scope = this;
 		do {
@@ -105,18 +290,6 @@ public abstract class Scope
 		} while (scope != null);
 		return null;
 	}	
-
-	/* Answer an int describing the relationship between the given type and unchecked exceptions.
-	*
-	* 	NotRelated 
-	* 	EqualOrMoreSpecific : type is known for sure to be an unchecked exception type
-	* 	MoreGeneric : type is a supertype of an actual unchecked exception type
-	*/
-	public int compareUncheckedException(ReferenceBinding type) {
-		int comparison = compareTypes(type, getJavaLangRuntimeException());
-		if (comparison != 0) return comparison;
-		return compareTypes(type, getJavaLangError());
-	}
 
 	public final CompilationUnitScope compilationUnitScope() {
 		Scope lastScope = null;
@@ -129,6 +302,14 @@ public abstract class Scope
 	}
 
 	/**
+	 * Finds the most specific compiler options
+	 */
+	public final CompilerOptions compilerOptions() {
+
+		return compilationUnitScope().environment.globalOptions;
+	}
+	
+	/**
 	 * Internal use only
 	 * Given a method, returns null if arguments cannot be converted to parameters.
 	 * Will answer a subsituted method in case the method was generic and type inference got triggered;
@@ -138,46 +319,61 @@ public abstract class Scope
 
 		TypeBinding[] genericTypeArguments = invocationSite.genericTypeArguments();
 		TypeBinding[] parameters = method.parameters;
-		if (parameters == arguments 
-				&& (method.returnType.tagBits & HasTypeVariable) == 0 
-				&& genericTypeArguments == null)
-			return method;
+		TypeVariableBinding[] typeVariables = method.typeVariables;
+		if (parameters == arguments
+			&& (method.returnType.tagBits & HasTypeVariable) == 0 
+			&& genericTypeArguments == null
+			&& typeVariables == NoTypeVariables)
+				return method;
 
 		int argLength = arguments.length;
-		if (argLength != parameters.length)
-			return null; // incompatible
+		int paramLength = parameters.length;
+		boolean isVarArgs = method.isVarargs();
+		if (argLength != paramLength)
+			if (!isVarArgs || argLength < paramLength - 1)
+				return null; // incompatible
 
-		TypeVariableBinding[] typeVariables = method.typeVariables;
 		if (typeVariables != NoTypeVariables) { // generic method
+			TypeBinding[] newArgs = null;
+			for (int i = 0; i < argLength; i++) {
+				TypeBinding param = i < paramLength ? parameters[i] : parameters[paramLength - 1];
+				if (arguments[i].isBaseType() != param.isBaseType()) {
+					if (newArgs == null) {
+						newArgs = new TypeBinding[argLength];
+						System.arraycopy(arguments, 0, newArgs, 0, argLength);
+					}
+					newArgs[i] = environment().computeBoxingType(arguments[i]);
+				}	
+			}
+			if (newArgs != null)
+				arguments = newArgs;
 			method = ParameterizedGenericMethodBinding.computeCompatibleMethod(method, arguments, this, invocationSite);
 			if (method == null) return null; // incompatible
 			if (!method.isValidBinding()) return method; // bound check issue is taking precedence
 			parameters = method.parameters; // reacquire them after type inference has performed
 		} else if (genericTypeArguments != null) {
 			if (method instanceof ParameterizedGenericMethodBinding) {
-				if (method.declaringClass.isRawType())
-					return new ProblemMethodBinding(method, method.selector, genericTypeArguments, TypeArgumentsForRawGenericMethod); // attempt to invoke generic method of raw type with type hints <String>foo()
+				if (!((ParameterizedGenericMethodBinding) method).wasInferred) {
+					// attempt to invoke generic method of raw type with type hints <String>foo()
+					return new ProblemMethodBinding(method, method.selector, genericTypeArguments, TypeArgumentsForRawGenericMethod);
+				}
 			} else {
 				return new ProblemMethodBinding(method, method.selector, genericTypeArguments, TypeParameterArityMismatch);
 			}
 		}
-		
-		argumentCompatibility: {
-			for (int i = 0; i < argLength; i++)
-				if (parameters[i] != arguments[i] && !arguments[i].isCompatibleWith(parameters[i]))
-					break argumentCompatibility;
-			return method; // compatible
-		}
-		if (genericTypeArguments != null) {
+
+		if (parameterCompatibilityLevel(method, arguments) > NOT_COMPATIBLE)
+			return method;
+		if (genericTypeArguments != null)
 			return new ProblemMethodBinding(method, method.selector, arguments, ParameterizedMethodTypeMismatch);
-		}
 		return null; // incompatible
 	}
 	
 	protected boolean connectTypeVariables(TypeParameter[] typeParameters) {
 		boolean noProblems = true;
-		if (typeParameters == null || environment().options.sourceLevel < ClassFileConstants.JDK1_5) return true;
-
+		if (typeParameters == null || compilerOptions().sourceLevel < ClassFileConstants.JDK1_5) return true;
+		TypeBinding[] types = new TypeBinding[2];
+		Map invocations = new HashMap(2);
 		nextVariable : for (int i = 0, paramLength = typeParameters.length; i < paramLength; i++) {
 			TypeParameter typeParameter = typeParameters[i];
 			TypeVariableBinding typeVariable = typeParameter.binding;
@@ -191,62 +387,121 @@ public abstract class Scope
 			TypeReference typeRef = typeParameter.type;
 			if (typeRef == null)
 				continue nextVariable;
-			ReferenceBinding superType = this.kind == METHOD_SCOPE
-				? (ReferenceBinding) typeRef.resolveType((BlockScope)this)
-				: (ReferenceBinding) typeRef.resolveType((ClassScope)this);
+			TypeBinding superType = this.kind == METHOD_SCOPE
+				? typeRef.resolveType((BlockScope)this, false/*no bound check*/)
+				: typeRef.resolveType((ClassScope)this);
 			if (superType == null) {
 				typeVariable.tagBits |= HierarchyHasProblems;
 				noProblems = false;
 				continue nextVariable;
 			}
+			typeRef.resolvedType = superType; // hold onto the problem type
+			if (superType.isArrayType()) {
+				problemReporter().boundCannotBeArray(typeRef, superType);
+				continue nextVariable;
+			}
 			if (superType.isTypeVariable()) {
 				TypeVariableBinding varSuperType = (TypeVariableBinding) superType;
-				if (varSuperType.rank >= typeVariable.rank) {
+				if (varSuperType.rank >= typeVariable.rank && varSuperType.declaringElement == typeVariable.declaringElement) {
 					problemReporter().forwardTypeVariableReference(typeParameter, varSuperType);
 					typeVariable.tagBits |= HierarchyHasProblems;
 					noProblems = false;
 					continue nextVariable;
 				}
 			}
-			if (superType.isFinal())
+			ReferenceBinding superRefType = (ReferenceBinding) superType;
+			if (superRefType.isFinal())
 				problemReporter().finalVariableBound(typeVariable, typeRef);
-			typeRef.resolvedType = superType; // hold onto the problem type
-			if (superType.isClass()) {
-				typeVariable.superclass = superType;
+			if (!superType.isInterface()) {
+				typeVariable.superclass = superRefType;
 			} else {
-				typeVariable.superInterfaces = new ReferenceBinding[] {superType};
-				typeVariable.modifiers |= AccInterface;
+				typeVariable.superInterfaces = new ReferenceBinding[] {superRefType};
 			}
-			typeVariable.firstBound = superType; // first bound used to compute erasure
-
+			typeVariable.firstBound = superRefType; // first bound used to compute erasure
 			TypeReference[] boundRefs = typeParameter.bounds;
 			if (boundRefs != null) {
-				for (int j = 0, k = boundRefs.length; j < k; j++) {
+				for (int j = 0, boundLength = boundRefs.length; j < boundLength; j++) {
 					typeRef = boundRefs[j];
 					superType = this.kind == METHOD_SCOPE
-						? (ReferenceBinding) typeRef.resolveType((BlockScope)this)
-						: (ReferenceBinding) typeRef.resolveType((ClassScope)this);
+						? typeRef.resolveType((BlockScope)this, false)
+						: typeRef.resolveType((ClassScope)this);
 					if (superType == null) {
 						typeVariable.tagBits |= HierarchyHasProblems;
 						noProblems = false;
 						continue nextVariable;
 					}
 					typeRef.resolvedType = superType; // hold onto the problem type
-					if (superType.isClass()) {
-						problemReporter().boundsMustBeAnInterface(typeRef, superType);
+					types[0] = superType;
+					if (superType.isArrayType()) {
+						problemReporter().boundCannotBeArray(typeRef, superType);
+						continue nextVariable;
+					}
+					superRefType = (ReferenceBinding) superType;
+					if (!superType.isInterface()) {
+						problemReporter().boundMustBeAnInterface(typeRef, superType);
 						typeVariable.tagBits |= HierarchyHasProblems;
 						noProblems = false;
 						continue nextVariable;
 					}
+					// check against superclass
+					if (typeVariable.firstBound == typeVariable.superclass) {
+						types[1] = typeVariable.superclass;
+						TypeBinding[] mecs = minimalErasedCandidates(types, invocations);
+						if (mecs != null) {
+							nextCandidate: for (int k = 0, max = mecs.length; k < max; k++) {
+								TypeBinding mec = mecs[k];
+								if (mec == null) continue nextCandidate;
+								Set invalidInvocations = (Set)invocations.get(mec);
+								int invalidSize = invalidInvocations.size();
+								if (invalidSize > 1) {
+									TypeBinding[] collisions;
+									invalidInvocations.toArray(collisions = new TypeBinding[invalidSize]);
+									problemReporter().superinterfacesCollide(collisions[0].erasure(), typeRef, collisions[1], collisions[0]); // swap collisions since mec types got swapped
+									typeVariable.tagBits |= HierarchyHasProblems;
+									noProblems = false;
+									continue nextVariable;
+								}
+							}			
+						}
+					}
+					// check against superinterfaces
+					for (int index = typeVariable.superInterfaces.length; --index >= 0;) {
+						ReferenceBinding previousInterface = typeVariable.superInterfaces[index];
+						if (previousInterface == superRefType) {
+							problemReporter().duplicateBounds(typeRef, superType);
+							typeVariable.tagBits |= HierarchyHasProblems;
+							noProblems = false;
+							continue nextVariable;
+						}
+						types[1] = previousInterface;
+						invocations.clear();
+						TypeBinding[] mecs = minimalErasedCandidates(types, invocations);
+						if (mecs != null) {
+							nextCandidate: for (int m = 0, max = mecs.length; m < max; m++) {
+								TypeBinding mec = mecs[m];
+								if (mec == null) continue nextCandidate;
+								Set invalidInvocations = (Set)invocations.get(mec);
+								int invalidSize = invalidInvocations.size();
+								if (invalidSize > 1) {
+									TypeBinding[] collisions;
+									invalidInvocations.toArray(collisions = new TypeBinding[invalidSize]);
+									problemReporter().superinterfacesCollide(collisions[0].erasure(), typeRef, collisions[0], collisions[1]);
+									typeVariable.tagBits |= HierarchyHasProblems;
+									noProblems = false;
+									continue nextVariable;
+								}
+							}					
+						}
+					}
 					int size = typeVariable.superInterfaces.length;
 					System.arraycopy(typeVariable.superInterfaces, 0, typeVariable.superInterfaces = new ReferenceBinding[size + 1], 0, size);
-					typeVariable.superInterfaces[size] = superType;
+					typeVariable.superInterfaces[size] = superRefType;
 				}
 			}
 		}
 		return noProblems;
 	}
-	
+
 	public ArrayBinding createArrayType(TypeBinding type, int dimension) {
 		if (type.isValidBinding())
 			return environment().createArrayType(type, dimension);
@@ -254,58 +509,29 @@ public abstract class Scope
 		return new ArrayBinding(type, dimension, environment());
 	}
 	
-	public ParameterizedTypeBinding createParameterizedType(ReferenceBinding genericType, TypeBinding[] arguments, ReferenceBinding enclosingType) {
-		valid: {
-			if (!genericType.isValidBinding()) break valid;
-			for (int i = 0, max = arguments == null ? 0 : arguments.length; i < max; i++){
-				if (!arguments[i].isValidBinding()) break valid;
-			}
-			return environment().createParameterizedType(genericType, arguments, enclosingType);
-		}
-		return new ParameterizedTypeBinding(genericType, arguments, enclosingType, environment());
-	}
-	
 	public TypeVariableBinding[] createTypeVariables(TypeParameter[] typeParameters, Binding declaringElement) {
-
-		PackageBinding unitPackage = compilationUnitScope().fPackage;
-		
 		// do not construct type variables if source < 1.5
-		if (typeParameters == null || environment().options.sourceLevel < ClassFileConstants.JDK1_5) {
+		if (typeParameters == null || compilerOptions().sourceLevel < ClassFileConstants.JDK1_5)
 			return NoTypeVariables;
-		}
+
 		TypeVariableBinding[] typeVariableBindings = NoTypeVariables;
-		
+		PackageBinding unitPackage = compilationUnitScope().fPackage;
 		int length = typeParameters.length;
 		typeVariableBindings = new TypeVariableBinding[length];
-		HashtableOfObject knownTypeParameterNames = new HashtableOfObject(length);
 		int count = 0;
-		nextParameter : for (int i = 0; i < length; i++) {
+		for (int i = 0; i < length; i++) {
 			TypeParameter typeParameter = typeParameters[i];
 			TypeVariableBinding parameterBinding = new TypeVariableBinding(typeParameter.name, declaringElement, i);
 			parameterBinding.fPackage = unitPackage;
 			typeParameter.binding = parameterBinding;
-			
-			if (knownTypeParameterNames.containsKey(typeParameter.name)) {
-				TypeVariableBinding previousBinding = (TypeVariableBinding) knownTypeParameterNames.get(typeParameter.name);
-				if (previousBinding != null) {
-					for (int j = 0; j < i; j++) {
-						TypeParameter previousParameter = typeParameters[j];
-						if (previousParameter.binding == previousBinding) {
-							problemReporter().duplicateTypeParameterInType(previousParameter);
-							previousParameter.binding = null;
-							break;
-						}
-					}
-				}
-				knownTypeParameterNames.put(typeParameter.name, null); // ensure that the duplicate parameter is found & removed
-				problemReporter().duplicateTypeParameterInType(typeParameter);
-				typeParameter.binding = null;
-			} else {
-				knownTypeParameterNames.put(typeParameter.name, parameterBinding);
-				// remember that we have seen a field with this name
-				if (parameterBinding != null)
-					typeVariableBindings[count++] = parameterBinding;
+
+			// detect duplicates, but keep each variable to reduce secondary errors with instantiating this generic type (assume number of variables is correct)
+			for (int j = 0; j < count; j++) {
+				TypeVariableBinding knownVar = typeVariableBindings[j];
+				if (CharOperation.equals(knownVar.sourceName, typeParameter.name))
+					problemReporter().duplicateTypeParameterInType(typeParameter);
 			}
+			typeVariableBindings[count++] = parameterBinding;
 //				TODO should offer warnings to inform about hiding declaring, enclosing or member types				
 //				ReferenceBinding type = sourceType;
 //				// check that the member does not conflict with an enclosing type
@@ -324,20 +550,15 @@ public abstract class Scope
 //					}
 //				}
 		}
-		if (count != length) {
+		if (count != length)
 			System.arraycopy(typeVariableBindings, 0, typeVariableBindings = new TypeVariableBinding[count], 0, count);
-		}
 		return typeVariableBindings;
-	}
-
-	public boolean detectCycle(ReferenceBinding superType) {
-		return false;
 	}
 
 	public final ClassScope enclosingClassScope() {
 		Scope scope = this;
 		while ((scope = scope.parent) != null) {
-			if (scope instanceof ClassScope) return (ClassScope)scope;
+			if (scope instanceof ClassScope) return (ClassScope) scope;
 		}
 		return null; // may answer null if no type around
 	}
@@ -345,11 +566,30 @@ public abstract class Scope
 	public final MethodScope enclosingMethodScope() {
 		Scope scope = this;
 		while ((scope = scope.parent) != null) {
-			if (scope instanceof MethodScope) return (MethodScope)scope;
+			if (scope instanceof MethodScope) return (MethodScope) scope;
 		}
 		return null; // may answer null if no method around
 	}
 
+	/**
+	 * Returns the immediately enclosing reference context, starting from current scope parent.
+	 * If starting on a class, it will skip current class. If starting on unitScope, returns null.
+	 */
+	public ReferenceContext enclosingReferenceContext() {
+		Scope current = this;
+		while ((current = current.parent) != null) {
+			switch(current.kind) {
+				case METHOD_SCOPE :
+					return ((MethodScope) current).referenceContext;
+				case CLASS_SCOPE :
+					return ((ClassScope) current).referenceContext;
+				case COMPILATION_UNIT_SCOPE :
+					return ((CompilationUnitScope) current).referenceContext;
+			}
+		}
+		return null;
+	}
+	
 	/* Answer the receiver's enclosing source type.
 	*/
 	public final SourceTypeBinding enclosingSourceType() {
@@ -384,9 +624,11 @@ public abstract class Scope
 			matchingMethod = findMethodInSuperInterfaces(currentType, selector, found, matchingMethod);
 			currentType = currentType.superclass();
 		}
+		CompilationUnitScope unitScope = compilationUnitScope();
 		int foundSize = found.size;
 		if (foundSize == startFoundSize) {
-			if (matchingMethod != null) compilationUnitScope().recordTypeReferences(matchingMethod.thrownExceptions);
+			if (matchingMethod != null)
+				unitScope.recordTypeReferences(matchingMethod.thrownExceptions);
 			return matchingMethod; // maybe null
 		}
 		MethodBinding[] candidates = new MethodBinding[foundSize - startFoundSize];
@@ -405,7 +647,7 @@ public abstract class Scope
 		}
 
 		if (candidatesCount == 1) {
-			compilationUnitScope().recordTypeReferences(candidates[0].thrownExceptions);
+			unitScope.recordTypeReferences(candidates[0].thrownExceptions);
 			return candidates[0]; 
 		}
 		if (candidatesCount == 0) { // try to find a close match when the parameter order is wrong or missing some parameters
@@ -427,6 +669,9 @@ public abstract class Scope
 			return (MethodBinding) found.elementAt(0); // no good match so just use the first one found
 		}
 		// no need to check for visibility - interface methods are public
+		boolean isCompliant14 = compilerOptions().complianceLevel >= ClassFileConstants.JDK1_4;
+		if (isCompliant14)
+			return mostSpecificMethodBinding(candidates, candidatesCount, argumentTypes, invocationSite);
 		return mostSpecificInterfaceMethodBinding(candidates, candidatesCount, invocationSite);
 	}
 
@@ -436,14 +681,15 @@ public abstract class Scope
 			return null; // know it has no member types (nor inherited member types)
 
 		SourceTypeBinding enclosingSourceType = enclosingSourceType();
-		compilationUnitScope().recordReference(enclosingType, typeName);
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordReference(enclosingType, typeName);
 		ReferenceBinding memberType = enclosingType.getMemberType(typeName);
 		if (memberType != null) {
-			compilationUnitScope().recordTypeReference(memberType);
+			unitScope.recordTypeReference(memberType);
 			if (enclosingSourceType == null
-					? memberType.canBeSeenBy(getCurrentPackage())
-					: memberType.canBeSeenBy(enclosingType, enclosingSourceType))
-				return memberType;
+				? memberType.canBeSeenBy(getCurrentPackage())
+				: memberType.canBeSeenBy(enclosingType, enclosingSourceType))
+					return memberType;
 			return new ProblemReferenceBinding(typeName, memberType, NotVisible);
 		}
 		return null;
@@ -456,21 +702,27 @@ public abstract class Scope
 		TypeBinding[] argumentTypes,
 		InvocationSite invocationSite) {
 
-		compilationUnitScope().recordTypeReferences(argumentTypes);
-		MethodBinding exactMethod = receiverType.getExactMethod(selector, argumentTypes, compilationUnitScope());
-		if (exactMethod != null) {
-			compilationUnitScope().recordTypeReferences(exactMethod.thrownExceptions);
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordTypeReferences(argumentTypes);
+		MethodBinding exactMethod = receiverType.getExactMethod(selector, argumentTypes, unitScope);
+		if (exactMethod != null && exactMethod.typeVariables == NoTypeVariables) {
+			unitScope.recordTypeReferences(exactMethod.thrownExceptions);
 			// special treatment for Object.getClass() in 1.5 mode (substitute parameterized return type)
 			if (receiverType.isInterface() || exactMethod.canBeSeenBy(receiverType, invocationSite, this)) {
-			    if (receiverType.id != T_Object
-			            && argumentTypes == NoParameters
-			            && CharOperation.equals(selector, GETCLASS)
-			            && exactMethod.returnType.isParameterizedType()/*1.5*/) {
-			        return ParameterizedMethodBinding.instantiateGetClass(receiverType, exactMethod, this);
+				if (receiverType.id != T_JavaLangObject
+					&& argumentTypes == NoParameters
+				    && CharOperation.equals(selector, GETCLASS)
+				    && exactMethod.returnType.isParameterizedType()/*1.5*/) {
+						return ParameterizedMethodBinding.instantiateGetClass(receiverType, exactMethod, this);
 			    }
-			    // targeting a generic method could find an exact match with variable return type
-			    if (exactMethod.typeVariables != NoTypeVariables || invocationSite.genericTypeArguments() != null)
-			    	exactMethod = computeCompatibleMethod(exactMethod, argumentTypes, invocationSite);
+				// targeting a generic method could find an exact match with variable return type
+				if (exactMethod.typeVariables != NoTypeVariables || invocationSite.genericTypeArguments() != null) {
+					MethodBinding compatibleMethod = computeCompatibleMethod(exactMethod, argumentTypes, invocationSite);
+					if (!compatibleMethod.isValidBinding() && exactMethod.typeVariables != NoTypeVariables) {
+						return null; // could be a better generic method match (90423), which will be found by non exact match
+					}
+					exactMethod = compatibleMethod;
+				}
 				return exactMethod;
 			}
 		}
@@ -488,19 +740,35 @@ public abstract class Scope
 		If no visible field is discovered, null is answered.
 	*/
 	public FieldBinding findField(TypeBinding receiverType, char[] fieldName, InvocationSite invocationSite, boolean needResolve) {
-		if (receiverType.isBaseType()) return null;
-		if (receiverType.isArrayType()) {
-			TypeBinding leafType = receiverType.leafComponentType();
-			if (leafType instanceof ReferenceBinding) {
+
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordTypeReference(receiverType);
+		
+		checkArrayField: {
+			TypeBinding leafType;
+			switch (receiverType.kind()) {
+				case Binding.BASE_TYPE :
+					return null;
+				case Binding.WILDCARD_TYPE :
+				case Binding.TYPE_PARAMETER : // capture
+					TypeBinding receiverErasure = receiverType.erasure();
+					if (!receiverErasure.isArrayType())
+						break checkArrayField;
+					leafType = receiverErasure.leafComponentType();
+					break;
+				case Binding.ARRAY_TYPE :
+					leafType = receiverType.leafComponentType();
+					break;
+				default:
+					break checkArrayField;
+			}
+			if (leafType instanceof ReferenceBinding)
 				if (!((ReferenceBinding) leafType).canBeSeenBy(this))
 					return new ProblemFieldBinding((ReferenceBinding)leafType, fieldName, ReceiverTypeNotVisible);
-			}
 			if (CharOperation.equals(fieldName, LENGTH))
 				return ArrayBinding.ArrayLength;
 			return null;
 		}
-
-		compilationUnitScope().recordTypeReference(receiverType);
 
 		ReferenceBinding currentType = (ReferenceBinding) receiverType;
 		if (!currentType.canBeSeenBy(this))
@@ -508,8 +776,10 @@ public abstract class Scope
 
 		FieldBinding field = currentType.getField(fieldName, true /*resolve*/);
 		if (field != null) {
-			if (field.canBeSeenBy(currentType, invocationSite, this))
-				return field;
+			if (invocationSite == null
+				? field.canBeSeenBy(getCurrentPackage())
+				: field.canBeSeenBy(currentType, invocationSite, this))
+					return field;
 			return new ProblemFieldBinding(field /* closest match*/, field.declaringClass, fieldName, NotVisible);
 		}
 		// collect all superinterfaces of receiverType until the field is found in a supertype
@@ -517,26 +787,25 @@ public abstract class Scope
 		int lastPosition = -1;
 		FieldBinding visibleField = null;
 		boolean keepLooking = true;
-		boolean notVisible = false;
+		FieldBinding notVisibleField = null;
 		// we could hold onto the not visible field for extra error reporting
 		while (keepLooking) {
 			ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
+			if (itsInterfaces == null) { // needed for statically imported types which don't know their hierarchy yet
+				((SourceTypeBinding) currentType).scope.connectTypeHierarchy();
+				itsInterfaces = currentType.superInterfaces();
+			}
 			if (itsInterfaces != NoSuperInterfaces) {
 				if (interfacesToVisit == null)
 					interfacesToVisit = new ReferenceBinding[5][];
 				if (++lastPosition == interfacesToVisit.length)
-					System.arraycopy(
-						interfacesToVisit,
-						0,
-						interfacesToVisit = new ReferenceBinding[lastPosition * 2][],
-						0,
-						lastPosition);
+					System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0, lastPosition);
 				interfacesToVisit[lastPosition] = itsInterfaces;
 			}
 			if ((currentType = currentType.superclass()) == null)
 				break;
 
-			compilationUnitScope().recordTypeReference(currentType);
+			unitScope.recordTypeReference(currentType);
 			if ((field = currentType.getField(fieldName, needResolve)) != null) {
 				keepLooking = false;
 				if (field.canBeSeenBy(receiverType, invocationSite, this)) {
@@ -545,7 +814,8 @@ public abstract class Scope
 					else
 						return new ProblemFieldBinding(visibleField /* closest match*/, visibleField.declaringClass, fieldName, Ambiguous);
 				} else {
-					notVisible = true;
+					if (notVisibleField == null)
+						notVisibleField = field;
 				}
 			}
 		}
@@ -560,7 +830,7 @@ public abstract class Scope
 					if ((anInterface.tagBits & InterfaceVisited) == 0) {
 						// if interface as not already been visited
 						anInterface.tagBits |= InterfaceVisited;
-						compilationUnitScope().recordTypeReference(anInterface);
+						unitScope.recordTypeReference(anInterface);
 						if ((field = anInterface.getField(fieldName, true /*resolve*/)) != null) {
 							if (visibleField == null) {
 								visibleField = field;
@@ -572,12 +842,7 @@ public abstract class Scope
 							ReferenceBinding[] itsInterfaces = anInterface.superInterfaces();
 							if (itsInterfaces != NoSuperInterfaces) {
 								if (++lastPosition == interfacesToVisit.length)
-									System.arraycopy(
-										interfacesToVisit,
-										0,
-										interfacesToVisit = new ReferenceBinding[lastPosition * 2][],
-										0,
-										lastPosition);
+									System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0, lastPosition);
 								interfacesToVisit[lastPosition] = itsInterfaces;
 							}
 						}
@@ -597,8 +862,8 @@ public abstract class Scope
 
 		if (visibleField != null)
 			return visibleField;
-		if (notVisible)
-			return new ProblemFieldBinding(currentType, fieldName, NotVisible);
+		if (notVisibleField != null)
+			return new ProblemFieldBinding(notVisibleField, currentType, fieldName, NotVisible);
 		return null;
 	}
 
@@ -609,14 +874,15 @@ public abstract class Scope
 
 		SourceTypeBinding enclosingSourceType = enclosingSourceType();
 		PackageBinding currentPackage = getCurrentPackage();
-		compilationUnitScope().recordReference(enclosingType, typeName);
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordReference(enclosingType, typeName);
 		ReferenceBinding memberType = enclosingType.getMemberType(typeName);
 		if (memberType != null) {
-			compilationUnitScope().recordTypeReference(memberType);
+			unitScope.recordTypeReference(memberType);
 			if (enclosingSourceType == null
-					? memberType.canBeSeenBy(currentPackage)
-					: memberType.canBeSeenBy(enclosingType, enclosingSourceType))
-				return memberType;
+				? memberType.canBeSeenBy(currentPackage)
+				: memberType.canBeSeenBy(enclosingType, enclosingSourceType))
+					return memberType;
 			return new ProblemReferenceBinding(typeName, memberType, NotVisible);
 		}
 
@@ -630,24 +896,25 @@ public abstract class Scope
 		// we could hold onto the not visible field for extra error reporting
 		while (keepLooking) {
 			ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
+			if (itsInterfaces == null) { // needed for statically imported types which don't know their hierarchy yet
+				if (currentType.isHierarchyBeingConnected())
+					return null; // looking for an undefined member type in its own superclass ref
+				((SourceTypeBinding) currentType).scope.connectTypeHierarchy();
+				itsInterfaces = currentType.superInterfaces();
+			}
 			if (itsInterfaces != NoSuperInterfaces) {
 				if (interfacesToVisit == null)
 					interfacesToVisit = new ReferenceBinding[5][];
 				if (++lastPosition == interfacesToVisit.length)
-					System.arraycopy(
-						interfacesToVisit,
-						0,
-						interfacesToVisit = new ReferenceBinding[lastPosition * 2][],
-						0,
-						lastPosition);
+					System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0, lastPosition);
 				interfacesToVisit[lastPosition] = itsInterfaces;
 			}
 			if ((currentType = currentType.superclass()) == null)
 				break;
 
-			compilationUnitScope().recordReference(currentType, typeName);
+			unitScope.recordReference(currentType, typeName);
 			if ((memberType = currentType.getMemberType(typeName)) != null) {
-				compilationUnitScope().recordTypeReference(memberType);
+				unitScope.recordTypeReference(memberType);
 				keepLooking = false;
 				if (enclosingSourceType == null
 					? memberType.canBeSeenBy(currentPackage)
@@ -655,7 +922,7 @@ public abstract class Scope
 						if (visibleMemberType == null)
 							visibleMemberType = memberType;
 						else
-							return new ProblemReferenceBinding(typeName, Ambiguous);
+							return new ProblemReferenceBinding(typeName, null, Ambiguous);
 				} else {
 					notVisible = memberType;
 				}
@@ -671,25 +938,20 @@ public abstract class Scope
 					if ((anInterface.tagBits & InterfaceVisited) == 0) {
 						// if interface as not already been visited
 						anInterface.tagBits |= InterfaceVisited;
-						compilationUnitScope().recordReference(anInterface, typeName);
+						unitScope.recordReference(anInterface, typeName);
 						if ((memberType = anInterface.getMemberType(typeName)) != null) {
-							compilationUnitScope().recordTypeReference(memberType);
+							unitScope.recordTypeReference(memberType);
 							if (visibleMemberType == null) {
 								visibleMemberType = memberType;
 							} else {
-								ambiguous = new ProblemReferenceBinding(typeName, Ambiguous);
+								ambiguous = new ProblemReferenceBinding(typeName, null, Ambiguous);
 								break done;
 							}
 						} else {
 							ReferenceBinding[] itsInterfaces = anInterface.superInterfaces();
 							if (itsInterfaces != NoSuperInterfaces) {
 								if (++lastPosition == interfacesToVisit.length)
-									System.arraycopy(
-										interfacesToVisit,
-										0,
-										interfacesToVisit = new ReferenceBinding[lastPosition * 2][],
-										0,
-										lastPosition);
+									System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[lastPosition * 2][], 0, lastPosition);
 								interfacesToVisit[lastPosition] = itsInterfaces;
 							}
 						}
@@ -724,10 +986,11 @@ public abstract class Scope
 		MethodBinding matchingMethod = null;
 		ObjectVector found = new ObjectVector(); //TODO (kent) should rewrite to remove #matchingMethod since found is allocated anyway
 
-		compilationUnitScope().recordTypeReferences(argumentTypes);
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordTypeReferences(argumentTypes);
 
 		if (currentType.isInterface()) {
-			compilationUnitScope().recordTypeReference(currentType);
+			unitScope.recordTypeReference(currentType);
 			MethodBinding[] currentMethods = currentType.getMethods(selector);
 			int currentLength = currentMethods.length;
 			if (currentLength == 1) {
@@ -739,32 +1002,42 @@ public abstract class Scope
 			currentType = getJavaLangObject();
 		}
 
-		boolean isCompliant14 = compilationUnitScope().environment.options.complianceLevel >= ClassFileConstants.JDK1_4;
+		boolean isCompliant14 = compilerOptions().complianceLevel >= ClassFileConstants.JDK1_4;
 		// superclass lookup
 		ReferenceBinding classHierarchyStart = currentType;
+		boolean mustBePublic = receiverType.isInterface();
 		while (currentType != null) {
-			compilationUnitScope().recordTypeReference(currentType);
+			unitScope.recordTypeReference(currentType);
 			MethodBinding[] currentMethods = currentType.getMethods(selector);
 			int currentLength = currentMethods.length;
 
-			/*
-			 * if 1.4 compliant, must filter out redundant protected methods from superclasses
-			 */
-			if (isCompliant14){			 
-				nextMethod: for (int i = 0; i < currentLength; i++){
+			if (isCompliant14 && (mustBePublic || matchingMethod != null || found.size > 0)) {
+				nextMethod: for (int i = 0, l = currentLength; i < l; i++) { // currentLength can be modified inside the loop
 					MethodBinding currentMethod = currentMethods[i];
+					if (mustBePublic && !currentMethod.isPublic()) { // only public methods from Object are visible to interface receiverTypes
+						currentLength--;
+						currentMethods[i] = null;
+						continue nextMethod;
+					}
+
+					// if 1.4 compliant, must filter out redundant protected methods from superclasses
 					// protected method need to be checked only - default access is already dealt with in #canBeSeen implementation
 					// when checking that p.C -> q.B -> p.A cannot see default access members from A through B.
-					if ((currentMethod.modifiers & AccProtected) == 0) continue nextMethod;
-					if (matchingMethod != null){
-						if (currentMethod.areParametersEqual(matchingMethod)){
+					// if ((currentMethod.modifiers & AccProtected) == 0) continue nextMethod;
+					// BUT we can also ignore any overridden method since we already know the better match (fixes 80028)
+					if (matchingMethod != null) {
+						if (currentMethod.areParametersEqual(matchingMethod)) {
+							if (matchingMethod.typeVariables != NoTypeVariables && invocationSite.genericTypeArguments() == null)
+								continue nextMethod; // keep inherited substituted methods to detect anonymous errors
+							if (matchingMethod.hasSubstitutedParameters() && !currentMethod.original().areParametersEqual(matchingMethod.original()))
+								continue nextMethod; // keep inherited substituted methods to detect anonymous errors
 							currentLength--;
 							currentMethods[i] = null; // discard this match
 							continue nextMethod;
 						}
 					} else {
 						for (int j = 0, max = found.size; j < max; j++) {
-							if (((MethodBinding)found.elementAt(j)).areParametersEqual(currentMethod)){
+							if (((MethodBinding) found.elementAt(j)).areParametersEqual(currentMethod)) {
 								currentLength--;
 								currentMethods[i] = null;
 								continue nextMethod;
@@ -773,7 +1046,7 @@ public abstract class Scope
 					}
 				}
 			}
-			
+
 			if (currentLength == 1 && matchingMethod == null && found.size == 0) {
 				matchingMethod = currentMethods[0];
 			} else if (currentLength > 0) {
@@ -851,7 +1124,7 @@ public abstract class Scope
 					MethodBinding interfaceMethod =
 						findDefaultAbstractMethod(receiverType, selector, argumentTypes, invocationSite, classHierarchyStart, null, found);						
 					if (interfaceMethod != null) return interfaceMethod;
-					compilationUnitScope().recordTypeReferences(matchingMethod.thrownExceptions);
+					unitScope.recordTypeReferences(matchingMethod.thrownExceptions);
 					return matchingMethod;
 				}
 			} 
@@ -883,13 +1156,16 @@ public abstract class Scope
 				}
 				return methodBinding;
 			}
+			if (found.size == 0) return null;
 			return (MethodBinding) found.elementAt(0); // no good match so just use the first one found
 		}
 
 		// check for duplicate parameterized methods
-		if (compilationUnitScope().environment.options.sourceLevel >= ClassFileConstants.JDK1_5) {
+		if (compilerOptions().sourceLevel >= ClassFileConstants.JDK1_5) {
 			for (int i = 0; i < candidatesCount; i++) {
 				MethodBinding current = candidates[i];
+				if (current instanceof ParameterizedGenericMethodBinding)
+					current = ((ParameterizedGenericMethodBinding) current).originalMethod;
 				if (current instanceof ParameterizedMethodBinding)
 					for (int j = i + 1; j < candidatesCount; j++)
 						if (current.declaringClass == candidates[j].declaringClass && current.areParametersEqual(candidates[j]))
@@ -910,7 +1186,7 @@ public abstract class Scope
 			}
 		}
 		if (visiblesCount == 1) {
-			compilationUnitScope().recordTypeReferences(candidates[0].thrownExceptions);
+			unitScope.recordTypeReferences(candidates[0].thrownExceptions);
 			return candidates[0];
 		}
 		if (visiblesCount == 0) {
@@ -919,9 +1195,18 @@ public abstract class Scope
 			if (interfaceMethod != null) return interfaceMethod;
 			return new ProblemMethodBinding(candidates[0], candidates[0].selector, candidates[0].parameters, NotVisible);
 		}
-		if (isCompliant14)
-			return mostSpecificMethodBinding(candidates, visiblesCount, invocationSite);
-		return candidates[0].declaringClass.isClass()
+		if (isCompliant14) {
+			matchingMethod = mostSpecificMethodBinding(candidates, visiblesCount, argumentTypes, invocationSite);
+			if (parameterCompatibilityLevel(matchingMethod, argumentTypes) > COMPATIBLE) {
+				// see if there is a better match in the interfaces
+				MethodBinding interfaceMethod =
+					findDefaultAbstractMethod(receiverType, selector, argumentTypes, invocationSite, classHierarchyStart, matchingMethod, new ObjectVector());
+				if (interfaceMethod != null) return interfaceMethod;
+			}
+			return matchingMethod;
+		}
+		ReferenceBinding declaringClass = candidates[0].declaringClass;
+		return !declaringClass.isInterface()
 			? mostSpecificClassMethodBinding(candidates, visiblesCount, invocationSite)
 			: mostSpecificInterfaceMethodBinding(candidates, visiblesCount, invocationSite);
 	}
@@ -940,21 +1225,22 @@ public abstract class Scope
 		}
 
 		ReferenceBinding object = getJavaLangObject();
-		MethodBinding methodBinding = object.getExactMethod(selector, argumentTypes);
+		MethodBinding methodBinding = object.getExactMethod(selector, argumentTypes, null);
 		if (methodBinding != null) {
 			// handle the method clone() specially... cannot be protected or throw exceptions
 			if (argumentTypes == NoParameters) {
 			    switch (selector[0]) {
 			        case 'c': 
-			            if (CharOperation.equals(selector, CLONE))
+			            if (CharOperation.equals(selector, CLONE)) {
 							return new UpdatedMethodBinding(
-								environment().options.targetJDK >= ClassFileConstants.JDK1_4 ? (TypeBinding)receiverType : (TypeBinding)object, // remember its array type for codegen purpose on target>=1.4.0
-								(methodBinding.modifiers ^ AccProtected) | AccPublic,
+								compilerOptions().targetJDK >= ClassFileConstants.JDK1_4 ? (TypeBinding)receiverType : (TypeBinding)object, // remember its array type for codegen purpose on target>=1.4.0
+								(methodBinding.modifiers & ~AccProtected) | AccPublic,
 								CLONE,
 								methodBinding.returnType,
 								argumentTypes,
 								null,
 								object);
+			            }
 			            break;
 			        case 'g': 
 			            if (CharOperation.equals(selector, GETCLASS) && methodBinding.returnType.isParameterizedType()/*1.5*/) {
@@ -1066,68 +1352,6 @@ public abstract class Scope
 
 		return null;
 	}
-	
-	public TypeBinding getBaseType(char[] name) {
-		// list should be optimized (with most often used first)
-		int length = name.length;
-		if (length > 2 && length < 8) {
-			switch (name[0]) {
-				case 'i' :
-					if (length == 3 && name[1] == 'n' && name[2] == 't')
-						return IntBinding;
-					break;
-				case 'v' :
-					if (length == 4 && name[1] == 'o' && name[2] == 'i' && name[3] == 'd')
-						return VoidBinding;
-					break;
-				case 'b' :
-					if (length == 7
-						&& name[1] == 'o'
-						&& name[2] == 'o'
-						&& name[3] == 'l'
-						&& name[4] == 'e'
-						&& name[5] == 'a'
-						&& name[6] == 'n')
-						return BooleanBinding;
-					if (length == 4 && name[1] == 'y' && name[2] == 't' && name[3] == 'e')
-						return ByteBinding;
-					break;
-				case 'c' :
-					if (length == 4 && name[1] == 'h' && name[2] == 'a' && name[3] == 'r')
-						return CharBinding;
-					break;
-				case 'd' :
-					if (length == 6
-						&& name[1] == 'o'
-						&& name[2] == 'u'
-						&& name[3] == 'b'
-						&& name[4] == 'l'
-						&& name[5] == 'e')
-						return DoubleBinding;
-					break;
-				case 'f' :
-					if (length == 5
-						&& name[1] == 'l'
-						&& name[2] == 'o'
-						&& name[3] == 'a'
-						&& name[4] == 't')
-						return FloatBinding;
-					break;
-				case 'l' :
-					if (length == 4 && name[1] == 'o' && name[2] == 'n' && name[3] == 'g')
-						return LongBinding;
-					break;
-				case 's' :
-					if (length == 5
-						&& name[1] == 'h'
-						&& name[2] == 'o'
-						&& name[3] == 'r'
-						&& name[4] == 't')
-						return ShortBinding;
-			}
-		}
-		return null;
-	}
 
 	/* API
 	 *	
@@ -1149,14 +1373,15 @@ public abstract class Scope
 	 *	Limitations: cannot request FIELD independently of LOCAL, or vice versa
 	 */
 	public Binding getBinding(char[] name, int mask, InvocationSite invocationSite, boolean needResolve) {
-			
+
 		try {
 			Binding binding = null;
 			FieldBinding problemField = null;
-			if ((mask & VARIABLE) != 0) {
+			if ((mask & Binding.VARIABLE) != 0) {
 				boolean insideStaticContext = false;
 				boolean insideConstructorCall = false;
-	
+				boolean insideTypeAnnotation = false;
+				
 				FieldBinding foundField = null;
 				// can be a problem field which is answered if a valid field is not found
 				ProblemFieldBinding foundInsideProblem = null;
@@ -1171,6 +1396,8 @@ public abstract class Scope
 							MethodScope methodScope = (MethodScope) scope;
 							insideStaticContext |= methodScope.isStatic;
 							insideConstructorCall |= methodScope.isConstructorCall;
+							insideTypeAnnotation = methodScope.insideTypeAnnotation;
+							
 							// Fall through... could duplicate the code below to save a cast - questionable optimization
 						case BLOCK_SCOPE :
 							LocalVariableBinding variableBinding = scope.findVariable(name);
@@ -1190,114 +1417,170 @@ public abstract class Scope
 						case CLASS_SCOPE :
 							ClassScope classScope = (ClassScope) scope;
 							SourceTypeBinding enclosingType = classScope.referenceContext.binding;
-							FieldBinding fieldBinding =
-								classScope.findField(enclosingType, name, invocationSite, needResolve);
-							// Use next line instead if willing to enable protected access accross inner types
-							// FieldBinding fieldBinding = findField(enclosingType, name, invocationSite);
-							if (fieldBinding != null) { // skip it if we did not find anything
-								if (fieldBinding.problemId() == Ambiguous) {
-									if (foundField == null || foundField.problemId() == NotVisible)
-										// supercedes any potential InheritedNameHidesEnclosingName problem
-										return fieldBinding;
-									// make the user qualify the field, likely wants the first inherited field (javac generates an ambiguous error instead)
-									return new ProblemFieldBinding(
-										foundField, // closest match
-										foundField.declaringClass,
-										name,
-										InheritedNameHidesEnclosingName);
-								}
-	
-								ProblemFieldBinding insideProblem = null;
-								if (fieldBinding.isValidBinding()) {
-									if (!fieldBinding.isStatic()) {
-										if (insideConstructorCall) {
-											insideProblem =
-												new ProblemFieldBinding(
-													fieldBinding, // closest match
-													fieldBinding.declaringClass,
-													name,
-													NonStaticReferenceInConstructorInvocation);
-										} else if (insideStaticContext) {
-											insideProblem =
-												new ProblemFieldBinding(
-													fieldBinding, // closest match
-													fieldBinding.declaringClass,
-													name,
-													NonStaticReferenceInStaticContext);
-										}
+							if (!insideTypeAnnotation) {
+								FieldBinding fieldBinding = classScope.findField(enclosingType, name, invocationSite, needResolve);
+								// Use next line instead if willing to enable protected access accross inner types
+								// FieldBinding fieldBinding = findField(enclosingType, name, invocationSite);
+								
+								if (fieldBinding != null) { // skip it if we did not find anything
+									if (fieldBinding.problemId() == Ambiguous) {
+										if (foundField == null || foundField.problemId() == NotVisible)
+											// supercedes any potential InheritedNameHidesEnclosingName problem
+											return fieldBinding;
+										// make the user qualify the field, likely wants the first inherited field (javac generates an ambiguous error instead)
+										return new ProblemFieldBinding(
+											foundField, // closest match
+											foundField.declaringClass,
+											name,
+											InheritedNameHidesEnclosingName);
 									}
-									if (enclosingType == fieldBinding.declaringClass
-										|| environment().options.complianceLevel >= ClassFileConstants.JDK1_4){
-										// found a valid field in the 'immediate' scope (ie. not inherited)
-										// OR in 1.4 mode (inherited shadows enclosing)
-										if (foundField == null) {
-											if (depth > 0){
-												invocationSite.setDepth(depth);
-												invocationSite.setActualReceiverType(enclosingType);
+	
+									ProblemFieldBinding insideProblem = null;
+									if (fieldBinding.isValidBinding()) {
+										if (!fieldBinding.isStatic()) {
+											if (insideConstructorCall) {
+												insideProblem =
+													new ProblemFieldBinding(
+														fieldBinding, // closest match
+														fieldBinding.declaringClass,
+														name,
+														NonStaticReferenceInConstructorInvocation);
+											} else if (insideStaticContext) {
+												insideProblem =
+													new ProblemFieldBinding(
+														fieldBinding, // closest match
+														fieldBinding.declaringClass,
+														name,
+														NonStaticReferenceInStaticContext);
 											}
-											// return the fieldBinding if it is not declared in a superclass of the scope's binding (that is, inherited)
-											return insideProblem == null ? fieldBinding : insideProblem;
 										}
-										if (foundField.isValidBinding())
-											// if a valid field was found, complain when another is found in an 'immediate' enclosing type (that is, not inherited)
-											if (foundField.declaringClass != fieldBinding.declaringClass)
-												// ie. have we found the same field - do not trust field identity yet
-												return new ProblemFieldBinding(
-													foundField, // closest match
-													foundField.declaringClass,
-													name,
-													InheritedNameHidesEnclosingName);
+										if (enclosingType == fieldBinding.declaringClass || compilerOptions().complianceLevel >= ClassFileConstants.JDK1_4) {
+											// found a valid field in the 'immediate' scope (ie. not inherited)
+											// OR in 1.4 mode (inherited shadows enclosing)
+											if (foundField == null) {
+												if (depth > 0){
+													invocationSite.setDepth(depth);
+													invocationSite.setActualReceiverType(enclosingType);
+												}
+												// return the fieldBinding if it is not declared in a superclass of the scope's binding (that is, inherited)
+												return insideProblem == null ? fieldBinding : insideProblem;
+											}
+											if (foundField.isValidBinding())
+												// if a valid field was found, complain when another is found in an 'immediate' enclosing type (that is, not inherited)
+												if (foundField.declaringClass != fieldBinding.declaringClass)
+													// ie. have we found the same field - do not trust field identity yet
+													return new ProblemFieldBinding(
+														foundField, // closest match
+														foundField.declaringClass,
+														name,
+														InheritedNameHidesEnclosingName);
+										}
 									}
-								}
 	
-								if (foundField == null
-									|| (foundField.problemId() == NotVisible
-										&& fieldBinding.problemId() != NotVisible)) {
-									// only remember the fieldBinding if its the first one found or the previous one was not visible & fieldBinding is...
-									foundDepth = depth;
-									foundActualReceiverType = enclosingType;
-									foundInsideProblem = insideProblem;
-									foundField = fieldBinding;
+									if (foundField == null || (foundField.problemId() == NotVisible && fieldBinding.problemId() != NotVisible)) {
+										// only remember the fieldBinding if its the first one found or the previous one was not visible & fieldBinding is...
+										foundDepth = depth;
+										foundActualReceiverType = enclosingType;
+										foundInsideProblem = insideProblem;
+										foundField = fieldBinding;
+									}
 								}
 							}
+							insideTypeAnnotation = false;
 							depth++;
 							insideStaticContext |= enclosingType.isStatic();
 							// 1EX5I8Z - accessing outer fields within a constructor call is permitted
 							// in order to do so, we change the flag as we exit from the type, not the method
 							// itself, because the class scope is used to retrieve the fields.
 							MethodScope enclosingMethodScope = scope.methodScope();
-							insideConstructorCall =
-								enclosingMethodScope == null ? false : enclosingMethodScope.isConstructorCall;
+							insideConstructorCall = enclosingMethodScope == null ? false : enclosingMethodScope.isConstructorCall;
 							break;
 						case COMPILATION_UNIT_SCOPE :
 							break done;
 					}
 					scope = scope.parent;
 				}
-	
+
 				if (foundInsideProblem != null)
 					return foundInsideProblem;
 				if (foundField != null) {
-					if (foundField.isValidBinding()){
-						if (foundDepth > 0){
+					if (foundField.isValidBinding()) {
+						if (foundDepth > 0) {
 							invocationSite.setDepth(foundDepth);
 							invocationSite.setActualReceiverType(foundActualReceiverType);
 						}
 						return foundField;
 					}
 					problemField = foundField;
+					foundField = null;
+				}
+
+				if (compilerOptions().sourceLevel >= ClassFileConstants.JDK1_5) {
+					// at this point the scope is a compilation unit scope & need to check for imported static fields
+					CompilationUnitScope unitScope = (CompilationUnitScope) scope;
+					ImportBinding[] imports = unitScope.imports;
+					if (imports != null) {
+						// check single static imports
+						for (int i = 0, length = imports.length; i < length; i++) {
+							ImportBinding importBinding = imports[i];
+							if (importBinding.isStatic() && !importBinding.onDemand) {
+								if (CharOperation.equals(importBinding.compoundName[importBinding.compoundName.length - 1], name)) {
+									if (unitScope.resolveSingleImport(importBinding) != null && importBinding.resolvedImport instanceof FieldBinding) {
+										ReferenceBinding declaringClass = ((FieldBinding) importBinding.resolvedImport).declaringClass;
+										if (declaringClass.canBeSeenBy(this)) {
+											ImportReference importReference = importBinding.reference;
+											if (importReference != null) importReference.used = true;
+											invocationSite.setActualReceiverType(declaringClass);											
+											return importBinding.resolvedImport;
+										}
+										if (problemField == null)
+											problemField = new ProblemFieldBinding(declaringClass, name, ReceiverTypeNotVisible);
+									}
+								}
+							}
+						}
+						// check on demand imports
+						boolean foundInImport = false;
+						for (int i = 0, length = imports.length; i < length; i++) {
+							ImportBinding importBinding = imports[i];
+							if (importBinding.isStatic() && importBinding.onDemand) {
+								Binding resolvedImport = importBinding.resolvedImport;
+								if (resolvedImport instanceof ReferenceBinding) {
+									FieldBinding temp = findField((ReferenceBinding) resolvedImport, name, invocationSite, needResolve);
+									if (temp != null) {
+										if (!temp.isValidBinding()) {
+											if (problemField == null)
+												problemField = temp;
+										} else if (temp.isStatic()) {
+											ImportReference importReference = importBinding.reference;
+											if (importReference != null) importReference.used = true;
+											if (foundInImport)
+												// Answer error binding -- import on demand conflict; name found in two import on demand packages.
+												return new ProblemReferenceBinding(name, null, Ambiguous);
+											foundField = temp;
+											foundInImport = true;
+										}
+									}
+								}
+							}
+						}
+						if (foundField != null) {
+							invocationSite.setActualReceiverType(foundField.declaringClass);							
+							return foundField;
+						}
+					}
 				}
 			}
-	
+
 			// We did not find a local or instance variable.
-			if ((mask & TYPE) != 0) {
+			if ((mask & Binding.TYPE) != 0) {
 				if ((binding = getBaseType(name)) != null)
 					return binding;
-				binding = getTypeOrPackage(name, (mask & PACKAGE) == 0 ? TYPE : TYPE | PACKAGE);
-				if (binding.isValidBinding() || mask == TYPE)
+				binding = getTypeOrPackage(name, (mask & Binding.PACKAGE) == 0 ? Binding.TYPE : Binding.TYPE | Binding.PACKAGE);
+				if (binding.isValidBinding() || mask == Binding.TYPE)
 					return binding;
 				// answer the problem type binding if we are only looking for a type
-			} else if ((mask & PACKAGE) != 0) {
+			} else if ((mask & Binding.PACKAGE) != 0) {
 				compilationUnitScope().recordSimpleReference(name);
 				if ((binding = environment().getTopLevelPackage(name)) != null)
 					return binding;
@@ -1312,8 +1595,9 @@ public abstract class Scope
 
 	public MethodBinding getConstructor(ReferenceBinding receiverType, TypeBinding[] argumentTypes, InvocationSite invocationSite) {
 		try {
-			compilationUnitScope().recordTypeReference(receiverType);
-			compilationUnitScope().recordTypeReferences(argumentTypes);
+			CompilationUnitScope unitScope = compilationUnitScope();
+			unitScope.recordTypeReference(receiverType);
+			unitScope.recordTypeReferences(argumentTypes);
 			MethodBinding methodBinding = receiverType.getExactConstructor(argumentTypes);
 			if (methodBinding != null && methodBinding.canBeSeenBy(invocationSite, this)) {
 			    // targeting a non generic constructor with type arguments ?
@@ -1321,13 +1605,13 @@ public abstract class Scope
 			    	methodBinding = computeCompatibleMethod(methodBinding, argumentTypes, invocationSite);				
 				return methodBinding;
 			}
-			MethodBinding[] methods = receiverType.getMethods(ConstructorDeclaration.ConstantPoolName);
+			MethodBinding[] methods = receiverType.getMethods(TypeConstants.INIT);
 			if (methods == NoMethods)
 				return new ProblemMethodBinding(
-					ConstructorDeclaration.ConstantPoolName,
+					TypeConstants.INIT,
 					argumentTypes,
 					NotFound);
-	
+
 			MethodBinding[] compatible = new MethodBinding[methods.length];
 			int compatibleIndex = 0;
 			MethodBinding problemMethod = null;
@@ -1342,7 +1626,7 @@ public abstract class Scope
 			}
 			if (compatibleIndex == 0) {
 				if (problemMethod == null)
-					return new ProblemMethodBinding(ConstructorDeclaration.ConstantPoolName, argumentTypes, NotFound);
+					return new ProblemMethodBinding(TypeConstants.INIT, argumentTypes, NotFound);
 				return problemMethod;
 			}
 			// need a more descriptive error... cannot convert from X to Y
@@ -1358,10 +1642,11 @@ public abstract class Scope
 			if (visibleIndex == 0)
 				return new ProblemMethodBinding(
 					compatible[0],
-					ConstructorDeclaration.ConstantPoolName,
+					TypeConstants.INIT,
 					compatible[0].parameters,
 					NotVisible);
-			return mostSpecificClassMethodBinding(visible, visibleIndex, invocationSite);
+			// all of visible are from the same declaringClass, even before 1.4 we can call this method instead of mostSpecificClassMethodBinding
+			return mostSpecificMethodBinding(visible, visibleIndex, argumentTypes, invocationSite);
 		} catch (AbortCompilation e) {
 			e.updateContext(invocationSite, referenceCompilationUnit().compilationResult);
 			throw e;
@@ -1387,26 +1672,22 @@ public abstract class Scope
 				if (!methodScope.isInsideInitializer()){
 					// check method modifiers to see if deprecated
 					MethodBinding context = ((AbstractMethodDeclaration)methodScope.referenceContext).binding;
-					if (context != null) {
+					if (context != null)
 						return context.modifiers;
-					}
 				} else {
-					SourceTypeBinding type = ((BlockScope)this).referenceType().binding;
+					SourceTypeBinding type = ((BlockScope) this).referenceType().binding;
 
 					// inside field declaration ? check field modifier to see if deprecated
-					if (methodScope.initializedField != null) {
+					if (methodScope.initializedField != null)
 						return methodScope.initializedField.modifiers;
-					}
-					if (type != null) {
+					if (type != null)
 						return type.modifiers;
-					}
 				}
 				break;
 			case Scope.CLASS_SCOPE :
 				ReferenceBinding context = ((ClassScope)this).referenceType().binding;
-				if (context != null) {
+				if (context != null)
 					return context.modifiers;
-				}
 				break;
 		}
 		return -1;
@@ -1444,6 +1725,7 @@ public abstract class Scope
 
 		boolean insideStaticContext = false;
 		boolean insideConstructorCall = false;
+		boolean insideTypeAnnotation = false;
 		MethodBinding foundMethod = null;
 		MethodBinding foundFuzzyProblem = null;
 		// the weird method lookup case (matches method name in scope, then arg types, then visibility)
@@ -1457,121 +1739,122 @@ public abstract class Scope
 					MethodScope methodScope = (MethodScope) scope;
 					insideStaticContext |= methodScope.isStatic;
 					insideConstructorCall |= methodScope.isConstructorCall;
+					insideTypeAnnotation = methodScope.insideTypeAnnotation;
 					break;
 				case CLASS_SCOPE :
 					ClassScope classScope = (ClassScope) scope;
 					SourceTypeBinding receiverType = classScope.referenceContext.binding;
-					boolean isExactMatch = true;
-					// retrieve an exact visible match (if possible)
-					MethodBinding methodBinding =
-						(foundMethod == null)
-							? classScope.findExactMethod(receiverType, selector, argumentTypes, invocationSite)
-							: classScope.findExactMethod( receiverType, foundMethod.selector, foundMethod.parameters, invocationSite);
-					//		? findExactMethod(receiverType, selector, argumentTypes, invocationSite)
-					//		: findExactMethod(receiverType, foundMethod.selector, foundMethod.parameters, invocationSite);
-					if (methodBinding == null) {
-						// answers closest approximation, may not check argumentTypes or visibility
-						isExactMatch = false;
-						methodBinding = classScope.findMethod(receiverType, selector, argumentTypes, invocationSite);
-						// methodBinding = findMethod(receiverType, selector, argumentTypes, invocationSite);
-					}
-					if (methodBinding != null) { // skip it if we did not find anything
-						if (methodBinding.problemId() == Ambiguous) {
-							if (foundMethod == null || foundMethod.problemId() == NotVisible) {
-								// supercedes any potential InheritedNameHidesEnclosingName problem
-								return methodBinding;
-							}
-							// make the user qualify the method, likely wants the first inherited method (javac generates an ambiguous error instead)
-							return new ProblemMethodBinding(
-								methodBinding, // closest match
-								selector,
-								argumentTypes,
-								InheritedNameHidesEnclosingName);
+					if (!insideTypeAnnotation) {
+						boolean isExactMatch = true;
+						// retrieve an exact visible match (if possible)
+						// compilationUnitScope().recordTypeReference(receiverType);   not needed since receiver is the source type
+						MethodBinding methodBinding =
+							(foundMethod == null)
+								? classScope.findExactMethod(receiverType, selector, argumentTypes, invocationSite)
+								: classScope.findExactMethod(receiverType, foundMethod.selector, foundMethod.parameters, invocationSite);
+						if (methodBinding == null) {
+							// answers closest approximation, may not check argumentTypes or visibility
+							isExactMatch = false;
+							methodBinding = classScope.findMethod(receiverType, selector, argumentTypes, invocationSite);
+							// methodBinding = findMethod(receiverType, selector, argumentTypes, invocationSite);
 						}
-						MethodBinding fuzzyProblem = null;
-						MethodBinding insideProblem = null;
-						if (methodBinding.isValidBinding()) {
-							if (!isExactMatch) {
-								MethodBinding compatibleMethod = computeCompatibleMethod(methodBinding, argumentTypes, invocationSite);
-								if (compatibleMethod == null) {
-									if (foundMethod == null || foundMethod.problemId() == NotVisible)
-										// inherited mismatch is reported directly, not looking at enclosing matches
-										return new ProblemMethodBinding(methodBinding, selector, argumentTypes, NotFound);
-									// make the user qualify the method, likely wants the first inherited method (javac generates an ambiguous error instead)
-									fuzzyProblem = new ProblemMethodBinding(methodBinding, selector, methodBinding.parameters, InheritedNameHidesEnclosingName);
-								} else if (!compatibleMethod.isValidBinding()) {
-									fuzzyProblem = compatibleMethod;
-								} else {
-									methodBinding = compatibleMethod;
-									if (!methodBinding.canBeSeenBy(receiverType, invocationSite, classScope)) {
-										// using <classScope> instead of <this> for visibility check does grant all access to innerclass
-										fuzzyProblem = new ProblemMethodBinding(methodBinding, selector, methodBinding.parameters, NotVisible);
-									}
-								}
-							}
-							if (fuzzyProblem == null && !methodBinding.isStatic()) {
-								if (insideConstructorCall) {
-									insideProblem =
-										new ProblemMethodBinding(
-											methodBinding, // closest match
-											methodBinding.selector,
-											methodBinding.parameters,
-											NonStaticReferenceInConstructorInvocation);
-								} else if (insideStaticContext) {
-									insideProblem =
-										new ProblemMethodBinding(
-											methodBinding, // closest match
-											methodBinding.selector,
-											methodBinding.parameters,
-											NonStaticReferenceInStaticContext);
-								}
-							}
-
-							if (receiverType == methodBinding.declaringClass
-								|| (receiverType.getMethods(selector)) != NoMethods
-								|| ((fuzzyProblem == null || fuzzyProblem.problemId() != NotVisible) && environment().options.complianceLevel >= ClassFileConstants.JDK1_4)){
-								// found a valid method in the 'immediate' scope (ie. not inherited)
-								// OR the receiverType implemented a method with the correct name
-								// OR in 1.4 mode (inherited visible shadows enclosing)
-								if (foundMethod == null) {
-									if (depth > 0){
-										invocationSite.setDepth(depth);
-										invocationSite.setActualReceiverType(receiverType);
-									}
-									// return the methodBinding if it is not declared in a superclass of the scope's binding (that is, inherited)
-									if (fuzzyProblem != null)
-										return fuzzyProblem;
-									if (insideProblem != null)
-										return insideProblem;
+						if (methodBinding != null) { // skip it if we did not find anything
+							if (methodBinding.problemId() == Ambiguous) {
+								if (foundMethod == null || foundMethod.problemId() == NotVisible) {
+									// supercedes any potential InheritedNameHidesEnclosingName problem
 									return methodBinding;
 								}
-								// if a method was found, complain when another is found in an 'immediate' enclosing type (that is, not inherited)
-								// NOTE: Unlike fields, a non visible method hides a visible method
-								if (foundMethod.declaringClass != methodBinding.declaringClass)
-									// ie. have we found the same method - do not trust field identity yet
-									return new ProblemMethodBinding(
-										methodBinding, // closest match
-										methodBinding.selector,
-										methodBinding.parameters,
-										InheritedNameHidesEnclosingName);
+								// make the user qualify the method, likely wants the first inherited method (javac generates an ambiguous error instead)
+								return new ProblemMethodBinding(
+									methodBinding, // closest match
+									selector,
+									argumentTypes,
+									InheritedNameHidesEnclosingName);
 							}
-						}
-
-						if (foundMethod == null
-							|| (foundMethod.problemId() == NotVisible
-								&& methodBinding.problemId() != NotVisible)) {
-							// only remember the methodBinding if its the first one found or the previous one was not visible & methodBinding is...
-							// remember that private methods are visible if defined directly by an enclosing class
-							if (depth > 0){
-								invocationSite.setDepth(depth);
-								invocationSite.setActualReceiverType(receiverType);
+							MethodBinding fuzzyProblem = null;
+							MethodBinding insideProblem = null;
+							if (methodBinding.isValidBinding()) {
+								if (!isExactMatch) {
+									MethodBinding compatibleMethod = computeCompatibleMethod(methodBinding, argumentTypes, invocationSite);
+									if (compatibleMethod == null) {
+										if (foundMethod == null || foundMethod.problemId() == NotVisible)
+											// inherited mismatch is reported directly, not looking at enclosing matches
+											return new ProblemMethodBinding(methodBinding, selector, argumentTypes, NotFound);
+										// make the user qualify the method, likely wants the first inherited method (javac generates an ambiguous error instead)
+										fuzzyProblem = new ProblemMethodBinding(methodBinding, selector, methodBinding.parameters, InheritedNameHidesEnclosingName);
+									} else if (!compatibleMethod.isValidBinding()) {
+										fuzzyProblem = compatibleMethod;
+									} else {
+										methodBinding = compatibleMethod;
+										if (!methodBinding.canBeSeenBy(receiverType, invocationSite, classScope)) {
+											// using <classScope> instead of <this> for visibility check does grant all access to innerclass
+											fuzzyProblem = new ProblemMethodBinding(methodBinding, selector, methodBinding.parameters, NotVisible);
+										}
+									}
+								}
+								if (fuzzyProblem == null && !methodBinding.isStatic()) {
+									if (insideConstructorCall) {
+										insideProblem =
+											new ProblemMethodBinding(
+												methodBinding, // closest match
+												methodBinding.selector,
+												methodBinding.parameters,
+												NonStaticReferenceInConstructorInvocation);
+									} else if (insideStaticContext) {
+										insideProblem =
+											new ProblemMethodBinding(
+												methodBinding, // closest match
+												methodBinding.selector,
+												methodBinding.parameters,
+												NonStaticReferenceInStaticContext);
+									}
+								}
+	
+								if (receiverType == methodBinding.declaringClass
+									|| (receiverType.getMethods(selector)) != NoMethods
+									|| ((fuzzyProblem == null || fuzzyProblem.problemId() != NotVisible) && compilerOptions().complianceLevel >= ClassFileConstants.JDK1_4)) {
+									// found a valid method in the 'immediate' scope (ie. not inherited)
+									// OR the receiverType implemented a method with the correct name
+									// OR in 1.4 mode (inherited visible shadows enclosing)
+									if (foundMethod == null) {
+										if (depth > 0){
+											invocationSite.setDepth(depth);
+											invocationSite.setActualReceiverType(receiverType);
+										}
+										// return the methodBinding if it is not declared in a superclass of the scope's binding (that is, inherited)
+										if (fuzzyProblem != null)
+											return fuzzyProblem;
+										if (insideProblem != null)
+											return insideProblem;
+										return methodBinding;
+									}
+									// if a method was found, complain when another is found in an 'immediate' enclosing type (that is, not inherited)
+									// NOTE: Unlike fields, a non visible method hides a visible method
+									if (foundMethod.declaringClass != methodBinding.declaringClass)
+										// ie. have we found the same method - do not trust field identity yet
+										return new ProblemMethodBinding(
+											methodBinding, // closest match
+											methodBinding.selector,
+											methodBinding.parameters,
+											InheritedNameHidesEnclosingName);
+								}
 							}
-							foundFuzzyProblem = fuzzyProblem;
-							foundInsideProblem = insideProblem;
-							if (fuzzyProblem == null)
-								foundMethod = methodBinding; // only keep it if no error was found
+	
+							if (foundMethod == null || (foundMethod.problemId() == NotVisible && methodBinding.problemId() != NotVisible)) {
+								// only remember the methodBinding if its the first one found or the previous one was not visible & methodBinding is...
+								// remember that private methods are visible if defined directly by an enclosing class
+								if (depth > 0) {
+									invocationSite.setDepth(depth);
+									invocationSite.setActualReceiverType(receiverType);
+								}
+								foundFuzzyProblem = fuzzyProblem;
+								foundInsideProblem = insideProblem;
+								if (fuzzyProblem == null)
+									foundMethod = methodBinding; // only keep it if no error was found
+							}
 						}
 					}
+					insideTypeAnnotation = false;
 					depth++;
 					insideStaticContext |= receiverType.isStatic();
 					// 1EX5I8Z - accessing outer fields within a constructor call is permitted
@@ -1593,6 +1876,91 @@ public abstract class Scope
 			return foundInsideProblem;
 		if (foundMethod != null)
 			return foundMethod;
+
+		if (insideStaticContext && compilerOptions().sourceLevel >= ClassFileConstants.JDK1_5) {
+			// at this point the scope is a compilation unit scope & need to check for imported static methods
+			CompilationUnitScope unitScope = (CompilationUnitScope) scope;
+			ImportBinding[] imports = unitScope.imports;
+			if (imports != null) {
+				MethodBinding[] visible = null;
+				boolean skipOnDemand = false; // set to true when matched static import of method name so stop looking for on demand methods
+				for (int i = 0, length = imports.length; i < length; i++) {
+					ImportBinding importBinding = imports[i];
+					if (importBinding.isStatic()) {
+						Binding resolvedImport = importBinding.resolvedImport;
+						MethodBinding possible = null;
+						if (importBinding.onDemand) {
+							if (!skipOnDemand && resolvedImport instanceof ReferenceBinding)
+								// answers closest approximation, may not check argumentTypes or visibility
+								possible = findMethod((ReferenceBinding) resolvedImport, selector, argumentTypes, invocationSite);
+						} else {
+							if (resolvedImport instanceof MethodBinding) {
+								MethodBinding staticMethod = (MethodBinding) resolvedImport;
+								if (CharOperation.equals(staticMethod.selector, selector))
+									// answers closest approximation, may not check argumentTypes or visibility
+									possible = findMethod(staticMethod.declaringClass, selector, argumentTypes, invocationSite);
+							} else if (resolvedImport instanceof FieldBinding) {
+								// check to see if there are also methods with the same name
+								FieldBinding staticField = (FieldBinding) resolvedImport;
+								if (CharOperation.equals(staticField.name, selector)) {
+									// must find the importRef's type again since the field can be from an inherited type
+									char[][] importName = importBinding.reference.tokens;
+									TypeBinding referencedType = getType(importName, importName.length - 1);
+									if (referencedType != null)
+										// answers closest approximation, may not check argumentTypes or visibility
+										possible = findMethod((ReferenceBinding) referencedType, selector, argumentTypes, invocationSite);
+								}
+							}
+						}
+						if (possible != null && possible != foundMethod) {
+							if (!possible.isValidBinding()) {
+								if (foundMethod == null)
+									foundMethod = possible; // answer as error case match
+							} else if (possible.isStatic()) {
+								MethodBinding compatibleMethod = computeCompatibleMethod(possible, argumentTypes, invocationSite);
+								if (compatibleMethod != null) {
+									if (compatibleMethod.isValidBinding()) {
+										if (compatibleMethod.canBeSeenBy(unitScope.fPackage)) {
+											ImportReference importReference = importBinding.reference;
+											if (importReference != null) importReference.used = true;
+											if (foundMethod == null || !foundMethod.isValidBinding()) {
+												foundMethod = compatibleMethod;
+												if (!importBinding.onDemand && foundMethod.isValidBinding())
+													skipOnDemand = true;
+											} else {
+												if (!skipOnDemand && !importBinding.onDemand) {
+													visible = null; // forget previous matches from on demand imports
+													foundMethod = compatibleMethod;
+													skipOnDemand = true;
+												} else if (visible == null) {
+													visible = new MethodBinding[] {foundMethod, compatibleMethod};
+												} else {
+													int visibleLength = visible.length;
+													MethodBinding[] temp = new MethodBinding[visibleLength + 1];
+													System.arraycopy(visible, 0, temp, 0, visibleLength);
+													temp[visibleLength] = compatibleMethod;
+													visible = temp;
+												}
+											}
+										} else if (foundMethod == null) {
+											foundMethod = new ProblemMethodBinding(compatibleMethod, selector, compatibleMethod.parameters, NotVisible);
+										}
+									}
+								} else if (foundMethod == null) {
+									foundMethod = new ProblemMethodBinding(possible, selector, argumentTypes, NotFound);
+								}
+							}
+						}
+					}
+				}
+				if (visible != null)
+					foundMethod = mostSpecificMethodBinding(visible, visible.length, argumentTypes, invocationSite);
+			}
+			if (foundMethod != null) {
+				invocationSite.setActualReceiverType(foundMethod.declaringClass);
+				return foundMethod;
+			}
+		}
 		return new ProblemMethodBinding(selector, argumentTypes, NotFound);
 	}
 
@@ -1604,7 +1972,16 @@ public abstract class Scope
 		problemReporter().isClassPathCorrect(JAVA_IO_SERIALIZABLE, referenceCompilationUnit());
 		return null; // will not get here since the above error aborts the compilation
 	}
-
+	
+	public final ReferenceBinding getJavaLangAnnotationAnnotation() {
+		compilationUnitScope().recordQualifiedReference(JAVA_LANG_ANNOTATION_ANNOTATION);
+		ReferenceBinding type = environment().getType(JAVA_LANG_ANNOTATION_ANNOTATION);
+		if (type != null) return type;
+	
+		problemReporter().isClassPathCorrect(JAVA_LANG_ANNOTATION_ANNOTATION, referenceCompilationUnit());
+		return null; // will not get here since the above error aborts the compilation
+	}
+	
 	public final ReferenceBinding getJavaLangAssertionError() {
 		compilationUnitScope().recordQualifiedReference(JAVA_LANG_ASSERTIONERROR);
 		ReferenceBinding type = environment().getType(JAVA_LANG_ASSERTIONERROR);
@@ -1630,15 +2007,15 @@ public abstract class Scope
 		problemReporter().isClassPathCorrect(JAVA_LANG_CLONEABLE, referenceCompilationUnit());
 		return null; // will not get here since the above error aborts the compilation
 	}
-
-	public final ReferenceBinding getJavaLangError() {
-		compilationUnitScope().recordQualifiedReference(JAVA_LANG_ERROR);
-		ReferenceBinding type = environment().getType(JAVA_LANG_ERROR);
+	public final ReferenceBinding getJavaLangEnum() {
+		compilationUnitScope().recordQualifiedReference(JAVA_LANG_ENUM);
+		ReferenceBinding type = environment().getType(JAVA_LANG_ENUM);
 		if (type != null) return type;
 	
-		problemReporter().isClassPathCorrect(JAVA_LANG_ERROR, referenceCompilationUnit());
+		problemReporter().isClassPathCorrect(JAVA_LANG_ENUM, referenceCompilationUnit());
 		return null; // will not get here since the above error aborts the compilation
 	}
+
 	public final ReferenceBinding getJavaLangIterable() {
 		compilationUnitScope().recordQualifiedReference(JAVA_LANG_ITERABLE);
 		ReferenceBinding type = environment().getType(JAVA_LANG_ITERABLE);
@@ -1653,15 +2030,6 @@ public abstract class Scope
 		if (type != null) return type;
 	
 		problemReporter().isClassPathCorrect(JAVA_LANG_OBJECT, referenceCompilationUnit());
-		return null; // will not get here since the above error aborts the compilation
-	}
-
-	public final ReferenceBinding getJavaLangRuntimeException() {
-		compilationUnitScope().recordQualifiedReference(JAVA_LANG_RUNTIMEEXCEPTION);
-		ReferenceBinding type = environment().getType(JAVA_LANG_RUNTIMEEXCEPTION);
-		if (type != null) return type;
-	
-		problemReporter().isClassPathCorrect(JAVA_LANG_RUNTIMEEXCEPTION, referenceCompilationUnit());
 		return null; // will not get here since the above error aborts the compilation
 	}
 
@@ -1696,16 +2064,20 @@ public abstract class Scope
 	public final ReferenceBinding getMemberType(char[] typeName, ReferenceBinding enclosingType) {
 		ReferenceBinding memberType = findMemberType(typeName, enclosingType);
 		if (memberType != null) return memberType;
-		return new ProblemReferenceBinding(typeName, NotFound);
+		return new ProblemReferenceBinding(typeName, null, NotFound);
 	}
 
 	public MethodBinding getMethod(TypeBinding receiverType, char[] selector, TypeBinding[] argumentTypes, InvocationSite invocationSite) {
 		try {
-			if (receiverType.isArrayType())
-				return findMethodForArray((ArrayBinding) receiverType, selector, argumentTypes, invocationSite);
-			if (receiverType.isBaseType())
-				return new ProblemMethodBinding(selector, argumentTypes, NotFound);
-	
+			switch (receiverType.kind()) {
+				case Binding.BASE_TYPE :
+					return new ProblemMethodBinding(selector, argumentTypes, NotFound);
+				case Binding.ARRAY_TYPE :
+					compilationUnitScope().recordTypeReference(receiverType);
+					return findMethodForArray((ArrayBinding) receiverType, selector, argumentTypes, invocationSite);
+			}
+			compilationUnitScope().recordTypeReference(receiverType);
+
 			ReferenceBinding currentType = (ReferenceBinding) receiverType;
 			if (!currentType.canBeSeenBy(this))
 				return new ProblemMethodBinding(selector, argumentTypes, ReceiverTypeNotVisible);
@@ -1730,6 +2102,13 @@ public abstract class Scope
 				if (!methodBinding.canBeSeenBy(currentType, invocationSite, this))
 					return new ProblemMethodBinding( methodBinding, selector, methodBinding.parameters, NotVisible);
 			}
+			// special treatment for Object.getClass() in 1.5 mode (substitute parameterized return type)
+			if (receiverType.id != T_JavaLangObject
+				&& argumentTypes == NoParameters
+			    && CharOperation.equals(selector, GETCLASS)
+			    && methodBinding.returnType.isParameterizedType()/*1.5*/) {
+					return ParameterizedMethodBinding.instantiateGetClass(receiverType, methodBinding, this);
+		    }			
 			return methodBinding;
 		} catch (AbortCompilation e) {
 			e.updateContext(invocationSite, referenceCompilationUnit().compilationResult);
@@ -1745,9 +2124,9 @@ public abstract class Scope
 	*/
 	public final Binding getPackage(char[][] compoundName) {
 		compilationUnitScope().recordQualifiedReference(compoundName);
-		Binding binding = getTypeOrPackage(compoundName[0], TYPE | PACKAGE);
+		Binding binding = getTypeOrPackage(compoundName[0], Binding.TYPE | Binding.PACKAGE);
 		if (binding == null)
-			return new ProblemReferenceBinding(compoundName[0], NotFound);
+			return new ProblemReferenceBinding(compoundName[0], null, NotFound);
 		if (!binding.isValidBinding())
 			return (ReferenceBinding) binding;
 
@@ -1760,16 +2139,18 @@ public abstract class Scope
 			if (binding == null)
 				return new ProblemReferenceBinding(
 					CharOperation.subarray(compoundName, 0, currentIndex),
+					null, 
 					NotFound);
 			if (!binding.isValidBinding())
 				return new ProblemReferenceBinding(
 					CharOperation.subarray(compoundName, 0, currentIndex),
+					null, // TODO should improve
 					binding.problemId());
 			if (!(binding instanceof PackageBinding))
 				return packageBinding;
 			packageBinding = (PackageBinding) binding;
 		}
-		return new ProblemReferenceBinding(compoundName, NotFound);
+		return new ProblemReferenceBinding(compoundName, null, NotFound);
 	}
 
 	/* Answer the type binding that corresponds the given name, starting the lookup in the receiver.
@@ -1782,7 +2163,7 @@ public abstract class Scope
 		// Would like to remove this test and require senders to specially handle base types
 		TypeBinding binding = getBaseType(name);
 		if (binding != null) return binding;
-		return (ReferenceBinding) getTypeOrPackage(name, TYPE);
+		return (ReferenceBinding) getTypeOrPackage(name, Binding.TYPE);
 	}
 
 	/* Answer the type binding that corresponds to the given name, starting the lookup in the receiver
@@ -1797,10 +2178,12 @@ public abstract class Scope
 		if (binding == null)
 			return new ProblemReferenceBinding(
 				CharOperation.arrayConcat(packageBinding.compoundName, name),
+				null,
 				NotFound);
 		if (!binding.isValidBinding())
 			return new ProblemReferenceBinding(
 				CharOperation.arrayConcat(packageBinding.compoundName, name),
+				null, // TODO should improve
 				binding.problemId());
 
 		ReferenceBinding typeBinding = (ReferenceBinding) binding;
@@ -1824,11 +2207,12 @@ public abstract class Scope
 			if (binding != null) return binding;
 		}
 
-		compilationUnitScope().recordQualifiedReference(compoundName);
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordQualifiedReference(compoundName);
 		Binding binding =
-			getTypeOrPackage(compoundName[0], typeNameLength == 1 ? TYPE : TYPE | PACKAGE);
+			getTypeOrPackage(compoundName[0], typeNameLength == 1 ? Binding.TYPE : Binding.TYPE | Binding.PACKAGE);
 		if (binding == null)
-			return new ProblemReferenceBinding(compoundName[0], NotFound);
+			return new ProblemReferenceBinding(compoundName[0], null, NotFound);
 		if (!binding.isValidBinding())
 			return (ReferenceBinding) binding;
 
@@ -1841,10 +2225,12 @@ public abstract class Scope
 				if (binding == null)
 					return new ProblemReferenceBinding(
 						CharOperation.subarray(compoundName, 0, currentIndex),
+						null,
 						NotFound);
 				if (!binding.isValidBinding())
 					return new ProblemReferenceBinding(
 						CharOperation.subarray(compoundName, 0, currentIndex),
+						null, // TODO should improve
 						binding.problemId());
 				if (!(binding instanceof PackageBinding))
 					break;
@@ -1853,13 +2239,14 @@ public abstract class Scope
 			if (binding instanceof PackageBinding)
 				return new ProblemReferenceBinding(
 					CharOperation.subarray(compoundName, 0, currentIndex),
+					null,
 					NotFound);
 			checkVisibility = true;
 		}
 
 		// binding is now a ReferenceBinding
 		ReferenceBinding typeBinding = (ReferenceBinding) binding;
-		compilationUnitScope().recordTypeReference(typeBinding);
+		unitScope.recordTypeReference(typeBinding);
 		if (checkVisibility) // handles the fall through case
 			if (!typeBinding.canBeSeenBy(this))
 				return new ProblemReferenceBinding(
@@ -1874,11 +2261,12 @@ public abstract class Scope
 					ProblemReferenceBinding problemBinding = (ProblemReferenceBinding) typeBinding;
 					return new ProblemReferenceBinding(
 						CharOperation.subarray(compoundName, 0, currentIndex),
-						problemBinding.original,
+						problemBinding.closestMatch,
 						typeBinding.problemId());
 				}
 				return new ProblemReferenceBinding(
 					CharOperation.subarray(compoundName, 0, currentIndex),
+					null, // TODO should improve
 					typeBinding.problemId());
 			}
 		}
@@ -1891,7 +2279,8 @@ public abstract class Scope
 		Scope scope = this;
 		ReferenceBinding foundType = null;
 		boolean insideStaticContext = false;
-		if ((mask & TYPE) == 0) {
+		boolean insideTypeAnnotation = false;
+		if ((mask & Binding.TYPE) == 0) {
 			Scope next = scope;
 			while ((next = scope.parent) != null)
 				scope = next;
@@ -1906,64 +2295,70 @@ public abstract class Scope
 							if (typeVariable != null)	return typeVariable;
 						}
 						insideStaticContext |= methodScope.isStatic;
+						insideTypeAnnotation = methodScope.insideTypeAnnotation;
 					case BLOCK_SCOPE :
 						ReferenceBinding localType = ((BlockScope) scope).findLocalType(name); // looks in this scope only
 						if (localType != null) {
 							if (foundType != null && foundType != localType)
-								return new ProblemReferenceBinding(name, InheritedNameHidesEnclosingName);
+								return new ProblemReferenceBinding(name, foundType, InheritedNameHidesEnclosingName);
 							return localType;
 						}
 						break;
 					case CLASS_SCOPE :
 						SourceTypeBinding sourceType = ((ClassScope) scope).referenceContext.binding;
-						if (sourceType.isHierarchyBeingConnected()) {
-							// type variables take precedence over the source type, ex. class X <X> extends X == class X <Y> extends Y 
+						if (scope == this && sourceType.isHierarchyBeingConnected()) {
+							// type variables take precedence over the source type, ex. class X <X> extends X == class X <Y> extends Y
+							// but not when we step out to the enclosing type
 							TypeVariableBinding typeVariable = sourceType.getTypeVariable(name);
 							if (typeVariable != null)
 								return typeVariable;
 							if (CharOperation.equals(name, sourceType.sourceName))
 								return sourceType;
+							insideStaticContext |= sourceType.isStatic();
 							break;
 						}
 						// type variables take precedence over member types
 						TypeVariableBinding typeVariable = sourceType.getTypeVariable(name);
 						if (typeVariable != null) {
 							if (insideStaticContext) // do not consider this type modifiers: access is legite within same type
-								return new ProblemReferenceBinding(name, NonStaticReferenceInStaticContext);
+								return new ProblemReferenceBinding(name, typeVariable, NonStaticReferenceInStaticContext);
 							return typeVariable;
 						}
-						insideStaticContext |= (sourceType.modifiers & AccStatic) != 0; // not isStatic()
-						// 6.5.5.1 - member types have precedence over top-level type in same unit
-						ReferenceBinding memberType = findMemberType(name, sourceType);
-						if (memberType != null) { // skip it if we did not find anything
-							if (memberType.problemId() == Ambiguous) {
-								if (foundType == null || foundType.problemId() == NotVisible)
-									// supercedes any potential InheritedNameHidesEnclosingName problem
-									return memberType;
-								else
+						if (!insideTypeAnnotation) {
+							// 6.5.5.1 - member types have precedence over top-level type in same unit
+							ReferenceBinding memberType = findMemberType(name, sourceType);
+							if (memberType != null) { // skip it if we did not find anything
+								if (memberType.problemId() == Ambiguous) {
+									if (foundType == null || foundType.problemId() == NotVisible)
+										// supercedes any potential InheritedNameHidesEnclosingName problem
+										return memberType;
 									// make the user qualify the type, likely wants the first inherited type
-									return new ProblemReferenceBinding(name, InheritedNameHidesEnclosingName);
-							}
-							if (memberType.isValidBinding()) {
-								if (sourceType == memberType.enclosingType()
-										|| environment().options.complianceLevel >= ClassFileConstants.JDK1_4) {
-									// found a valid type in the 'immediate' scope (ie. not inherited)
-									// OR in 1.4 mode (inherited shadows enclosing)
-									if (foundType == null)
-										return memberType; 
-									if (foundType.isValidBinding())
-										// if a valid type was found, complain when another is found in an 'immediate' enclosing type (ie. not inherited)
-										if (foundType != memberType)
-											return new ProblemReferenceBinding(name, InheritedNameHidesEnclosingName);
+									return new ProblemReferenceBinding(name, foundType, InheritedNameHidesEnclosingName);
 								}
+								if (memberType.isValidBinding()) {
+									if (sourceType == memberType.enclosingType()
+											|| compilerOptions().complianceLevel >= ClassFileConstants.JDK1_4) {
+										if (insideStaticContext && !memberType.isStatic() && sourceType.isGenericType())
+											return new ProblemReferenceBinding(name, memberType, NonStaticReferenceInStaticContext);
+										// found a valid type in the 'immediate' scope (ie. not inherited)
+										// OR in 1.4 mode (inherited shadows enclosing)
+										if (foundType == null)
+											return memberType; 
+										// if a valid type was found, complain when another is found in an 'immediate' enclosing type (ie. not inherited)
+										if (foundType.isValidBinding() && foundType != memberType)
+											return new ProblemReferenceBinding(name, foundType, InheritedNameHidesEnclosingName);
+									}
+								}
+								if (foundType == null || (foundType.problemId() == NotVisible && memberType.problemId() != NotVisible))
+									// only remember the memberType if its the first one found or the previous one was not visible & memberType is...
+									foundType = memberType;
 							}
-							if (foundType == null || (foundType.problemId() == NotVisible && memberType.problemId() != NotVisible))
-								// only remember the memberType if its the first one found or the previous one was not visible & memberType is...
-								foundType = memberType;
 						}
+						insideTypeAnnotation = false;
+						insideStaticContext |= sourceType.isStatic();
 						if (CharOperation.equals(sourceType.sourceName, name)) {
 							if (foundType != null && foundType != sourceType && foundType.problemId() != NotVisible)
-								return new ProblemReferenceBinding(name, InheritedNameHidesEnclosingName);
+								return new ProblemReferenceBinding(name, foundType, InheritedNameHidesEnclosingName);
 							return sourceType;
 						}
 						break;
@@ -1978,41 +2373,63 @@ public abstract class Scope
 
 		// at this point the scope is a compilation unit scope
 		CompilationUnitScope unitScope = (CompilationUnitScope) scope;
-		PackageBinding currentPackage = unitScope.fPackage; 
-		// ask for the imports + name
-		if ((mask & TYPE) != 0) {
-			// check single type imports.
+		HashtableOfObject typeOrPackageCache = unitScope.typeOrPackageCache;
+		if (typeOrPackageCache != null) {
+			Binding binding = (Binding) typeOrPackageCache.get(name);
+			if (binding != null) { // can also include NotFound ProblemReferenceBindings if we already know this name is not found
+				if (binding instanceof ImportBinding) { // single type import cached in faultInImports(), replace it in the cache with the type
+					ImportReference importReference = ((ImportBinding) binding).reference;
+					if (importReference != null) importReference.used = true;
+					if (binding instanceof ImportConflictBinding)
+						typeOrPackageCache.put(name, binding = ((ImportConflictBinding) binding).conflictingTypeBinding); // already know its visible
+					else
+						typeOrPackageCache.put(name, binding = ((ImportBinding) binding).resolvedImport); // already know its visible
+				}
+				if ((mask & Binding.TYPE) != 0) {
+					if (foundType != null && foundType.problemId() != NotVisible && binding.problemId() != Ambiguous)
+						return foundType; // problem type from above supercedes NotFound type but not Ambiguous import case
+					if (binding instanceof ReferenceBinding)
+						return binding; // cached type found in previous walk below
+				}
+				if ((mask & Binding.PACKAGE) != 0 && binding instanceof PackageBinding)
+					return binding; // cached package found in previous walk below
+			}
+		}
 
+		// ask for the imports + name
+		if ((mask & Binding.TYPE) != 0) {
 			ImportBinding[] imports = unitScope.imports;
-			if (imports != null) {
-				HashtableOfObject typeImports = unitScope.resolvedSingeTypeImports;
-				if (typeImports != null) {
-					ImportBinding typeImport = (ImportBinding) typeImports.get(name);
-					if (typeImport != null) {
-						ImportReference importReference = typeImport.reference;
-						if (importReference != null) importReference.used = true;
-						return typeImport.resolvedImport; // already know its visible
-					}
-				} else {
-					// walk all the imports since resolvedSingeTypeImports is not yet initialized
-					for (int i = 0, length = imports.length; i < length; i++) {
-						ImportBinding typeImport = imports[i];
-						if (!typeImport.onDemand) {
-							if (CharOperation.equals(typeImport.compoundName[typeImport.compoundName.length - 1], name)) {
-								if (unitScope.resolveSingleTypeImport(typeImport) != null) {
-									ImportReference importReference = typeImport.reference;
-									if (importReference != null) importReference.used = true;
-									return typeImport.resolvedImport; // already know its visible
-								}
+			if (imports != null && typeOrPackageCache == null) { // walk single type imports since faultInImports() has not run yet
+				nextImport : for (int i = 0, length = imports.length; i < length; i++) {
+					ImportBinding importBinding = imports[i];
+					if (!importBinding.onDemand) {
+						if (CharOperation.equals(importBinding.compoundName[importBinding.compoundName.length - 1], name)) {
+							Binding resolvedImport = unitScope.resolveSingleImport(importBinding);
+							if (resolvedImport == null) continue nextImport;
+							if (resolvedImport instanceof MethodBinding) {
+								resolvedImport = (ReferenceBinding) getType(importBinding.compoundName, importBinding.compoundName.length);
+								if (!resolvedImport.isValidBinding()) continue nextImport;
+							}
+							if (resolvedImport instanceof TypeBinding) {
+								ImportReference importReference = importBinding.reference;
+								if (importReference != null)
+									importReference.used = true;
+								return resolvedImport; // already know its visible
 							}
 						}
 					}
 				}
 			}
+
 			// check if the name is in the current package, skip it if its a sub-package
+			PackageBinding currentPackage = unitScope.fPackage; 
 			unitScope.recordReference(currentPackage.compoundName, name);
 			Binding binding = currentPackage.getTypeOrPackage(name);
-			if (binding instanceof ReferenceBinding) return binding; // type is always visible to its own package
+			if (binding instanceof ReferenceBinding) {
+				if (typeOrPackageCache != null)
+					typeOrPackageCache.put(name, binding);
+				return binding; // type is always visible to its own package
+			}
 
 			// check on demand imports
 			if (imports != null) {
@@ -2022,16 +2439,27 @@ public abstract class Scope
 					ImportBinding someImport = imports[i];
 					if (someImport.onDemand) {
 						Binding resolvedImport = someImport.resolvedImport;
-						ReferenceBinding temp = resolvedImport instanceof PackageBinding
-							? findType(name, (PackageBinding) resolvedImport, currentPackage)
-							: findDirectMemberType(name, (ReferenceBinding) resolvedImport);
-						if (temp != null) {
+						ReferenceBinding temp = null;
+						if (resolvedImport instanceof PackageBinding) {
+							temp = findType(name, (PackageBinding) resolvedImport, currentPackage);
+						} else if (someImport.isStatic()) {
+							temp = findMemberType(name, (ReferenceBinding) resolvedImport); // static imports are allowed to see inherited member types
+							if (temp != null && !temp.isStatic())
+								temp = null;
+						} else {
+							temp = findDirectMemberType(name, (ReferenceBinding) resolvedImport);
+						}
+						if (temp != type && temp != null) {
 							if (temp.isValidBinding()) {
 								ImportReference importReference = someImport.reference;
 								if (importReference != null) importReference.used = true;
-								if (foundInImport)
+								if (foundInImport) {
 									// Answer error binding -- import on demand conflict; name found in two import on demand packages.
-									return new ProblemReferenceBinding(name, Ambiguous);
+									temp = new ProblemReferenceBinding(name, null, Ambiguous);
+									if (typeOrPackageCache != null)
+										typeOrPackageCache.put(name, temp);
+									return temp;
+								}
 								type = temp;
 								foundInImport = true;
 							} else if (foundType == null) {
@@ -2040,29 +2468,44 @@ public abstract class Scope
 						}
 					}
 				}
-				if (type != null) return type;
+				if (type != null) {
+					if (typeOrPackageCache != null)
+						typeOrPackageCache.put(name, type);
+					return type;
+				}
 			}
 		}
 
 		unitScope.recordSimpleReference(name);
-		if ((mask & PACKAGE) != 0) {
+		if ((mask & Binding.PACKAGE) != 0) {
 			PackageBinding packageBinding = unitScope.environment.getTopLevelPackage(name);
-			if (packageBinding != null) return packageBinding;
+			if (packageBinding != null) {
+				if (typeOrPackageCache != null)
+					typeOrPackageCache.put(name, packageBinding);
+				return packageBinding;
+			}
 		}
 
 		// Answer error binding -- could not find name
-		if (foundType != null) return foundType; // problem type from above
-		return new ProblemReferenceBinding(name, NotFound);
+		if (foundType == null) {
+			foundType = new ProblemReferenceBinding(name, null, NotFound);
+			if (typeOrPackageCache != null && (mask & Binding.PACKAGE) != 0) // only put NotFound type in cache if you know its not a package
+				typeOrPackageCache.put(name, foundType);
+		}
+		return foundType;
 	}
 
 	// Added for code assist... NOT Public API
+	// DO NOT USE to resolve import references since this method assumes 'A.B' is relative to a single type import of 'p1.A'
+	// when it may actually mean the type B in the package A
+	// use CompilationUnitScope.getImport(char[][]) instead
 	public final Binding getTypeOrPackage(char[][] compoundName) {
 		int nameLength = compoundName.length;
 		if (nameLength == 1) {
 			TypeBinding binding = getBaseType(compoundName[0]);
 			if (binding != null) return binding;
 		}
-		Binding binding = getTypeOrPackage(compoundName[0], TYPE | PACKAGE);
+		Binding binding = getTypeOrPackage(compoundName[0], Binding.TYPE | Binding.PACKAGE);
 		if (!binding.isValidBinding()) return binding;
 
 		int currentIndex = 1;
@@ -2075,10 +2518,12 @@ public abstract class Scope
 				if (binding == null)
 					return new ProblemReferenceBinding(
 						CharOperation.subarray(compoundName, 0, currentIndex),
+						null,
 						NotFound);
 				if (!binding.isValidBinding())
 					return new ProblemReferenceBinding(
 						CharOperation.subarray(compoundName, 0, currentIndex),
+						null, // TODO should improve
 						binding.problemId());
 				if (!(binding instanceof PackageBinding))
 					break;
@@ -2089,6 +2534,8 @@ public abstract class Scope
 		}
 		// binding is now a ReferenceBinding
 		ReferenceBinding typeBinding = (ReferenceBinding) binding;
+		ReferenceBinding qualifiedType = (ReferenceBinding) this.environment().convertToRawType(typeBinding);
+
 		if (checkVisibility) // handles the fall through case
 			if (!typeBinding.canBeSeenBy(this))
 				return new ProblemReferenceBinding(
@@ -2102,19 +2549,30 @@ public abstract class Scope
 			if (!typeBinding.isValidBinding())
 				return new ProblemReferenceBinding(
 					CharOperation.subarray(compoundName, 0, currentIndex),
+					null, // TODO should improve
 					typeBinding.problemId());
+			
+			if (typeBinding.isGenericType()) {
+				qualifiedType = this.environment().createRawType(typeBinding, qualifiedType);
+			} else {
+				qualifiedType = (qualifiedType != null && (qualifiedType.isRawType() || qualifiedType.isParameterizedType()))
+					? this.environment().createParameterizedType(typeBinding, null, qualifiedType)
+					: typeBinding;
+			}
 		}
-		return typeBinding;
+		return qualifiedType;
 	}
 	
 	// 5.1.10
-	public TypeBinding[] greaterLowerBound(TypeBinding[] types) {
+	public static TypeBinding[] greaterLowerBound(TypeBinding[] types) {
 		if (types == null) return null;
 		int length = types.length;
+		if (length == 0) return null;
 		TypeBinding[] result = types;
 		int removed = 0;
 		for (int i = 0; i < length; i++) {
 			TypeBinding iType = result[i];
+			if (iType == null) continue;
 			for (int j = 0; j < length; j++) {
 				if (i == j) continue;
 				TypeBinding jType = result[j];
@@ -2129,6 +2587,7 @@ public abstract class Scope
 			}
 		}
 		if (removed == 0) return result;
+		if (length == removed) return null;
 		TypeBinding[] trimmedResult = new TypeBinding[length - removed];
 		for (int i = 0, index = 0; i < length; i++) {
 			TypeBinding iType = result[i];
@@ -2137,6 +2596,58 @@ public abstract class Scope
 			}
 		}
 		return trimmedResult;
+	}
+	
+	// 5.1.10
+	public static ReferenceBinding[] greaterLowerBound(ReferenceBinding[] types) {
+		if (types == null) return null;
+		int length = types.length;
+		if (length == 0) return null;
+		ReferenceBinding[] result = types;
+		int removed = 0;
+		for (int i = 0; i < length; i++) {
+			ReferenceBinding iType = result[i];
+			if (iType == null) continue;
+			for (int j = 0; j < length; j++) {
+				if (i == j) continue;
+				ReferenceBinding jType = result[j];
+				if (jType == null) continue;
+				if (iType.isCompatibleWith(jType)) { // if Vi <: Vj, Vj is removed
+					if (result == types) { // defensive copy
+						System.arraycopy(result, 0, result = new ReferenceBinding[length], 0, length);
+					}
+					result[j] = null;
+					removed ++;
+				}
+			}
+		}
+		if (removed == 0) return result;
+		if (length == removed) return null;
+		ReferenceBinding[] trimmedResult = new ReferenceBinding[length - removed];
+		for (int i = 0, index = 0; i < length; i++) {
+			ReferenceBinding iType = result[i];
+			if (iType != null) {
+				trimmedResult[index++] = iType;
+			}
+		}
+		return trimmedResult;
+	}	
+
+	/**
+	 * Returns the immediately enclosing switchCase statement (carried by closest blockScope),
+	 */
+	public CaseStatement innermostSwitchCase() {
+		Scope scope = this;
+		do {
+			if (scope instanceof BlockScope)
+				return ((BlockScope) scope).enclosingCase;
+			scope = scope.parent;
+		} while (scope != null);
+		return null;
+	}
+
+	public boolean isBoxingCompatibleWith(TypeBinding left, TypeBinding right) {
+		return left.isBaseType() != right.isBaseType() && environment().isBoxingCompatibleWith(left, right);
 	}
 
 	/* Answer true if the scope is nested inside a given field declaration.
@@ -2162,10 +2673,9 @@ public abstract class Scope
 		do {
 			if (scope instanceof MethodScope) {
 				ReferenceContext refContext = ((MethodScope) scope).referenceContext;
-				if (refContext instanceof AbstractMethodDeclaration
-						&& ((AbstractMethodDeclaration)refContext).binding == method) {
-					return true;
-				}
+				if (refContext instanceof AbstractMethodDeclaration)
+					if (((AbstractMethodDeclaration) refContext).binding == method)
+						return true;
 			}
 			scope = scope.parent;
 		} while (scope != null);
@@ -2186,8 +2696,7 @@ public abstract class Scope
 			unitScope = scope;
 
 		// test that the enclosingType is not part of the compilation unit
-		SourceTypeBinding[] topLevelTypes =
-			((CompilationUnitScope) unitScope).topLevelTypes;
+		SourceTypeBinding[] topLevelTypes = ((CompilationUnitScope) unitScope).topLevelTypes;
 		for (int i = topLevelTypes.length; --i >= 0;)
 			if (topLevelTypes[i] == enclosingType)
 				return true;
@@ -2200,14 +2709,31 @@ public abstract class Scope
 		Scope scope = this;
 		do {
 			if (scope instanceof ClassScope)
-				if (((ClassScope) scope).referenceContext.binding == type){
+				if (((ClassScope) scope).referenceContext.binding == type)
 					return true;
-				}
 			scope = scope.parent;
 		} while (scope != null);
 		return false;
 	}
 
+	/** 
+	 * Returns true if the scope or one of its parent is associated to a given caseStatement, denoting
+	 * being part of a given switch case statement.
+	 */
+	public boolean isInsideCase(CaseStatement caseStatement) {
+		Scope scope = this;
+		do {
+			switch (scope.kind) {
+				case Scope.BLOCK_SCOPE :
+					if (((BlockScope) scope).enclosingCase == caseStatement) {
+						return true;
+					}
+			}
+			scope = scope.parent;
+		} while (scope != null);
+		return false;
+	}
+	
 	public boolean isInsideDeprecatedCode(){
 		switch(this.kind){
 			case Scope.BLOCK_SCOPE :
@@ -2216,134 +2742,208 @@ public abstract class Scope
 				if (!methodScope.isInsideInitializer()){
 					// check method modifiers to see if deprecated
 					MethodBinding context = ((AbstractMethodDeclaration)methodScope.referenceContext).binding;
-					if (context != null && context.isViewedAsDeprecated()) {
+					if (context != null && context.isViewedAsDeprecated())
 						return true;
-					}
 				} else {
 					SourceTypeBinding type = ((BlockScope)this).referenceType().binding;
 					// inside field declaration ? check field modifier to see if deprecated
-					if (methodScope.initializedField != null && methodScope.initializedField.isViewedAsDeprecated()) {
+					if (methodScope.initializedField != null && methodScope.initializedField.isViewedAsDeprecated())
 						return true;
-					}
-					if (type != null && type.isViewedAsDeprecated()) {
+					if (type != null && type.isViewedAsDeprecated())
 						return true;
-					}
 				}
 				break;
 			case Scope.CLASS_SCOPE :
 				ReferenceBinding context = ((ClassScope)this).referenceType().binding;
-				if (context != null && context.isViewedAsDeprecated()) {
+				if (context != null && context.isViewedAsDeprecated())
 					return true;
-				}
 				break;
 		}
 		return false;
 	}
-	private TypeBinding leastContainingInvocation(TypeBinding mec, List invocations) {
+	private TypeBinding leastContainingInvocation(TypeBinding mec, Set invocations, List lubStack) {
+		if (invocations == null) return mec; // no alternate invocation
 		int length = invocations.size();
-		if (length == 0) return mec;
-		if (length == 1) return (TypeBinding) invocations.get(0);
+		Iterator iter = invocations.iterator();
+		if (length == 1) return (TypeBinding) iter.next();
 		int argLength = mec.typeVariables().length;
 		if (argLength == 0) return mec; // should be caught by no invocation check
 
 		// infer proper parameterized type from invocations
 		TypeBinding[] bestArguments = new TypeBinding[argLength];
-		for (int i = 0; i < length; i++) {
-			TypeBinding invocation = (TypeBinding)invocations.get(i);
-			if (invocation.isGenericType()) {
-				for (int j = 0; j < argLength; j++) {
-					TypeBinding bestArgument = leastContainingTypeArgument(bestArguments[j], invocation.typeVariables()[j], (ReferenceBinding) mec, j);
-					if (bestArgument == null) return null;
-					bestArguments[j] = bestArgument;
-				}
-			} else if (invocation.isParameterizedType()) {
-				ParameterizedTypeBinding parameterizedType = (ParameterizedTypeBinding)invocation;
-				for (int j = 0; j < argLength; j++) {
-					TypeBinding bestArgument = leastContainingTypeArgument(bestArguments[j], parameterizedType.arguments[j], (ReferenceBinding) mec, j);
-					if (bestArgument == null) return null;
-					bestArguments[j] = bestArgument;
-				}
-			} else if (invocation.isRawType()) {
-				return invocation; // raw type is taking precedence
+		while (iter.hasNext()) {
+			TypeBinding invocation = (TypeBinding)iter.next();
+			switch (invocation.kind()) {
+				case Binding.GENERIC_TYPE :
+					TypeVariableBinding[] invocationVariables = invocation.typeVariables();
+					for (int i = 0; i < argLength; i++) {
+						TypeBinding bestArgument = leastContainingTypeArgument(bestArguments[i], invocationVariables[i], (ReferenceBinding) mec, i, lubStack);
+						if (bestArgument == null) return null;
+						bestArguments[i] = bestArgument;
+					}
+					break;
+				case Binding.PARAMETERIZED_TYPE :
+					ParameterizedTypeBinding parameterizedType = (ParameterizedTypeBinding)invocation;
+					for (int i = 0; i < argLength; i++) {
+						TypeBinding bestArgument = leastContainingTypeArgument(bestArguments[i], parameterizedType.arguments[i], (ReferenceBinding) mec, i, lubStack);
+						if (bestArgument == null) return null;
+						bestArguments[i] = bestArgument;
+					}
+					break;
+				case Binding.RAW_TYPE :
+					return invocation; // raw type is taking precedence
 			}
 		}
-		return createParameterizedType((ReferenceBinding) mec, bestArguments, null);
+		return environment().createParameterizedType((ReferenceBinding) mec.erasure(), bestArguments, mec.enclosingType());
 	}
 	
 	// JLS 15.12.2
-	private TypeBinding leastContainingTypeArgument(TypeBinding u, TypeBinding v, ReferenceBinding genericType, int rank) {
+	private TypeBinding leastContainingTypeArgument(TypeBinding u, TypeBinding v, ReferenceBinding genericType, int rank, List lubStack) {
 		if (u == null) return v;
 		if (u == v) return u;
 		if (v.isWildcard()) {
 			WildcardBinding wildV = (WildcardBinding) v;
 			if (u.isWildcard()) {
 				WildcardBinding wildU = (WildcardBinding) u;
-				switch (wildU.kind) {
+				switch (wildU.boundKind) {
 					// ? extends U
 					case Wildcard.EXTENDS :
-						switch(wildV.kind) {
+						switch(wildV.boundKind) {
 							// ? extends U, ? extends V
 							case Wildcard.EXTENDS :  
-								TypeBinding lub = lowerUpperBound(new TypeBinding[]{wildU.bound,wildV.bound});
+								TypeBinding lub = lowerUpperBound(new TypeBinding[]{wildU.bound,wildV.bound}, lubStack);
 								if (lub == null) return null;
-								return environment().createWildcard(genericType, rank, lub, Wildcard.EXTENDS);	
+								// int is returned to denote cycle detected in lub computation - stop recursion by answering unbound wildcard
+								if (lub == IntBinding) return environment().createWildcard(genericType, rank, null, null /*no extra bound*/, Wildcard.UNBOUND);
+								return environment().createWildcard(genericType, rank, lub, null /*no extra bound*/, Wildcard.EXTENDS);	
 							// ? extends U, ? SUPER V
 							case Wildcard.SUPER : 
 								if (wildU.bound == wildV.bound) return wildU.bound;
-								return environment().createWildcard(genericType, rank, null, Wildcard.UNBOUND);
+								return environment().createWildcard(genericType, rank, null, null /*no extra bound*/, Wildcard.UNBOUND);
 						}
 						break;
 						// ? super U
 					case Wildcard.SUPER : 
 						// ? super U, ? super V
-						if (wildU.kind == Wildcard.SUPER) {
+						if (wildU.boundKind == Wildcard.SUPER) {
 							TypeBinding[] glb = greaterLowerBound(new TypeBinding[]{wildU.bound,wildV.bound});
 							if (glb == null) return null;
-							return environment().createWildcard(genericType, rank, glb[0], Wildcard.SUPER);	// TODO (philippe) need to capture entire bounds
+							return environment().createWildcard(genericType, rank, glb[0], null /*no extra bound*/, Wildcard.SUPER);	// TODO (philippe) need to capture entire bounds
 						}
 				}				
 			} else {
-				switch (wildV.kind) {
+				switch (wildV.boundKind) {
 					// U, ? extends V
 					case Wildcard.EXTENDS :
-						TypeBinding lub = lowerUpperBound(new TypeBinding[]{u,wildV.bound});
+						TypeBinding lub = lowerUpperBound(new TypeBinding[]{u,wildV.bound}, lubStack);
 						if (lub == null) return null;
-						return environment().createWildcard(genericType, rank, lub, Wildcard.EXTENDS);	
+						// int is returned to denote cycle detected in lub computation - stop recursion by answering unbound wildcard
+						if (lub == IntBinding) return environment().createWildcard(genericType, rank, null, null /*no extra bound*/, Wildcard.UNBOUND);
+						return environment().createWildcard(genericType, rank, lub, null /*no extra bound*/, Wildcard.EXTENDS);	
 					// U, ? super V
 					case Wildcard.SUPER :
 						TypeBinding[] glb = greaterLowerBound(new TypeBinding[]{u,wildV.bound});
 						if (glb == null) return null;
-						return environment().createWildcard(genericType, rank, glb[0], Wildcard.SUPER);	// TODO (philippe) need to capture entire bounds
+						return environment().createWildcard(genericType, rank, glb[0], null /*no extra bound*/, Wildcard.SUPER);	// TODO (philippe) need to capture entire bounds
 					case Wildcard.UNBOUND :
 				}
 			}
 		} else if (u.isWildcard()) {
 			WildcardBinding wildU = (WildcardBinding) u;
-			switch (wildU.kind) {
+			switch (wildU.boundKind) {
 				// U, ? extends V
 				case Wildcard.EXTENDS :
-					TypeBinding lub = lowerUpperBound(new TypeBinding[]{wildU.bound, v});
+					TypeBinding lub = lowerUpperBound(new TypeBinding[]{wildU.bound, v}, lubStack);
 					if (lub == null) return null;
-					return environment().createWildcard(genericType, rank, lub, Wildcard.EXTENDS);	
+					// int is returned to denote cycle detected in lub computation - stop recursion by answering unbound wildcard
+					if (lub == IntBinding) return environment().createWildcard(genericType, rank, null, null /*no extra bound*/, Wildcard.UNBOUND);
+					return environment().createWildcard(genericType, rank, lub, null /*no extra bound*/, Wildcard.EXTENDS);	
 				// U, ? super V
 				case Wildcard.SUPER :
 					TypeBinding[] glb = greaterLowerBound(new TypeBinding[]{wildU.bound, v});
 					if (glb == null) return null;
-					return environment().createWildcard(genericType, rank, glb[0], Wildcard.SUPER); // TODO (philippe) need to capture entire bounds		
+					return environment().createWildcard(genericType, rank, glb[0], null /*no extra bound*/, Wildcard.SUPER); // TODO (philippe) need to capture entire bounds		
 				case Wildcard.UNBOUND :
 			}
 		}
-		TypeBinding lub = lowerUpperBound(new TypeBinding[]{u,v});
+		TypeBinding lub = lowerUpperBound(new TypeBinding[]{u,v}, lubStack);
 		if (lub == null) return null;
-		return environment().createWildcard(genericType, rank, lub, Wildcard.EXTENDS);
+		// int is returned to denote cycle detected in lub computation - stop recursion by answering unbound wildcard
+		if (lub == IntBinding) return environment().createWildcard(genericType, rank, null, null /*no extra bound*/, Wildcard.UNBOUND);
+		return environment().createWildcard(genericType, rank, lub, null /*no extra bound*/, Wildcard.EXTENDS);
 	}
 
 	// 15.12.2
+	/**
+	 * Returns VoidBinding if types have no intersection (e.g. 2 unrelated interfaces), or null if
+	 * no common supertype (e.g. List<String> and List<Exception>), or the intersection type if possible
+	 */
 	public TypeBinding lowerUpperBound(TypeBinding[] types) {
+		int typeLength = types.length;
+		if (typeLength == 1) {
+			TypeBinding type = types[0];
+			return type == null ? VoidBinding : type;
+		}		
+		return lowerUpperBound(types, new ArrayList(1));
+	}
+	
+	// 15.12.2
+	private TypeBinding lowerUpperBound(TypeBinding[] types, List lubStack) {
 		
-		ArrayList invocations = new ArrayList(1);
-		TypeBinding mec = minimalErasedCandidate(types, invocations);
-		return leastContainingInvocation(mec, invocations);
+		int typeLength = types.length;
+		if (typeLength == 1) {
+			TypeBinding type = types[0];
+			return type == null ? VoidBinding : type;
+		}
+		// cycle detection
+		int stackLength = lubStack.size();
+		nextLubCheck: for (int i = 0; i < stackLength; i++) {
+			TypeBinding[] lubTypes = (TypeBinding[])lubStack.get(i);
+			int lubTypeLength = lubTypes.length;
+			if (lubTypeLength < typeLength) continue nextLubCheck;
+			nextTypeCheck:	for (int j = 0; j < typeLength; j++) {
+				TypeBinding type = types[j];
+				for (int k = 0; k < lubTypeLength; k++) {
+					if (lubTypes[k] == type || lubTypes[k].isEquivalentTo(type)) continue nextTypeCheck; // type found, jump to next one 
+				}
+				continue nextLubCheck; // type not found in current lubTypes
+			}
+			// all types are included in some lub, cycle detected - stop recursion by answering special value (int)
+			return IntBinding;
+		}
+
+		lubStack.add(types);
+		Map invocations = new HashMap(1);
+		TypeBinding[] mecs = minimalErasedCandidates(types, invocations);
+		if (mecs == null) return null;
+		int length = mecs.length;
+		if (length == 0) return VoidBinding;
+		int count = 0;
+		TypeBinding firstBound = null;
+		for (int i = 0; i < length; i++) {
+			TypeBinding mec = mecs[i];
+			if (mec == null) continue;
+			mec = leastContainingInvocation(mec, (Set)invocations.get(mec), lubStack);
+			if (mec == null) return null;
+			if (!mec.isInterface()) firstBound = mec;
+			mecs[count++] = mec; // recompact them to the front
+		}
+		switch (count) {
+			case 0 : return VoidBinding;
+			case 1 : return mecs[0];
+			case 2 : 
+				if (mecs[1].id == T_JavaLangObject) return mecs[0];
+				if (mecs[0].id == T_JavaLangObject) return mecs[1];
+		}
+		TypeBinding[] otherBounds = new TypeBinding[count - 1];
+		int rank = 0;
+		for (int i = 0; i < count; i++) {
+			TypeBinding mec = mecs[i];
+			if (mec.isInterface()) {
+				otherBounds[rank++] = (ReferenceBinding)mec;
+			}
+		}
+		return environment().createWildcard(null, 0, firstBound, otherBounds, Wildcard.EXTENDS);
 	}
 	
 	public final MethodScope methodScope() {
@@ -2357,13 +2957,14 @@ public abstract class Scope
 	}
 
 	/**
-	 * Returns the most specific type compatible with all given types.
-	 * (i.e. most specific common super type)
-	 * If no types is given, will return VoidBinding. If not compatible 
-	 * reference type is found, returns null.
+	 * Returns the most specific set of types compatible with all given types.
+	 * (i.e. most specific common super types)
+	 * If no types is given, will return an empty array. If not compatible 
+	 * reference type is found, returns null. In other cases, will return an array 
+	 * of minimal erased types, where some nulls may appear (and must simply be
+	 * ignored).
 	 */
-	private TypeBinding minimalErasedCandidate(TypeBinding[] types, List invocations) {
-		Map allInvocations = new HashMap(2);
+	protected TypeBinding[] minimalErasedCandidates(TypeBinding[] types, Map allInvocations) {
 		int length = types.length;
 		int indexOfFirst = -1, actualLength = 0;
 		for (int i = 0; i < length; i++) {
@@ -2374,25 +2975,25 @@ public abstract class Scope
 			actualLength ++;
 		}
 		switch (actualLength) {
-			case 0: return VoidBinding;
-			case 1: return types[indexOfFirst];
+			case 0: return NoTypes;
+			case 1: return types;
 		}
 
 		// record all supertypes of type
 		// intersect with all supertypes of otherType
 		TypeBinding firstType = types[indexOfFirst];
-		TypeBinding[] superTypes;
+		TypeBinding[] erasedSuperTypes;
 		int superLength;
 		if (firstType.isBaseType()) {
 			return null; 
 		} else if (firstType.isArrayType()) {
 			superLength = 4;
 			if (firstType.erasure() != firstType) {
-				ArrayList someInvocations = new ArrayList(1);
+				Set someInvocations = new HashSet(1);
 				someInvocations.add(firstType);
 				allInvocations.put(firstType.erasure(), someInvocations);
 			}
-			superTypes = new TypeBinding[] {
+			erasedSuperTypes = new TypeBinding[] { // inject well-known array supertypes
 					firstType.erasure(), 
 					getJavaIoSerializable(),
 					getJavaLangCloneable(),
@@ -2400,63 +3001,78 @@ public abstract class Scope
 			};
 		} else {
 			ArrayList typesToVisit = new ArrayList(5);
-			if (firstType.erasure() != firstType) {
-				ArrayList someInvocations = new ArrayList(1);
+			TypeBinding firstErasure = firstType.isTypeVariable() ? firstType : firstType.erasure();
+			if (firstErasure != firstType) {
+				Set someInvocations = new HashSet(1);
 				someInvocations.add(firstType);
-				allInvocations.put(firstType.erasure(), someInvocations);
-			}			
-			typesToVisit.add(firstType.erasure());
+				allInvocations.put(firstErasure, someInvocations);
+			}
+			typesToVisit.add(firstType);
+			int max = 1;
+			if (firstErasure.isArrayType()) {
+				typesToVisit.add(getJavaIoSerializable());
+				typesToVisit.add(getJavaLangCloneable());
+				typesToVisit.add(getJavaLangObject());
+				max += 3;
+			}
 			ReferenceBinding currentType = (ReferenceBinding)firstType;
-			for (int i = 0, max = 1; i < max; i++) {
-				currentType = (ReferenceBinding) typesToVisit.get(i);
-				TypeBinding itsSuperclass = currentType.superclass();
-				if (itsSuperclass != null) {
-					TypeBinding itsSuperclassErasure = itsSuperclass.erasure();
-					if (!typesToVisit.contains(itsSuperclassErasure)) {
-						if (itsSuperclassErasure != itsSuperclass) {
-							ArrayList someInvocations = new ArrayList(1);
-							someInvocations.add(itsSuperclass);
-							allInvocations.put(itsSuperclassErasure, someInvocations);
-						}
-						typesToVisit.add(itsSuperclassErasure);
-						max++;
-					}
-				}
+			for (int i = 0; i < max; i++) {
+				TypeBinding typeToVisit = (TypeBinding) typesToVisit.get(i);
+				if (typeToVisit.isArrayType()) continue;
+				currentType = (ReferenceBinding) typeToVisit;
+				// inject super interfaces prior to superclass
 				ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
 				for (int j = 0, count = itsInterfaces.length; j < count; j++) {
 					TypeBinding itsInterface = itsInterfaces[j];
-					TypeBinding itsInterfaceErasure = itsInterface.erasure();
+					TypeBinding itsInterfaceErasure = itsInterface.isTypeVariable() ? itsInterface : itsInterface.erasure();
 					if (!typesToVisit.contains(itsInterfaceErasure)) {
 						if (itsInterfaceErasure != itsInterface) {
-							ArrayList someInvocations = new ArrayList(1);
+							Set someInvocations = new HashSet(1);
 							someInvocations.add(itsInterface);
 							allInvocations.put(itsInterfaceErasure, someInvocations);
 						}						
-						typesToVisit.add(itsInterfaceErasure);
+						typesToVisit.add(itsInterface);
+						max++;
+					}
+				}
+				TypeBinding itsSuperclass = currentType.superclass();
+				if (itsSuperclass != null) {
+					TypeBinding itsSuperclassErasure = itsSuperclass.isTypeVariable() ? itsSuperclass : itsSuperclass.erasure();
+					if (!typesToVisit.contains(itsSuperclassErasure)) {
+						if (itsSuperclassErasure != itsSuperclass) {
+							Set someInvocations = new HashSet(1);
+							someInvocations.add(itsSuperclass);
+							allInvocations.put(itsSuperclassErasure, someInvocations);
+						}
+						typesToVisit.add(itsSuperclass);
 						max++;
 					}
 				}
 			}
 			superLength = typesToVisit.size();
-			superTypes = new TypeBinding[superLength];
-			typesToVisit.toArray(superTypes);
+			erasedSuperTypes = new TypeBinding[superLength];
+			int rank = 0;
+			for (Iterator iter = typesToVisit.iterator(); iter.hasNext();) {
+				TypeBinding type = (TypeBinding)iter.next();
+				erasedSuperTypes[rank++] = type.isTypeVariable() ? type : type.erasure();
+			}
 		}
+		// intersecting first type supertypes with other types' ones, nullifying non matching supertypes
 		int remaining = superLength;
 		nextOtherType: for (int i = indexOfFirst+1; i < length; i++) {
 			TypeBinding otherType = types[i];
-			if (otherType == null)
-				continue nextOtherType;
-			else if (otherType.isArrayType()) {
+			if (otherType == null) continue nextOtherType;
+			if (otherType.isArrayType()) {
 				nextSuperType: for (int j = 0; j < superLength; j++) {
-					TypeBinding superType = superTypes[j];
-					if (superType == null || superType == otherType) continue nextSuperType;
-					switch (superType.id) {
+					TypeBinding erasedSuperType = erasedSuperTypes[j];
+					if (erasedSuperType == null || erasedSuperType == otherType) continue nextSuperType;
+					switch (erasedSuperType.id) {
 						case T_JavaIoSerializable :
 						case T_JavaLangCloneable :
 						case T_JavaLangObject :
 							continue nextSuperType;
 					}
-					superTypes[j] = null;
+					erasedSuperTypes[j] = null;
 					if (--remaining == 0) return null;
 					
 				}
@@ -2464,33 +3080,50 @@ public abstract class Scope
 			}
 			ReferenceBinding otherRefType = (ReferenceBinding) otherType;
 			nextSuperType: for (int j = 0; j < superLength; j++) {
-				TypeBinding superType = superTypes[j];
-				if (superType == null) continue nextSuperType;
-				if (otherRefType.erasure().isCompatibleWith(superType)) {
-					TypeBinding match = otherRefType.findSuperTypeErasingTo((ReferenceBinding)superType);
-						if (match.erasure() != match) {
-							ArrayList someInvocations = (ArrayList) allInvocations.get(superType);
-							if (someInvocations == null) someInvocations = new ArrayList(1);
-							someInvocations.add(match);
-							allInvocations.put(superType, someInvocations);
-						}						
-					break nextSuperType;
+				TypeBinding erasedSuperType = erasedSuperTypes[j];
+				if (erasedSuperType == null) continue nextSuperType;
+				TypeBinding match;
+				if (erasedSuperType == otherType || erasedSuperType.id == T_JavaLangObject && otherType.isInterface()) {
+					match = erasedSuperType;
 				} else {
-					superTypes[j] = null;
-					if (--remaining == 0) return null;
+					if (erasedSuperType.isArrayType()) {
+						match = null;
+					} else {
+						match = otherRefType.findSuperTypeWithSameErasure(erasedSuperType);
+					}
+					if (match == null) { // incompatible super type
+						erasedSuperTypes[j] = null;
+						if (--remaining == 0) return null;
+						continue nextSuperType;
+					}
 				}
+				// record invocation
+				Set someInvocations = (Set) allInvocations.get(erasedSuperType);
+				if (someInvocations == null) someInvocations = new HashSet(1);
+				someInvocations.add(match);
+				allInvocations.put(erasedSuperType, someInvocations);
 			}				
 		}
-		// per construction, first non-null supertype is most specific common supertype
-		for (int i = 0; i < superLength; i++) {
-			TypeBinding superType = superTypes[i];
-			if (superType != null) {
-				List matchingInvocations = (List)allInvocations.get(superType);
-				if (matchingInvocations != null) invocations.addAll(matchingInvocations);
-				return superType;
+		// eliminate non minimal super types
+		if (remaining > 1) {
+			nextType: for (int i = 0; i < superLength; i++) {
+				TypeBinding erasedSuperType = erasedSuperTypes[i];
+				if (erasedSuperType == null) continue nextType;
+				nextOtherType: for (int j = 0; j < superLength; j++) {
+					if (i == j) continue nextOtherType;
+					TypeBinding otherType = erasedSuperTypes[j];
+					if (otherType == null) continue nextOtherType;
+					if (otherType.id == T_JavaLangObject && erasedSuperType.isInterface()) continue nextOtherType;
+					if (erasedSuperType instanceof ReferenceBinding) {
+						if (((ReferenceBinding)erasedSuperType).findSuperTypeWithSameErasure(otherType) != null) {
+							erasedSuperTypes[j] = null; // discard non minimal supertype
+							remaining--;
+						}
+					}
+				}
 			}
 		}
-		return null;
+		return erasedSuperTypes;
 	}
 	
 	// Internal use only
@@ -2514,12 +3147,8 @@ public abstract class Scope
 			if (!method.isStatic()) previous = method; // no ambiguity for static methods
 			for (int j = 0; j < visibleSize; j++) {
 				if (i == j) continue;
-				MethodBinding compatibleMethod = computeCompatibleMethod(visible[j], method.parameters, invocationSite);
-				if (compatibleMethod == null || !compatibleMethod.isValidBinding()) {
-					if (problemMethod == null)
-						problemMethod = compatibleMethod;
+				if (!visible[j].areParametersCompatibleWith(method.parameters))
 					continue nextVisible;
-				}
 			}
 			compilationUnitScope().recordTypeReferences(method.thrownExceptions);
 			return method;
@@ -2529,106 +3158,6 @@ public abstract class Scope
 		return problemMethod;
 	}
 	
-	/**
-	 * Returns the most specific type compatible with all given types.
-	 * (i.e. most specific common super type)
-	 * If no types is given, will return VoidBinding. If not compatible 
-	 * reference type is found, returns null.
-	 * @deprecated - use lowerUpperBound(TypeBinding[]) instead
-	 */
-	public TypeBinding mostSpecificCommonType(TypeBinding[] types) {
-		int length = types.length;
-		int indexOfFirst = -1, actualLength = 0;
-		for (int i = 0; i < length; i++) {
-			TypeBinding type = types[i];
-			if (type == null) continue;
-			if (type.isBaseType()) return null;
-			if (indexOfFirst < 0) indexOfFirst = i;
-			actualLength ++;
-		}
-		switch (actualLength) {
-			case 0: return VoidBinding;
-			case 1: return types[indexOfFirst];
-		}
-
-		// record all supertypes of type
-		// intersect with all supertypes of otherType
-		TypeBinding firstType = types[indexOfFirst];
-		TypeBinding[] superTypes;
-		int superLength;
-		if (firstType.isBaseType()) {
-			return null; 
-		} else if (firstType.isArrayType()) {
-			superLength = 4;
-			superTypes = new TypeBinding[] {
-					firstType, 
-					getJavaIoSerializable(),
-					getJavaLangCloneable(),
-					getJavaLangObject(),
-			};
-		} else {
-			ArrayList typesToVisit = new ArrayList(5);
-			typesToVisit.add(firstType);
-			ReferenceBinding currentType = (ReferenceBinding)firstType;
-			for (int i = 0, max = 1; i < max; i++) {
-				currentType = (ReferenceBinding) typesToVisit.get(i);
-				ReferenceBinding itsSuperclass = currentType.superclass();
-				if (itsSuperclass != null && !typesToVisit.contains(itsSuperclass)) {
-					typesToVisit.add(itsSuperclass);
-					max++;
-				}
-				ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
-				for (int j = 0, count = itsInterfaces.length; j < count; j++)
-					if (!typesToVisit.contains(itsInterfaces[j])) {
-						typesToVisit.add(itsInterfaces[j]);
-						max++;
-					}
-			}
-			superLength = typesToVisit.size();
-			superTypes = new TypeBinding[superLength];
-			typesToVisit.toArray(superTypes);
-		}
-		int remaining = superLength;
-		nextOtherType: for (int i = indexOfFirst+1; i < length; i++) {
-			TypeBinding otherType = types[i];
-			if (otherType == null)
-				continue nextOtherType;
-			else if (otherType.isArrayType()) {
-				nextSuperType: for (int j = 0; j < superLength; j++) {
-					TypeBinding superType = superTypes[j];
-					if (superType == null || superType == otherType) continue nextSuperType;
-					switch (superType.id) {
-						case T_JavaIoSerializable :
-						case T_JavaLangCloneable :
-						case T_JavaLangObject :
-							continue nextSuperType;
-					}
-					superTypes[j] = null;
-					if (--remaining == 0) return null;
-					
-				}
-				continue nextOtherType;
-			}
-			ReferenceBinding otherRefType = (ReferenceBinding) otherType;
-			nextSuperType: for (int j = 0; j < superLength; j++) {
-				TypeBinding superType = superTypes[j];
-				if (superType == null) continue nextSuperType;
-				if (otherRefType.isCompatibleWith(superType)) {
-					break nextSuperType;
-				} else {
-					superTypes[j] = null;
-					if (--remaining == 0) return null;
-				}
-			}				
-		}
-		// per construction, first non-null supertype is most specific common supertype
-		for (int i = 0; i < superLength; i++) {
-			TypeBinding superType = superTypes[i];
-			if (superType != null) return superType;
-		}
-		return null;
-	}
-
 	// Internal use only
 	/* All methods in visible are acceptable matches for the method in question...
 	* Since the receiver type is an interface, we ignore the possibility that 2 inherited
@@ -2664,12 +3193,8 @@ public abstract class Scope
 			MethodBinding method = visible[i];
 			for (int j = 0; j < visibleSize; j++) {
 				if (i == j) continue;
-				MethodBinding compatibleMethod = computeCompatibleMethod(visible[j], method.parameters, invocationSite);
-				if (compatibleMethod == null || !compatibleMethod.isValidBinding()) {
-					if (problemMethod == null)
-						problemMethod = compatibleMethod;
+				if (!visible[j].areParametersCompatibleWith(method.parameters))
 					continue nextVisible;
-				}
 			}
 			compilationUnitScope().recordTypeReferences(method.thrownExceptions);
 			return method;
@@ -2679,22 +3204,84 @@ public abstract class Scope
 		return problemMethod;
 	}
 
-	// Internal use only
-	/* All methods in visible are acceptable matches for the method in question...
-	* Since 1.4, the inherited ambiguous case has been removed from mostSpecificClassMethodBinding
-	*/
-	protected final MethodBinding mostSpecificMethodBinding(MethodBinding[] visible, int visibleSize, InvocationSite invocationSite) {
-		MethodBinding method = null;
-		nextVisible : for (int i = 0; i < visibleSize; i++) {
-			method = visible[i];
-			for (int j = 0; j < visibleSize; j++) {
-				if (i == j) continue;
-				MethodBinding compatibleMethod = computeCompatibleMethod(visible[j], method.parameters, invocationSite);
-				if (compatibleMethod == null)
-					continue nextVisible;
+	protected final MethodBinding mostSpecificMethodBinding(MethodBinding[] visible, int visibleSize, TypeBinding[] argumentTypes, InvocationSite invocationSite) {
+		int[] compatibilityLevels = new int[visibleSize];
+		for (int i = 0; i < visibleSize; i++)
+			compatibilityLevels[i] = parameterCompatibilityLevel(visible[i], argumentTypes);
+
+		for (int level = 0, max = VARARGS_COMPATIBLE; level <= max; level++) {
+			nextVisible : for (int i = 0; i < visibleSize; i++) {
+				if (compatibilityLevels[i] != level) continue nextVisible; // skip this method for now
+				MethodBinding method = visible[i];
+				TypeBinding[] params = method.tiebreakMethod().parameters;
+				for (int j = 0; j < visibleSize; j++) {
+					if (i == j || compatibilityLevels[j] != level) continue;
+					max = level; // do not examine further categories
+					MethodBinding method2 = visible[j];
+					// tiebreak generic methods using variant where type params are substituted by their erasures
+					if (!method2.tiebreakMethod().areParametersCompatibleWith(params)) {
+						if (method.isVarargs() && method2.isVarargs()) {
+							// check the non-vararg parameters
+							int paramLength = params.length;
+							TypeBinding[] params2 = method2.tiebreakMethod().parameters;
+							if (paramLength != params2.length)
+								continue nextVisible;
+							for (int p = paramLength - 2; p >= 0; p--)
+								if (params[p] != params2[p] && !params[p].isCompatibleWith(params2[p]))
+									continue nextVisible;
+
+							TypeBinding elementsType = ((ArrayBinding) params2[paramLength - 1]).elementsType();
+							if (params[paramLength - 1].isCompatibleWith(elementsType))
+								continue; // special case to choose between 2 varargs methods when the last arg is missing or its Object[]
+						}
+						continue nextVisible;
+					}
+
+					// parameterized superclasses & interfaces may be walked twice from different paths
+					if (method.original() == method2.original()) continue;
+
+					// see if method & method2 are duplicates due to the current substitution or multiple static imported methods
+					if (method.tiebreakMethod().areParametersEqual(method2.tiebreakMethod())) {
+						if (method.declaringClass == method2.declaringClass)
+							continue nextVisible; // duplicates thru substitution
+
+						MethodBinding original = method.original();
+						if (method.hasSubstitutedParameters() || original.typeVariables != NoTypeVariables) {
+							ReferenceBinding declaringClass = (ReferenceBinding) method.declaringClass.erasure();
+							ReferenceBinding superType = declaringClass.findSuperTypeWithSameErasure(method2.declaringClass.erasure());
+							if (superType == null) {
+								// accept concrete methods over abstract methods found due to the default abstract method walk
+								if (!method.isAbstract() && method2.isAbstract())
+									continue;
+								continue nextVisible;
+							}
+							MethodBinding inheritedMethod = method2;
+							MethodBinding inheritedOriginal = method2.original();
+							if (method.hasSubstitutedParameters()) { // must find inherited method with the same substituted variables
+								MethodBinding[] superMethods = superType.getMethods(inheritedMethod.selector);
+								for (int m = 0, l = superMethods.length; m < l; m++) {
+									if (superMethods[m].original() == inheritedOriginal) {
+										inheritedMethod = superMethods[m];
+										break;
+									}
+								}
+							}
+							if (original.typeVariables != NoTypeVariables)
+								inheritedMethod = original.computeSubstitutedMethod(inheritedMethod == method2 ? inheritedOriginal : inheritedMethod, environment());
+							if (inheritedMethod == null || !original.areParametersEqual(inheritedMethod))
+								break nextVisible; // dup thru substitution, not overridden... cannot find possible match
+							// method overrides method2, accept it
+						} else if (method.isStatic() && method2.isStatic()) {
+							ReferenceBinding declaringClass = (ReferenceBinding) method.declaringClass.erasure();
+							ReferenceBinding superType = declaringClass.findSuperTypeWithSameErasure(method2.declaringClass.erasure());
+							if (superType == null)
+								continue nextVisible; // static methods from unrelated types
+						}
+					}
+				}
+				compilationUnitScope().recordTypeReferences(method.thrownExceptions);
+				return method;
 			}
-			compilationUnitScope().recordTypeReferences(method.thrownExceptions);
-			return method;
 		}
 		return new ProblemMethodBinding(visible[0].selector, visible[0].parameters, Ambiguous);
 	}	
@@ -2721,6 +3308,81 @@ public abstract class Scope
 		return lastMethodScope; // may answer null if no method around
 	}
 
+	protected int parameterCompatibilityLevel(MethodBinding method, TypeBinding[] arguments) {
+		TypeBinding[] parameters = method.parameters;
+		int paramLength = parameters.length;
+		int argLength = arguments.length;
+
+		if (compilerOptions().sourceLevel < ClassFileConstants.JDK1_5) {
+			if (paramLength != argLength)
+				return NOT_COMPATIBLE;
+			for (int i = 0; i < argLength; i++) {
+				TypeBinding param = parameters[i];
+				TypeBinding arg = arguments[i];
+				if (arg != param && !arg.isCompatibleWith(param))
+					return NOT_COMPATIBLE;
+			}
+			return COMPATIBLE;
+		}
+
+		int level = COMPATIBLE; // no autoboxing or varargs support needed
+		int lastIndex = argLength;
+		if (method.isVarargs()) {
+			lastIndex = paramLength - 1;
+			if (paramLength == argLength) { // accept X or X[] but not X[][]
+				TypeBinding param = parameters[lastIndex]; // is an ArrayBinding by definition
+				TypeBinding arg = arguments[lastIndex];
+				if (param != arg) {
+					level = parameterCompatibilityLevel(arg, param, environment());
+					if (level == NOT_COMPATIBLE) {
+						// expect X[], is it called with X
+						param = ((ArrayBinding) param).elementsType();
+						if (parameterCompatibilityLevel(arg, param, environment()) == NOT_COMPATIBLE)
+							return NOT_COMPATIBLE;
+						level = VARARGS_COMPATIBLE; // varargs support needed
+					}
+				}
+			} else {
+				if (paramLength < argLength) { // all remaining argument types must be compatible with the elementsType of varArgType
+					TypeBinding param = ((ArrayBinding) parameters[lastIndex]).elementsType();
+					for (int i = lastIndex; i < argLength; i++) {
+						TypeBinding arg = arguments[i];
+						if (param != arg && parameterCompatibilityLevel(arg, param, environment()) == NOT_COMPATIBLE)
+							return NOT_COMPATIBLE;
+					}
+				}  else if (lastIndex != argLength) { // can call foo(int i, X ... x) with foo(1) but NOT foo();
+					return NOT_COMPATIBLE;
+				}
+				level = VARARGS_COMPATIBLE; // varargs support needed
+			}
+			// now compare standard arguments from 0 to lastIndex
+		}
+		for (int i = 0; i < lastIndex; i++) {
+			TypeBinding param = parameters[i];
+			TypeBinding arg = arguments[i];
+			if (arg != param) {
+				int newLevel = parameterCompatibilityLevel(arg, param, environment());
+				if (newLevel == NOT_COMPATIBLE)
+					return NOT_COMPATIBLE;
+				if (newLevel > level)
+					level = newLevel;
+			}
+		}
+		return level;
+	}
+
+	private int parameterCompatibilityLevel(TypeBinding arg, TypeBinding param, LookupEnvironment env) {
+		// only called if env.options.sourceLevel >= ClassFileConstants.JDK1_5
+		if (arg.isCompatibleWith(param))
+			return COMPATIBLE;
+		if (arg.isBaseType() != param.isBaseType()) {
+			TypeBinding convertedType = env.computeBoxingType(arg);
+			if (convertedType == param || convertedType.isCompatibleWith(param))
+				return AUTOBOX_COMPATIBLE;
+		}
+		return NOT_COMPATIBLE;
+	}
+
 	public abstract ProblemReporter problemReporter();
 
 	public final CompilationUnitDeclaration referenceCompilationUnit() {
@@ -2729,21 +3391,28 @@ public abstract class Scope
 			unitScope = scope;
 		return ((CompilationUnitScope) unitScope).referenceContext;
 	}
+	
+	/**
+	 * Returns the nearest reference context, starting from current scope.
+	 * If starting on a class, it will return current class. If starting on unitScope, returns unit.
+	 */
+	public ReferenceContext referenceContext() {
+		Scope current = this;
+		do {
+			switch(current.kind) {
+				case METHOD_SCOPE :
+					return ((MethodScope) current).referenceContext;
+				case CLASS_SCOPE :
+					return ((ClassScope) current).referenceContext;
+				case COMPILATION_UNIT_SCOPE :
+					return ((CompilationUnitScope) current).referenceContext;
+			}
+		} while ((current = current.parent) != null);
+		return null;
+	}
+	
 	// start position in this scope - for ordering scopes vs. variables
 	int startIndex() {
 		return 0;
-	}
-	
-	/**
-	 * Returns the immediately enclosing switchCase statement (carried by closest blockScope),
-	 */
-	public CaseStatement switchCase() {
-		Scope scope = this;
-		do {
-			if (scope instanceof BlockScope)
-				return ((BlockScope) scope).switchCase;
-			scope = scope.parent;
-		} while (scope != null);
-		return null;
 	}
 }

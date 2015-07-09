@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -20,7 +20,7 @@ public class ExplicitConstructorCall extends Statement implements InvocationSite
 	public Expression[] arguments;
 	public Expression qualification;
 	public MethodBinding binding;							// exact binding resulting from lookup
-	protected MethodBinding codegenBinding;	// actual binding used for code generation (if no synthetic accessor)
+	protected MethodBinding codegenBinding;		// actual binding used for code generation (if no synthetic accessor)
 	MethodBinding syntheticAccessor;						// synthetic accessor for inner-emulation
 	public int accessMode;
 	public TypeReference[] typeArguments;
@@ -103,8 +103,14 @@ public class ExplicitConstructorCall extends Statement implements InvocationSite
 			int pc = codeStream.position;
 			codeStream.aload_0();
 
-			// handling innerclass constructor invocation
 			ReferenceBinding targetType = this.codegenBinding.declaringClass;
+			
+			// special name&ordinal argument generation for enum constructors
+			if (targetType.erasure().id == T_JavaLangEnum || targetType.isEnum()) {
+				codeStream.aload_1(); // pass along name param as name arg
+				codeStream.iload_2(); // pass along ordinal param as ordinal arg
+			}
+			// handling innerclass constructor invocation
 			// handling innerclass instance allocation - enclosing instance arguments
 			if (targetType.isNestedType()) {
 				codeStream.generateSyntheticEnclosingInstanceValues(
@@ -113,12 +119,9 @@ public class ExplicitConstructorCall extends Statement implements InvocationSite
 					discardEnclosingInstance ? null : qualification,
 					this);
 			}
-			// regular code gen
-			if (arguments != null) {
-				for (int i = 0, max = arguments.length; i < max; i++) {
-					arguments[i].generateCode(currentScope, codeStream, true);
-				}
-			}
+			// generate arguments
+			generateArguments(binding, arguments, currentScope, codeStream);			
+			
 			// handling innerclass instance allocation - outer local arguments
 			if (targetType.isNestedType()) {
 				codeStream.generateSyntheticOuterArgumentValues(
@@ -173,18 +176,18 @@ public class ExplicitConstructorCall extends Statement implements InvocationSite
 	 * exact need.
 	 */
 	void manageEnclosingInstanceAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
-		ReferenceBinding superType;
+		ReferenceBinding superTypeErasure = (ReferenceBinding) binding.declaringClass.erasure();
 
 		if (!flowInfo.isReachable()) return;
 		// perform some emulation work in case there is some and we are inside a local type only
-		if ((superType = binding.declaringClass).isNestedType()
+		if (superTypeErasure.isNestedType()
 			&& currentScope.enclosingSourceType().isLocalType()) {
 
-			if (superType.isLocalType()) {
-				((LocalTypeBinding) superType).addInnerEmulationDependent(currentScope, qualification != null);
+			if (superTypeErasure.isLocalType()) {
+				((LocalTypeBinding) superTypeErasure).addInnerEmulationDependent(currentScope, qualification != null);
 			} else {
 				// locally propagate, since we already now the desired shape for sure
-				currentScope.propagateInnerEmulation(superType, qualification != null);
+				currentScope.propagateInnerEmulation(superTypeErasure, qualification != null);
 			}
 		}
 	}
@@ -198,7 +201,7 @@ public class ExplicitConstructorCall extends Statement implements InvocationSite
 		// perform some emulation work in case there is some and we are inside a local type only
 		if (binding.isPrivate() && accessMode != This) {
 
-			if (currentScope.environment().options.isPrivateConstructorAccessChangingVisibility) {
+			if (currentScope.compilerOptions().isPrivateConstructorAccessChangingVisibility) {
 				this.codegenBinding.tagForClearingPrivateModifier();
 				// constructor will not be dumped as private, no emulation required thus
 			} else {
@@ -214,7 +217,7 @@ public class ExplicitConstructorCall extends Statement implements InvocationSite
 		printIndent(indent, output);
 		if (qualification != null) qualification.printExpression(0, output).append('.');
 		if (typeArguments != null) {
-			output.append('<');//$NON-NLS-1$
+			output.append('<');
 			int max = typeArguments.length - 1;
 			for (int j = 0; j < max; j++) {
 				typeArguments[j].print(0, output);
@@ -260,7 +263,10 @@ public class ExplicitConstructorCall extends Statement implements InvocationSite
 			if (receiverType == null) {
 				return;
 			}
-
+			// prevent (explicit) super constructor invocation from within enum
+			if (this.accessMode == Super && receiverType.erasure().id == T_JavaLangEnum) {
+				scope.problemReporter().cannotInvokeSuperConstructorInEnum(this, methodScope.referenceMethod().binding);
+			}
 			// qualification should be from the type of the enclosingType
 			if (qualification != null) {
 				if (accessMode != Super) {
@@ -285,7 +291,7 @@ public class ExplicitConstructorCall extends Statement implements InvocationSite
 				boolean argHasError = false; // typeChecks all arguments
 				this.genericTypeArguments = new TypeBinding[length];
 				for (int i = 0; i < length; i++) {
-					if ((this.genericTypeArguments[i] = this.typeArguments[i].resolveType(scope)) == null) {
+					if ((this.genericTypeArguments[i] = this.typeArguments[i].resolveType(scope, true /* check bounds*/)) == null) {
 						argHasError = true;
 					}
 				}
@@ -314,14 +320,16 @@ public class ExplicitConstructorCall extends Statement implements InvocationSite
 				if (argHasError) {
 					return;
 				}
+			} else if (receiverType.erasure().id == T_JavaLangEnum) {
+				// TODO (philippe) get rid of once well-known binding is available
+				argumentTypes = new TypeBinding[] { scope.getJavaLangString(), BaseTypes.IntBinding };
 			}
 			if ((binding = scope.getConstructor(receiverType, argumentTypes, this)).isValidBinding()) {
 				if (isMethodUseDeprecated(binding, scope))
 					scope.problemReporter().deprecatedMethod(binding, this);
-				if (this.arguments != null)
-					checkInvocationArguments(scope, null, receiverType, binding, this.arguments, argumentTypes, argsContainCast, this);
-				if (binding.isPrivate()) {
-					binding.modifiers |= AccPrivateUsed;
+				checkInvocationArguments(scope, null, receiverType, binding, this.arguments, argumentTypes, argsContainCast, this);
+				if (binding.isPrivate() || receiverType.isLocalType()) {
+					binding.original().modifiers |= AccLocallyUsed;
 				}				
 			} else {
 				if (binding.declaringClass == null)

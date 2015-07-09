@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -16,6 +16,7 @@ package org.eclipse.jdt.core;
  * This interface may be implemented by clients.
  * </p>
  * @since 2.0
+ * @deprecated Use <code>WorkingCopyOwner</code> instead
  */
 public interface IBufferFactory {
 
@@ -26,6 +27,7 @@ public interface IBufferFactory {
 	 * its content is <code>null</code>).
 	 * 
 	 * @param owner the owner of the buffer
+	 * @return the newly created buffer
 	 * @see IBuffer
 	 */
 	IBuffer createBuffer(IOpenable owner);

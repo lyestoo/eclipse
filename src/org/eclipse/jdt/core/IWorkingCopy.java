@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -49,6 +49,7 @@ import org.eclipse.core.runtime.IProgressMonitor;
  * <p>
  * This interface is not intended to be implemented by clients.
  * </p>
+ * @deprecated Use <code>ICompilationUnit</code>instead
  */
 public interface IWorkingCopy {
 	
@@ -118,6 +119,7 @@ public interface IWorkingCopy {
 	 * or <code>null</code> if this is not a working copy element.  This is a handle
 	 * only method, the returned element may or may not exist.
 	 * 
+	 * @param workingCopyElement the specified working copy element
 	 * @return the original element the specified working copy element was created from,
 	 * or <code>null</code> if this is not a working copy element
 	 */
@@ -269,6 +271,7 @@ public interface IWorkingCopy {
 	 * Returns whether this working copy's original element's content
 	 * has not changed since the inception of this working copy.
 	 * 
+	 * @param resource this working copy's resource
 	 * @return true if this working copy's original element's content
 	 * has not changed since the inception of this working copy, false otherwise
 	 */

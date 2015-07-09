@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -19,6 +19,7 @@ import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
 public class ArrayTypeReference extends SingleTypeReference {
 	public int dimensions;
+	public int originalSourceEnd;
 
 	/**
 	 * ArrayTypeReference constructor comment.
@@ -29,6 +30,7 @@ public class ArrayTypeReference extends SingleTypeReference {
 	public ArrayTypeReference(char[] source, int dimensions, long pos) {
 		
 		super(source, pos);
+		this.originalSourceEnd = this.sourceEnd;
 		this.dimensions = dimensions ;
 	}
 	
@@ -62,9 +64,16 @@ public class ArrayTypeReference extends SingleTypeReference {
 	
 	public StringBuffer printExpression(int indent, StringBuffer output){
 	
-		super.printExpression(indent, output)  ;
-		for (int i= 0 ; i < dimensions ; i++) {
-			output.append("[]"); //$NON-NLS-1$
+		super.printExpression(indent, output);
+		if ((this.bits & IsVarArgs) != 0) {
+			for (int i= 0 ; i < dimensions - 1; i++) {
+				output.append("[]"); //$NON-NLS-1$
+			}
+			output.append("..."); //$NON-NLS-1$
+		} else {
+			for (int i= 0 ; i < dimensions; i++) {
+				output.append("[]"); //$NON-NLS-1$
+			}
 		}
 		return output;
 	}

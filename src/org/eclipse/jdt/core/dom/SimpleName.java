@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -171,17 +171,23 @@ public class SimpleName extends Name {
 	 * @exception IllegalArgumentException if the identifier is invalid
 	 */ 
 	public void setIdentifier(String identifier) {
+		// update internalSetIdentifier if this is changed
 		if (identifier == null) {
 			throw new IllegalArgumentException();
 		}
 		Scanner scanner = this.ast.scanner;
 		char[] source = identifier.toCharArray();
 		scanner.setSource(source);
-		scanner.resetTo(0, source.length);
+		final int length = source.length;
+		scanner.resetTo(0, length);
 		try {
 			int tokenType = scanner.getNextToken();
 			switch(tokenType) {
 				case TerminalTokens.TokenNameIdentifier:
+					if (scanner.getCurrentTokenEndPosition() != length - 1) {
+						// this is the case when there is only one identifier see 87849
+						throw new IllegalArgumentException();
+					}
 					break;
 				default:
 					throw new IllegalArgumentException();
@@ -194,6 +200,15 @@ public class SimpleName extends Name {
 		postValueChange(IDENTIFIER_PROPERTY);
 	}
 
+	/* (omit javadoc for this method)
+	 * This method is a copy of setIdentifier(String) that doesn't do any validation.
+	 */
+	void internalSetIdentifier(String ident) {
+		preValueChange(IDENTIFIER_PROPERTY);
+		this.identifier = ident;
+		postValueChange(IDENTIFIER_PROPERTY);
+	}
+	
 	/**
 	 * Returns whether this simple name represents a name that is being defined,
 	 * as opposed to one being referenced. The following positions are considered
@@ -273,7 +288,7 @@ public class SimpleName extends Name {
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		int size = BASE_NAME_NODE_SIZE + 1 * 4;
+		int size = BASE_NAME_NODE_SIZE + 2 * 4;
 		if (identifier != MISSING_IDENTIFIER) {
 			// everything but our missing id costs
 			size += stringSize(identifier);

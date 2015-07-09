@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -71,6 +71,11 @@ public class IfStatement extends Statement {
 		if (isConditionOptimizedFalse) {
 			thenFlowInfo.setReachMode(FlowInfo.UNREACHABLE); 
 		}
+		FlowInfo elseFlowInfo = flowInfo.initsWhenFalse().copy();
+		if (isConditionOptimizedTrue) {
+			elseFlowInfo.setReachMode(FlowInfo.UNREACHABLE); 
+		}
+		this.condition.checkNullComparison(currentScope, flowContext, flowInfo, thenFlowInfo, elseFlowInfo);
 		if (this.thenStatement != null) {
 			// Save info for code gen
 			thenInitStateIndex =
@@ -84,10 +89,6 @@ public class IfStatement extends Statement {
 		this.thenExit =  !thenFlowInfo.isReachable();
 
 		// process the ELSE part
-		FlowInfo elseFlowInfo = flowInfo.initsWhenFalse().copy();
-		if (isConditionOptimizedTrue) {
-			elseFlowInfo.setReachMode(FlowInfo.UNREACHABLE); 
-		}
 		if (this.elseStatement != null) {
 		    // signal else clause unnecessarily nested, tolerate else-if code pattern
 		    if (thenFlowInfo == FlowInfo.DEAD_END 
@@ -162,7 +163,7 @@ public class IfStatement extends Statement {
 				this.thenStatement.branchChainTo(endifLabel);
 				int position = codeStream.position;
 				codeStream.goto_(endifLabel);
-				codeStream.updateLastRecordedEndPC(position);
+				codeStream.updateLastRecordedEndPC((this.thenStatement instanceof Block) ? ((Block) this.thenStatement).scope : currentScope, position);
 				//goto is tagged as part of the thenAction block
 			}
 			falseLabel.place();

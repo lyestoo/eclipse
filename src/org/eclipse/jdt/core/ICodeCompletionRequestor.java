@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2004 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -20,14 +20,12 @@ import org.eclipse.core.resources.IMarker;
  * </p>
  *
  * @see ICodeAssist
- * @deprecated Use an ICompletionRequestor instead
+ * @deprecated Use {@link CompletionRequestor} instead.
  */
 public interface ICodeCompletionRequestor {
 /**
  * Code assist notification of a class completion.
  * 
- * @return void - Nothing is answered back to code assist engine
- *
  * @param packageName Declaring package name of the class.
  * @param className Name of the class.
  * @param completionName The completion for the class.
@@ -50,7 +48,7 @@ void acceptClass(
 	int completionEnd);
 /**
  * Code assist notification of a compilation error detected during completion.
- *  @param error Only problems which are categorized as errors are notified to the requestor,
+ *  @param marker Only problems which are categorized as errors are notified to the requestor,
  *		warnings are silently ignored.
  *		In case an error got signaled, no other completions might be available,
  *		therefore the problem message should be presented to the user.
@@ -102,7 +100,7 @@ void acceptField(
  * Code assist notification of an interface completion.
  *
  * @param packageName Declaring package name of the interface.
- * @param className Name of the interface.
+ * @param interfaceName Name of the interface.
  * @param completionName The completion for the interface.
  *   Can include ';' for imported interfaces.
  * @param modifiers The modifiers of the interface.
@@ -132,12 +130,8 @@ void acceptKeyword(char[] keywordName, int completionStart, int completionEnd);
 /**
  * Code assist notification of a label completion.
  *
- * @return void - Nothing is answered back to code assist engine
- *
  * @param labelName The label source.
- * 
  * @param completionStart The start position of insertion of the name of this label.
- * 
  * @param completionEnd The end position of insertion of the name of this label.
  */
 void acceptLabel(char[] labelName, int completionStart, int completionEnd);
@@ -222,8 +216,6 @@ void acceptMethod(
 /**
  * Code assist notification of a modifier completion.
  *
- * @return void - Nothing is answered back to code assist engine
- *
  * @param modifierName The new modifier.
  * @param completionStart The start position of insertion of the name of this new modifier.
  * @param completionEnd The end position of insertion of the name of this new modifier.
@@ -231,8 +223,6 @@ void acceptMethod(
 void acceptModifier(char[] modifierName, int completionStart, int completionEnd);
 /**
  * Code assist notification of a package completion.
- *
- * @return void - Nothing is answered back to code assist engine
  *
  * @param packageName The package name.
  * @param completionName The completion for the package.
@@ -252,8 +242,6 @@ void acceptPackage(
 /**
  * Code assist notification of a type completion.
  * 
- * @return void - Nothing is answered back to code assist engine
- *
  * @param packageName Declaring package name of the type.
  * @param typeName Name of the type.
  * @param completionName The completion for the type.

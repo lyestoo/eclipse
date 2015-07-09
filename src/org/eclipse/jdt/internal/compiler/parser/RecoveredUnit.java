@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -15,9 +15,11 @@ package org.eclipse.jdt.internal.compiler.parser;
  */
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
+import org.eclipse.jdt.internal.compiler.ast.Block;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ImportReference;
+import org.eclipse.jdt.internal.compiler.ast.Initializer;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 
 public class RecoveredUnit extends RecoveredElement {
@@ -40,9 +42,21 @@ public RecoveredElement add(AbstractMethodDeclaration methodDeclaration, int bra
 	/* attach it to last type - if any */
 	if (this.typeCount > 0){
 		RecoveredType type = this.types[this.typeCount -1];
+		int start = type.bodyEnd;
+		int end = type.typeDeclaration.bodyEnd;
 		type.bodyEnd = 0; // reset position
 		type.typeDeclaration.declarationSourceEnd = 0; // reset position
 		type.typeDeclaration.bodyEnd = 0;
+		
+		if(start > 0 && start < end) {
+			Initializer initializer = new Initializer(new Block(0), 0);
+			initializer.bodyStart = end;
+			initializer.bodyEnd = end;
+			initializer.declarationSourceStart = end;
+			initializer.declarationSourceEnd = end;
+			type.add(initializer, bracketBalanceValue);
+		}
+		
 		return type.add(methodDeclaration, bracketBalanceValue);
 	}
 	return this; // ignore

@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
 /*
  * Created on 2004-03-11
  *
@@ -7,31 +17,24 @@
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
-import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
-import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
-import org.eclipse.jdt.internal.compiler.lookup.CompilationUnitScope;
+import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public class MarkerAnnotation extends Annotation {
 	
-	public MarkerAnnotation(char[][] tokens, long[] sourcePositions, int sourceStart) {
-		this.tokens = tokens;
-		this.sourcePositions = sourcePositions;
+	public MarkerAnnotation(TypeReference type, int sourceStart) {
+		this.type = type;
 		this.sourceStart = sourceStart;
-		this.sourceEnd = (int) sourcePositions[sourcePositions.length - 1];
+		this.sourceEnd = type.sourceEnd;
 	}
 	
-	public MarkerAnnotation(char[] token, long sourcePosition, int sourceStart) {
-		this.tokens = new char[][] { token };
-		this.sourcePositions = new long[] { sourcePosition };
-		this.sourceStart = sourceStart;
-		this.sourceEnd = (int) sourcePosition;
+	/**
+	 * @see org.eclipse.jdt.internal.compiler.ast.Annotation#memberValuePairs()
+	 */
+	public MemberValuePair[] memberValuePairs() {
+		return NoValuePairs;
 	}
 	
 	public void traverse(ASTVisitor visitor, BlockScope scope) {
-		visitor.visit(this, scope);
-		visitor.endVisit(this, scope);
-	}
-	public void traverse(ASTVisitor visitor, ClassScope scope) {
 		visitor.visit(this, scope);
 		visitor.endVisit(this, scope);
 	}

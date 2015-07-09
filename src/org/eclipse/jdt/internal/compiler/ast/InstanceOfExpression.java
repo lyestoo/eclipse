@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -37,9 +37,11 @@ public class InstanceOfExpression extends OperatorExpression {
 		FlowContext flowContext,
 		FlowInfo flowInfo) {
 
-		return expression
+		flowInfo = expression
 			.analyseCode(currentScope, flowContext, flowInfo)
 			.unconditionalInits();
+		expression.checkNullStatus(currentScope, flowContext, flowInfo, FlowInfo.NON_NULL);
+		return flowInfo;
 	}
 
 	/**
@@ -57,8 +59,11 @@ public class InstanceOfExpression extends OperatorExpression {
 		int pc = codeStream.position;
 		expression.generateCode(currentScope, codeStream, true);
 		codeStream.instance_of(type.resolvedType);
-		if (!valueRequired)
+		if (valueRequired) {
+			codeStream.generateImplicitConversion(implicitConversion);
+		} else {
 			codeStream.pop();
+		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 
@@ -67,24 +72,22 @@ public class InstanceOfExpression extends OperatorExpression {
 		expression.printExpression(indent, output).append(" instanceof "); //$NON-NLS-1$
 		return type.print(0, output);
 	}
-	/**
-	 * @see org.eclipse.jdt.internal.compiler.ast.Expression#reportIllegalCast(org.eclipse.jdt.internal.compiler.lookup.Scope, org.eclipse.jdt.internal.compiler.lookup.TypeBinding, org.eclipse.jdt.internal.compiler.lookup.TypeBinding)
-	 */
-	public void reportIllegalCast(Scope scope, TypeBinding castType, TypeBinding expressionType) {
-		scope.problemReporter().notCompatibleTypesError(this, expressionType, castType);
-	}
+
 	public TypeBinding resolveType(BlockScope scope) {
 
 		constant = NotAConstant;
 		TypeBinding expressionType = expression.resolveType(scope);
-		TypeBinding checkedType = type.resolveType(scope);
+		TypeBinding checkedType = type.resolveType(scope, true /* check bounds*/);
 		if (expressionType == null || checkedType == null)
 			return null;
 
-		if (checkedType.isTypeVariable() || checkedType.isParameterizedType() || checkedType.isGenericType()) {
+		if (checkedType.isTypeVariable() || checkedType.isBoundParameterizedType() || checkedType.isGenericType()) {
 			scope.problemReporter().illegalInstanceOfGenericType(checkedType, this);
 		} else {
-			checkCastTypesCompatibility(scope, checkedType, expressionType, null);
+			boolean isLegal = checkCastTypesCompatibility(scope, checkedType, expressionType, null);
+			if (!isLegal) {
+				scope.problemReporter().notCompatibleTypesError(this, expressionType, checkedType);
+			}
 		}
 		return this.resolvedType = BooleanBinding;
 	}
@@ -92,7 +95,9 @@ public class InstanceOfExpression extends OperatorExpression {
 	 * @see org.eclipse.jdt.internal.compiler.ast.Expression#tagAsUnnecessaryCast(Scope,TypeBinding)
 	 */
 	public void tagAsUnnecessaryCast(Scope scope, TypeBinding castType) {
-		scope.problemReporter().unnecessaryInstanceof(this, castType);
+		// null is not instanceof Type, recognize direct scenario
+		if (expression.resolvedType != NullBinding)
+			scope.problemReporter().unnecessaryInstanceof(this, castType);
 	}
 	public void traverse(ASTVisitor visitor, BlockScope scope) {
 

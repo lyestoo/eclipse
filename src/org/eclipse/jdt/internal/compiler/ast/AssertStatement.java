@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -129,7 +129,7 @@ public class AssertStatement extends Statement {
 					case T_void :
 						scope.problemReporter().illegalVoidExpression(exceptionArgument);
 					default:
-					    id = T_Object;
+					    id = T_JavaLangObject;
 					case T_boolean :
 					case T_byte :
 					case T_char :
@@ -138,7 +138,7 @@ public class AssertStatement extends Statement {
 					case T_float :
 					case T_int :
 					case T_long :
-					case T_String :
+					case T_JavaLangString :
 						exceptionArgument.implicitConversion = (id << 4) + id;
 				}
 			}
@@ -169,7 +169,7 @@ public class AssertStatement extends Statement {
 			outerMostClass = (SourceTypeBinding) enclosing;
 		}
 
-		this.assertionSyntheticFieldBinding = outerMostClass.addSyntheticField(this, currentScope);
+		this.assertionSyntheticFieldBinding = outerMostClass.addSyntheticFieldForAssert(currentScope);
 
 		// find <clinit> and enable assertion support
 		TypeDeclaration typeDeclaration = outerMostClass.scope.referenceType();
@@ -177,7 +177,7 @@ public class AssertStatement extends Statement {
 		for (int i = 0, max = methods.length; i < max; i++) {
 			AbstractMethodDeclaration method = methods[i];
 			if (method.isClinit()) {
-				((Clinit) method).setAssertionSupport(assertionSyntheticFieldBinding, currentScope.environment().options.sourceLevel < ClassFileConstants.JDK1_5);
+				((Clinit) method).setAssertionSupport(assertionSyntheticFieldBinding, currentScope.compilerOptions().sourceLevel < ClassFileConstants.JDK1_5);
 				break;
 			}
 		}

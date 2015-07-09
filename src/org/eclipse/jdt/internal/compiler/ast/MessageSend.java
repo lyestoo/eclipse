@@ -1,18 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * Copyright (c) 2000, 2005 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *     Nick Teryaev - fix for bug (https://bugs.eclipse.org/bugs/show_bug.cgi?id=40752)
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.flow.*;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -29,14 +31,17 @@ public class MessageSend extends Expression implements InvocationSite {
 
 	public long nameSourcePosition ; //(start<<32)+end
 
-	public TypeBinding receiverType, qualifyingType;
-	public TypeBinding genericCast;
+	public TypeBinding actualReceiverType;
+	public TypeBinding valueCast; // extra reference type cast to perform on method returned value
 	public TypeReference[] typeArguments;
 	public TypeBinding[] genericTypeArguments;
 	
 public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
 
-	flowInfo = receiver.analyseCode(currentScope, flowContext, flowInfo, !binding.isStatic()).unconditionalInits();
+	boolean nonStatic = !binding.isStatic();
+	flowInfo = receiver.analyseCode(currentScope, flowContext, flowInfo, nonStatic).unconditionalInits();
+	if (nonStatic) receiver.checkNullStatus(currentScope, flowContext, flowInfo, FlowInfo.NON_NULL);
+
 	if (arguments != null) {
 		int length = arguments.length;
 		for (int i = 0; i < length; i++) {
@@ -55,15 +60,27 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
  * @see org.eclipse.jdt.internal.compiler.ast.Expression#computeConversion(org.eclipse.jdt.internal.compiler.lookup.Scope, org.eclipse.jdt.internal.compiler.lookup.TypeBinding, org.eclipse.jdt.internal.compiler.lookup.TypeBinding)
  */
 public void computeConversion(Scope scope, TypeBinding runtimeTimeType, TypeBinding compileTimeType) {
+	if (runtimeTimeType == null || compileTimeType == null)
+		return;
 	// set the generic cast after the fact, once the type expectation is fully known (no need for strict cast)
 	if (this.binding != null && this.binding.isValidBinding()) {
 		MethodBinding originalBinding = this.binding.original();
 		if (originalBinding != this.binding) {
 		    // extra cast needed if method return type has type variable
-		    if ((originalBinding.returnType.tagBits & TagBits.HasTypeVariable) != 0 && runtimeTimeType.id != T_Object) {
-		        this.genericCast = originalBinding.returnType.genericCast(runtimeTimeType);
+		    if ((originalBinding.returnType.tagBits & TagBits.HasTypeVariable) != 0 && runtimeTimeType.id != T_JavaLangObject) {
+		    	TypeBinding targetType = (!compileTimeType.isBaseType() && runtimeTimeType.isBaseType()) 
+		    		? compileTimeType  // unboxing: checkcast before conversion
+		    		: runtimeTimeType;
+		        this.valueCast = originalBinding.returnType.genericCast(targetType); 
 		    }
-		} 	
+		} 	else if (this.actualReceiverType.isArrayType() 
+						&& runtimeTimeType.id != T_JavaLangObject
+						&& this.binding.parameters == NoParameters 
+						&& scope.compilerOptions().complianceLevel >= JDK1_5 
+						&& CharOperation.equals(this.binding.selector, CLONE)) {
+					// from 1.5 compliant mode on, array#clone() resolves to array type, but codegen to #clone()Object - thus require extra inserted cast
+			this.valueCast = runtimeTimeType;			
+		}
 	}
 	super.computeConversion(scope, runtimeTimeType, compileTimeType);
 }
@@ -88,13 +105,10 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 		codeStream.generateOuterAccess(path, this, targetType, currentScope);
 	} else {
 		receiver.generateCode(currentScope, codeStream, !isStatic);
+		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 	// generate arguments
-	if (arguments != null){
-		for (int i = 0, max = arguments.length; i < max; i++){
-			arguments[i].generateCode(currentScope, codeStream, true);
-		}
-	}
+	generateArguments(binding, arguments, currentScope, codeStream);
 	// actual message invocation
 	if (syntheticAccessor == null){
 		if (isStatic){
@@ -103,7 +117,7 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 			if( (receiver.isSuper()) || this.codegenBinding.isPrivate()){
 				codeStream.invokespecial(this.codegenBinding);
 			} else {
-				if (this.codegenBinding.declaringClass.isInterface()){
+				if (this.codegenBinding.declaringClass.isInterface()) { // interface or annotation type
 					codeStream.invokeinterface(this.codegenBinding);
 				} else {
 					codeStream.invokevirtual(this.codegenBinding);
@@ -116,8 +130,9 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 	// operation on the returned value
 	if (valueRequired){
 		// implicit conversion if necessary
+		if (this.valueCast != null) 
+			codeStream.checkcast(this.valueCast);
 		codeStream.generateImplicitConversion(implicitConversion);
-		if (this.genericCast != null) codeStream.checkcast(this.genericCast);
 	} else {
 		// pop return value if any
 		switch(binding.returnType.id){
@@ -187,26 +202,31 @@ public void manageSyntheticAccessIfNecessary(BlockScope currentScope, FlowInfo f
 	// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
 	// NOTE: from target 1.2 on, method's declaring class is touched if any different from receiver type
 	// and not from Object or implicit static method call.	
-	if (this.binding.declaringClass != this.qualifyingType
-		&& !this.qualifyingType.isArrayType()
-		&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2
-				&& (!receiver.isImplicitThis() || !this.codegenBinding.isStatic())
-				&& this.binding.declaringClass.id != T_Object) // no change for Object methods
-			|| !this.binding.declaringClass.canBeSeenBy(currentScope))) {
+	if (this.binding.declaringClass != this.actualReceiverType
+			&& !this.actualReceiverType.isArrayType()) {
+		CompilerOptions options = currentScope.compilerOptions();
+		if ((options.targetJDK >= ClassFileConstants.JDK1_2
+				&& (options.complianceLevel >= ClassFileConstants.JDK1_4 || !receiver.isImplicitThis() || !this.codegenBinding.isStatic())
+				&& this.binding.declaringClass.id != T_JavaLangObject) // no change for Object methods
+			|| !this.binding.declaringClass.canBeSeenBy(currentScope)) {
 
-		this.codegenBinding = currentScope.enclosingSourceType().getUpdatedMethodBinding(
-		        										this.codegenBinding, (ReferenceBinding) this.qualifyingType.erasure());
-
+			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedMethodBinding(
+			        										this.codegenBinding, (ReferenceBinding) this.actualReceiverType.erasure());
+		}
 		// Post 1.4.0 target, array clone() invocations are qualified with array type 
 		// This is handled in array type #clone method binding resolution (see Scope and UpdatedMethodBinding)
 	}
 }
 
+public int nullStatus(FlowInfo flowInfo) {
+	return FlowInfo.UNKNOWN;
+}
+	
 public StringBuffer printExpression(int indent, StringBuffer output){
 	
 	if (!receiver.isImplicitThis()) receiver.printExpression(0, output).append('.');
 	if (this.typeArguments != null) {
-		output.append('<');//$NON-NLS-1$
+		output.append('<');
 		int max = typeArguments.length - 1;
 		for (int j = 0; j < max; j++) {
 			typeArguments[j].print(0, output);
@@ -215,7 +235,7 @@ public StringBuffer printExpression(int indent, StringBuffer output){
 		typeArguments[max].print(0, output);
 		output.append('>');
 	}
-	output.append(selector).append('(') ; //$NON-NLS-1$
+	output.append(selector).append('(') ;
 	if (arguments != null) {
 		for (int i = 0; i < arguments.length ; i ++) {	
 			if (i > 0) output.append(", "); //$NON-NLS-1$
@@ -235,10 +255,10 @@ public TypeBinding resolveType(BlockScope scope) {
 		this.receiver.bits |= IgnoreNeedForCastCheckMASK; // will check later on
 		receiverCast = true;
 	}
-	this.qualifyingType = this.receiverType = receiver.resolveType(scope); 
-	if (receiverCast && this.receiverType != null) {
+	this.actualReceiverType = receiver.resolveType(scope); 
+	if (receiverCast && this.actualReceiverType != null) {
 		 // due to change of declaring class with receiver type, only identity cast should be notified
-		if (((CastExpression)this.receiver).expression.resolvedType == this.receiverType) { 
+		if (((CastExpression)this.receiver).expression.resolvedType == this.actualReceiverType) { 
 			scope.problemReporter().unnecessaryCast((CastExpression)this.receiver);		
 		}
 	}
@@ -248,7 +268,7 @@ public TypeBinding resolveType(BlockScope scope) {
 		boolean argHasError = false; // typeChecks all arguments
 		this.genericTypeArguments = new TypeBinding[length];
 		for (int i = 0; i < length; i++) {
-			if ((this.genericTypeArguments[i] = this.typeArguments[i].resolveType(scope)) == null) {
+			if ((this.genericTypeArguments[i] = this.typeArguments[i].resolveType(scope, true /* check bounds*/)) == null) {
 				argHasError = true;
 			}
 		}
@@ -273,31 +293,31 @@ public TypeBinding resolveType(BlockScope scope) {
 			}
 		}
 		if (argHasError) {
-			if(receiverType instanceof ReferenceBinding) {
+			if(actualReceiverType instanceof ReferenceBinding) {
 				// record any selector match, for clients who may still need hint about possible method match
-				this.binding = scope.findMethod((ReferenceBinding)receiverType, selector, new TypeBinding[]{}, this);
+				this.binding = scope.findMethod((ReferenceBinding)actualReceiverType, selector, new TypeBinding[]{}, this);
 			}			
 			return null;
 		}
 	}
-	if (this.receiverType == null) {
+	if (this.actualReceiverType == null) {
 		return null;
 	}
 	// base type cannot receive any message
-	if (this.receiverType.isBaseType()) {
-		scope.problemReporter().errorNoMethodFor(this, this.receiverType, argumentTypes);
+	if (this.actualReceiverType.isBaseType()) {
+		scope.problemReporter().errorNoMethodFor(this, this.actualReceiverType, argumentTypes);
 		return null;
 	}
 	this.binding = 
 		receiver.isImplicitThis()
 			? scope.getImplicitMethod(selector, argumentTypes, this)
-			: scope.getMethod(this.receiverType, selector, argumentTypes, this); 
+			: scope.getMethod(this.actualReceiverType, selector, argumentTypes, this); 
 	if (!binding.isValidBinding()) {
 		if (binding.declaringClass == null) {
-			if (this.receiverType instanceof ReferenceBinding) {
-				binding.declaringClass = (ReferenceBinding) this.receiverType;
+			if (this.actualReceiverType instanceof ReferenceBinding) {
+				binding.declaringClass = (ReferenceBinding) this.actualReceiverType;
 			} else { 
-				scope.problemReporter().errorNoMethodFor(this, this.receiverType, argumentTypes);
+				scope.problemReporter().errorNoMethodFor(this, this.actualReceiverType, argumentTypes);
 				return null;
 			}
 		}
@@ -317,9 +337,9 @@ public TypeBinding resolveType(BlockScope scope) {
 		// record the closest match, for clients who may still need hint about possible method match
 		if (closestMatch != null) {
 			this.binding = closestMatch;
-			if (closestMatch.isPrivate() && !scope.isDefinedInMethod(closestMatch)) {
+			if ((closestMatch.isPrivate() || closestMatch.declaringClass.isLocalType()) && !scope.isDefinedInMethod(closestMatch)) {
 				// ignore cases where method is used from within inside itself (e.g. direct recursions)
-				closestMatch.modifiers |= AccPrivateUsed;
+				closestMatch.original().modifiers |= AccLocallyUsed;
 			}
 		}
 		return this.resolvedType;
@@ -327,24 +347,32 @@ public TypeBinding resolveType(BlockScope scope) {
 	if (!binding.isStatic()) {
 		// the "receiver" must not be a type, in other words, a NameReference that the TC has bound to a Type
 		if (receiver instanceof NameReference 
-				&& (((NameReference) receiver).bits & BindingIds.TYPE) != 0) {
+				&& (((NameReference) receiver).bits & Binding.TYPE) != 0) {
 			scope.problemReporter().mustUseAStaticMethod(this, binding);
+		} else {
+			// compute generic cast if necessary
+			TypeBinding receiverErasure = this.actualReceiverType.erasure();
+			if (receiverErasure instanceof ReferenceBinding) {
+				ReferenceBinding match = ((ReferenceBinding)receiverErasure).findSuperTypeWithSameErasure(this.binding.declaringClass);
+				if (match == null) {
+					this.actualReceiverType = this.binding.declaringClass; // handle indirect inheritance thru variable secondary bound
+				}
+			}
+			receiver.computeConversion(scope, this.actualReceiverType, this.actualReceiverType);
 		}
-		receiver.computeConversion(scope, receiverType, receiverType); // compute generic cast if necessary
 	} else {
 		// static message invoked through receiver? legal but unoptimal (optional warning).
 		if (!(receiver.isImplicitThis()
 				|| receiver.isSuper()
 				|| (receiver instanceof NameReference 
-					&& (((NameReference) receiver).bits & BindingIds.TYPE) != 0))) {
+					&& (((NameReference) receiver).bits & Binding.TYPE) != 0))) {
 			scope.problemReporter().nonStaticAccessToStaticMethod(this, binding);
 		}
-		if (!receiver.isImplicitThis() && binding.declaringClass != receiverType) {
+		if (!receiver.isImplicitThis() && binding.declaringClass != actualReceiverType) {
 			scope.problemReporter().indirectAccessToStaticMethod(this, binding);
 		}		
 	}
-	if (this.arguments != null) 
-		checkInvocationArguments(scope, this.receiver, receiverType, binding, this.arguments, argumentTypes, argsContainCast, this);
+	checkInvocationArguments(scope, this.receiver, actualReceiverType, binding, this.arguments, argumentTypes, argsContainCast, this);
 
 	//-------message send that are known to fail at compile time-----------
 	if (binding.isAbstract()) {
@@ -356,10 +384,23 @@ public TypeBinding resolveType(BlockScope scope) {
 	if (isMethodUseDeprecated(binding, scope))
 		scope.problemReporter().deprecatedMethod(binding, this);
 
-	return this.resolvedType = this.binding.returnType;
+	// from 1.5 compliance on, array#clone() returns the array type (but binding still shows Object)
+	if (actualReceiverType.isArrayType() 
+			&& this.binding.parameters == NoParameters 
+			&& scope.compilerOptions().complianceLevel >= JDK1_5 
+			&& CharOperation.equals(this.binding.selector, CLONE)) {
+		this.resolvedType = actualReceiverType;
+	} else {
+		TypeBinding returnType = this.binding.returnType;
+		if (returnType != null) returnType = returnType.capture(scope, this.sourceEnd);
+		this.resolvedType = returnType;
+	}
+	return this.resolvedType;
 }
+
 public void setActualReceiverType(ReferenceBinding receiverType) {
-	this.qualifyingType = receiverType;
+	if (receiverType == null) return; // error scenario only
+	this.actualReceiverType = receiverType;
 }
 /**
  * @see org.eclipse.jdt.internal.compiler.ast.Expression#setExpectedType(org.eclipse.jdt.internal.compiler.lookup.TypeBinding)

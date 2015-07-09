@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2000, 2004 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v10.html
- * 
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -12,11 +12,10 @@ package org.eclipse.jdt.internal.eval;
 
 import java.util.Map;
 
+import org.eclipse.jdt.core.CompletionRequestor;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.codeassist.CompletionEngine;
-import org.eclipse.jdt.internal.codeassist.ISearchableNameEnvironment;
 import org.eclipse.jdt.internal.codeassist.ISelectionRequestor;
 import org.eclipse.jdt.internal.codeassist.SelectionEngine;
 import org.eclipse.jdt.internal.compiler.ClassFile;
@@ -26,7 +25,8 @@ import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
 import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
-import org.eclipse.jdt.internal.core.CompletionRequestorWrapper;
+import org.eclipse.jdt.internal.core.SearchableEnvironment;
+import org.eclipse.jdt.internal.core.util.Util;
 
 /**
  * @see org.eclipse.jdt.core.eval.IEvaluationContext
@@ -50,6 +50,7 @@ public class EvaluationContext implements EvaluationConstants, SuffixConstants {
 	boolean varsChanged;
 	VariablesInfo installedVars;
 	IBinaryType codeSnippetBinary;
+	String lineSeparator;
 
 	/* do names implicitly refer to a given type */
 	char[] declaringTypeName;
@@ -71,6 +72,7 @@ public EvaluationContext() {
 	this.varsChanged = true;
 	this.isStatic = true;
 	this.isConstructorCall = false;
+	this.lineSeparator = org.eclipse.jdt.internal.compiler.util.Util.LINE_SEPARATOR; // default value
 }
 /**
  * Returns the global variables of this evaluation context in the order they were created in.
@@ -95,7 +97,7 @@ public GlobalVariable[] allVariables() {
  *  @param options
  *		set of options used to configure the code assist engine.
  */
-public void complete(char[] codeSnippet, int completionPosition, ISearchableNameEnvironment environment, CompletionRequestorWrapper requestor, Map options, IJavaProject project) {
+public void complete(char[] codeSnippet, int completionPosition, SearchableEnvironment environment, CompletionRequestor requestor, Map options, IJavaProject project) {
 	final char[] className = "CodeSnippetCompletion".toCharArray(); //$NON-NLS-1$
 	final CodeSnippetToCuMapper mapper = new CodeSnippetToCuMapper(
 		codeSnippet, 
@@ -106,14 +108,15 @@ public void complete(char[] codeSnippet, int completionPosition, ISearchableName
 		this.localVariableNames, 
 		this.localVariableTypeNames, 
 		this.localVariableModifiers, 
-		this.declaringTypeName		
+		this.declaringTypeName,
+		this.lineSeparator
 	);
 	ICompilationUnit sourceUnit = new ICompilationUnit() {
 		public char[] getFileName() {
-			return CharOperation.concat(className, SUFFIX_java);
+			return CharOperation.concat(className, Util.defaultJavaExtension().toCharArray());
 		}
 		public char[] getContents() {
-			return mapper.getCUSource();
+			return mapper.getCUSource(EvaluationContext.this.lineSeparator);
 		}
 		public char[] getMainTypeName() {
 			return className;
@@ -123,7 +126,6 @@ public void complete(char[] codeSnippet, int completionPosition, ISearchableName
 		}
 	};
 	CompletionEngine engine = new CompletionEngine(environment, mapper.getCompletionRequestor(requestor), options, project);
-	requestor.completionEngine = engine;
 	engine.complete(sourceUnit, mapper.startPosOffset + completionPosition, 0);
 }
 /**
@@ -482,7 +484,7 @@ public GlobalVariable newVariable(char[] typeName, char[] name, char[] initializ
  * 
  *  @param selectionSourceEnd int
  * 
- *  @param environment org.eclipse.jdt.internal.codeassist.ISearchableNameEnvironment
+ *  @param environment org.eclipse.jdt.internal.core.SearchableEnvironment
  *      used to resolve type/package references and search for types/packages
  *      based on partial names.
  *
@@ -497,7 +499,7 @@ public void select(
 	char[] codeSnippet,
 	int selectionSourceStart,
 	int selectionSourceEnd,
-	ISearchableNameEnvironment environment, 
+	SearchableEnvironment environment, 
 	ISelectionRequestor requestor,
 	Map options) {
 		
@@ -511,14 +513,15 @@ public void select(
 		this.localVariableNames, 
 		this.localVariableTypeNames, 
 		this.localVariableModifiers, 
-		this.declaringTypeName
+		this.declaringTypeName,
+		this.lineSeparator
 	);
 	ICompilationUnit sourceUnit = new ICompilationUnit() {
 		public char[] getFileName() {
-			return CharOperation.concat(className, SUFFIX_java);
+			return CharOperation.concat(className, Util.defaultJavaExtension().toCharArray());
 		}
 		public char[] getContents() {
-			return mapper.getCUSource();
+			return mapper.getCUSource(EvaluationContext.this.lineSeparator);
 		}
 		public char[] getMainTypeName() {
 			return className;
@@ -538,6 +541,12 @@ public void select(
 public void setImports(char[][] imports) {
 	this.imports = imports;
 	this.varsChanged = true; // this may change the visibility of the variable's types
+}
+/**
+ * Sets the line separator used by this evaluation context.
+ */
+public void setLineSeparator(String lineSeparator) {
+	this.lineSeparator = lineSeparator;
 }
 /**
  * Sets the dot-separated name of the package code snippets are ran into.
