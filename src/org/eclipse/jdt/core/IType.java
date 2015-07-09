@@ -1,14 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *     IBM Corporation - added support for restoring previously saved hierarchy
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import java.io.InputStream;
@@ -32,7 +31,7 @@ import org.eclipse.core.runtime.IProgressMonitor;
  * This interface is not intended to be implemented by clients.
  * </p>
  */
-public interface IType extends IMember, IParent {
+public interface IType extends IMember {
 	/**
 	 * Do code completion inside a code snippet in the context of the current type.
 	 * 
@@ -65,6 +64,49 @@ public interface IType extends IMember, IParent {
 		int[] localVariableModifiers,
 		boolean isStatic,
 		ICompletionRequestor requestor)
+		throws JavaModelException;
+
+	/**
+	 * Do code completion inside a code snippet in the context of the current type.
+	 * It considers types in the working copies with the given owner first. In other words, 
+	 * the owner's working copies will take precedence over their original compilation units
+	 * in the workspace.
+	 * <p>
+	 * Note that if a working copy is empty, it will be as if the original compilation
+	 * unit had been deleted.
+	 * </p><p>
+	 * If the type can access to his source code and the insertion position is valid,
+	 * then completion is performed against source. Otherwise the completion is performed
+	 * against type structure and given locals variables.
+	 * </p>
+	 * 
+	 * @param snippet the code snippet
+	 * @param insertion the position with in source where the snippet
+	 * is inserted. This position must not be in comments.
+	 * A possible value is -1, if the position is not known.
+	 * @param position the position with in snippet where the user 
+	 * is performing code assist.
+	 * @param localVariableTypesNames an array (possibly empty) of fully qualified 
+	 * type names of local variables visible at the current scope
+	 * @param localVariableNames an array (possibly empty) of local variable names 
+	 * that are visible at the current scope
+	 * @param localVariableModifiers an array (possible empty) of modifiers for 
+	 * local variables
+	 * @param isStatic whether the current scope is in a static context
+	 * @param requestor the completion requestor
+	 * @param owner the owner of working copies that take precedence over their original compilation units
+	 * @since 3.0
+	 */
+	void codeComplete(
+		char[] snippet,
+		int insertion,
+		int position,
+		char[][] localVariableTypeNames,
+		char[][] localVariableNames,
+		int[] localVariableModifiers,
+		boolean isStatic,
+		ICompletionRequestor requestor,
+		WorkingCopyOwner owner)
 		throws JavaModelException;
 
 	/**
@@ -283,7 +325,7 @@ public interface IType extends IMember, IParent {
 	/**
 	 * Returns the initializer with the specified position relative to
 	 * the order they are defined in the source.
-	 * Numbering starts at 1 (i.e. the first occurrence is occurrence 1, not occurrence 0).
+	 * Numbering starts at 1 (thus the first occurrence is occurrence 1, not occurrence 0).
 	 * This is a handle-only method.  The initializer may or may not be present.
 	 * 
 	 * @param occurrenceCount the specified position
@@ -344,6 +386,7 @@ public interface IType extends IMember, IParent {
 	 * For interfaces, the superclass name is always <code>"java.lang.Object"</code>.
 	 * For source types, the name as declared is returned, for binary types,
 	 * the resolved, qualified name is returned.
+	 * For anonymous types, the superclass name is the name appearing after the 'new' keyword'.
 	 *
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
@@ -359,6 +402,7 @@ public interface IType extends IMember, IParent {
 	 * An empty collection is returned if this type does not implement or
 	 * extend any interfaces. For source types, simple names are returned,
 	 * for binary types, qualified names are returned.
+	 * For anonymous types, an empty collection is always returned.
 	 *
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
@@ -480,7 +524,7 @@ public interface IType extends IMember, IParent {
 	 * Loads a previously saved ITypeHierarchy from an input stream. A type hierarchy can
 	 * be stored using ITypeHierachy#store(OutputStream).
 	 * 
-	 * Only hierarchies originally created by the following methods can be load:
+	 * Only hierarchies originally created by the following methods can be loaded:
 	 * <ul>
 	 * <li>IType#newSupertypeHierarchy(IProgressMonitor)</li>
 	 * <li>IType#newTypeHierarchy(IJavaProject, IProgressMonitor)</li>
@@ -516,6 +560,7 @@ public interface IType extends IMember, IParent {
 	 * <p>
 	 * Note that passing an empty working copy will be as if the original compilation
 	 * unit had been deleted.
+	 * </p>
 	 *
 	 * @param workingCopies the working copies that take precedence over their original compilation units
 	 * @param monitor the given progress monitor
@@ -527,6 +572,66 @@ public interface IType extends IMember, IParent {
 	ITypeHierarchy newSupertypeHierarchy(IWorkingCopy[] workingCopies, IProgressMonitor monitor)
 		throws JavaModelException;
 		
+	/**
+	 * Creates and returns a type hierarchy for this type containing
+	 * this type and all of its supertypes, considering types in the 
+	 * working copies with the given owner. 
+	 * In other words, the owner's working copies will take 
+	 * precedence over their original compilation units in the workspace.
+	 * <p>
+	 * Note that if a working copy is empty, it will be as if the original compilation
+	 * unit had been deleted.
+	 * <p>
+	 *
+	 * @param owner the owner of working copies that take precedence over their original compilation units
+	 * @param monitor the given progress monitor
+	 * @return a type hierarchy for this type containing this type and all of its supertypes
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @since 3.0
+	 */
+	ITypeHierarchy newSupertypeHierarchy(WorkingCopyOwner owner, IProgressMonitor monitor)
+		throws JavaModelException;
+
+	/**
+	 * Creates and returns a type hierarchy for this type containing
+	 * this type, all of its supertypes, and all its subtypes 
+	 * in the context of the given project.
+	 *
+	 * @param project the given project
+	 * @param monitor the given progress monitor
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @return a type hierarchy for this type containing
+	 * this type, all of its supertypes, and all its subtypes 
+	 * in the context of the given project
+	 */
+	ITypeHierarchy newTypeHierarchy(IJavaProject project, IProgressMonitor monitor) throws JavaModelException;
+	
+	/**
+	 * Creates and returns a type hierarchy for this type containing
+	 * this type, all of its supertypes, and all its subtypes 
+	 * in the context of the given project, considering types in the 
+	 * working copies with the given owner. 
+	 * In other words, the owner's working copies will take 
+	 * precedence over their original compilation units in the workspace.
+	 * <p>
+	 * Note that if a working copy is empty, it will be as if the original compilation
+	 * unit had been deleted.
+	 * <p>
+	 *
+	 * @param project the given project
+	 * @param owner the owner of working copies that take precedence over their original compilation units
+	 * @param monitor the given progress monitor
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource.
+	 * @return a type hierarchy for this type containing
+	 * this type, all of its supertypes, and all its subtypes 
+	 * in the context of the given project
+	 * @since 3.0
+	 */
+	ITypeHierarchy newTypeHierarchy(IJavaProject project, WorkingCopyOwner owner, IProgressMonitor monitor) throws JavaModelException;
+
 	/**
 	 * Creates and returns a type hierarchy for this type containing
 	 * this type, all of its supertypes, and all its subtypes in the workspace.
@@ -560,18 +665,25 @@ public interface IType extends IMember, IParent {
 	
 	/**
 	 * Creates and returns a type hierarchy for this type containing
-	 * this type, all of its supertypes, and all its subtypes 
-	 * in the context of the given project.
+	 * this type, all of its supertypes, and all its subtypes in the workspace, 
+	 * considering types in the working copies with the given owner. 
+	 * In other words, the owner's working copies will take 
+	 * precedence over their original compilation units in the workspace.
+	 * <p>
+	 * Note that if a working copy is empty, it will be as if the original compilation
+	 * unit had been deleted.
+	 * <p>
 	 *
-	 * @param project the given project
+	 * @param workingCopies the working copies that take precedence over their original compilation units
+	 * @param owner the owner of working copies that take precedence over their original compilation units
 	 * @param monitor the given progress monitor
+	 * @return a type hierarchy for this type containing
+	 * this type, all of its supertypes, and all its subtypes in the workspace
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource.
-	 * @return a type hierarchy for this type containing
-	 * this type, all of its supertypes, and all its subtypes 
-	 * in the context of the given project
+	 * @since 3.0
 	 */
-	ITypeHierarchy newTypeHierarchy(IJavaProject project, IProgressMonitor monitor) throws JavaModelException;
+	ITypeHierarchy newTypeHierarchy(WorkingCopyOwner owner, IProgressMonitor monitor) throws JavaModelException;
 	
 	/**
 	 * Resolves the given type name within the context of this type (depending on the type hierarchy 
@@ -589,4 +701,34 @@ public interface IType extends IMember, IParent {
 	 * @return the resolved type names or <code>null</code> if unable to find any matching type
 	 */
 	String[][] resolveType(String typeName) throws JavaModelException;
+
+	/**
+	 * Resolves the given type name within the context of this type (depending on the type hierarchy 
+	 * and its imports) and using the given owner's working copies, considering types in the 
+	 * working copies with the given owner. In other words, the owner's working copies will take 
+	 * precedence over their original compilation units in the workspace.
+	 * <p>
+	 * Note that if a working copy is empty, it will be as if the original compilation
+	 * unit had been deleted.
+	 * </p>
+	 * <p>. 
+	 * Multiple answers might be found in case there are ambiguous matches.
+	 * </p>
+	 * <p>
+	 * Each matching type name is decomposed as an array of two strings, the first denoting the package
+	 * name (dot-separated) and the second being the type name.
+	 * Returns <code>null</code> if unable to find any matching type.
+	 *</p>
+	 *<p>
+	 * For example, resolution of <code>"Object"</code> would typically return
+	 * <code>{{"java.lang", "Object"}}</code>.
+	 * </p>
+	 * 
+	 * @param typeName the given type name
+	 * @param owner the owner of working copies that take precedence over their original compilation units
+	 * @exception JavaModelException if code resolve could not be performed. 
+	 * @return the resolved type names or <code>null</code> if unable to find any matching type
+	 * @since 3.0
+	 */
+	String[][] resolveType(String typeName, WorkingCopyOwner owner) throws JavaModelException;
 }

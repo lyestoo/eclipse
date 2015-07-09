@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.formatter;
 
 import java.io.BufferedReader;
@@ -21,6 +21,7 @@ import org.eclipse.jdt.core.ICodeFormatter;
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.ConfigurableOption;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
 import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
 import org.eclipse.jdt.internal.formatter.impl.FormatterOptions;
@@ -144,12 +145,12 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 	 */
 	public CodeFormatter(Map settings) {
 		// initialize primary and secondary scanners
-		scanner = new Scanner(true /*comment*/, true /*whitespace*/, false /*nls*/, false /*assert*/, false /*strict comment*/, null /*taskTags*/, null/*taskPriorities*/); // regular scanner for forming lines
+		scanner = new Scanner(true /*comment*/, true /*whitespace*/, false /*nls*/, ClassFileConstants.JDK1_3/*sourceLevel*/, null /*taskTags*/, null/*taskPriorities*/); // regular scanner for forming lines
 		// to record positions of the beginning of lines.
 		scanner.recordLineSeparator = true;
 
 		// secondary scanner to split long lines formed by primary scanning
-		splitScanner = new Scanner(true /*comment*/, true /*whitespace*/, false /*nls*/, false /*assert*/, false /*strict comment */, null /*taskTags*/, null/*taskPriorities*/);
+		splitScanner = new Scanner(true /*comment*/, true /*whitespace*/, false /*nls*/, ClassFileConstants.JDK1_3/*sourceLevel*/, null /*taskTags*/, null/*taskPriorities*/);
 
 		this.options = new FormatterOptions(settings);
 	}
@@ -367,7 +368,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 					}
 					token = 0;
 				}
-				if (token == Scanner.TokenNameEOF)
+				if (token == TerminalTokens.TokenNameEOF)
 					break;
 
 				/* ## MODIFYING the indentation level before generating new lines
@@ -376,7 +377,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 
 				// Removes all the indentations made by statements not followed by a block
 				// except if the current token is ELSE, CATCH or if we are in a switch/case
-				if (clearNonBlockIndents && (token != Scanner.TokenNameWHITESPACE)) {
+				if (clearNonBlockIndents && (token != TerminalTokens.TokenNameWHITESPACE)) {
 					switch (token) {
 						case TokenNameelse :
 							if (constructionsCount > 0
@@ -410,10 +411,10 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 				if (token == TokenNamecase || token == TokenNamedefault) {
 					indentationLevel += pop(TokenNamecase);
 				}
-				if (token == Scanner.TokenNamethrows) {
+				if (token == TerminalTokens.TokenNamethrows) {
 					inThrowsClause = true;
 				}
-				if ((token == Scanner.TokenNameclass || token == Scanner.TokenNameinterface) && previousToken != Scanner.TokenNameDOT) {
+				if ((token == TerminalTokens.TokenNameclass || token == TerminalTokens.TokenNameinterface) && previousToken != TerminalTokens.TokenNameDOT) {
 					inClassOrInterfaceHeader = true;
 				}
 
@@ -438,7 +439,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 				pendingNewlineAfterParen =
 					pendingNewlineAfterParen
 						|| (previousCompilableToken == TokenNameRPAREN && token == TokenNameLBRACE);
-				if (pendingNewlineAfterParen && token != Scanner.TokenNameWHITESPACE) {
+				if (pendingNewlineAfterParen && token != TerminalTokens.TokenNameWHITESPACE) {
 					pendingNewlineAfterParen = false;
 
 					// Do to add a newline & indent sequence if the current token is an
@@ -506,7 +507,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 				if (((pendingNewLines > 0 && (!isComment(token)))
 					|| (newLinesInWhitespace > 0 && (openParenthesisCount <= 1 && isComment(token)))
 					|| (previousCompilableToken == TokenNameLBRACE && token == TokenNameRBRACE))
-					&& token != Scanner.TokenNameWHITESPACE) {
+					&& token != TerminalTokens.TokenNameWHITESPACE) {
 
 					// Do not add newline & indent between an adjoining close brace and
 					// close paren.  Anonymous inner classes may use this form.
@@ -530,7 +531,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 
 					// Do not add a new line & indent between a multiline comment and a opening brace
 					boolean commentAndOpenBrace =
-						previousToken == Scanner.TokenNameCOMMENT_BLOCK && token == TokenNameLBRACE;
+						previousToken == TerminalTokens.TokenNameCOMMENT_BLOCK && token == TokenNameLBRACE;
 
 					// Do not add a newline & indent between a close brace and a colon (in array assignments, for example).
 					boolean commaAndCloseBrace =
@@ -577,8 +578,8 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 							}
 						} else {
 							// see PR 1FKKC3U: LFCOM:WINNT - Format problem with a comment before the ';'
-							if (!((previousToken == Scanner.TokenNameCOMMENT_BLOCK
-								|| previousToken == Scanner.TokenNameCOMMENT_JAVADOC)
+							if (!((previousToken == TerminalTokens.TokenNameCOMMENT_BLOCK
+								|| previousToken == TerminalTokens.TokenNameCOMMENT_JAVADOC)
 								&& token == TokenNameSEMICOLON)) {
 								newLine(pendingNewLines);
 							}
@@ -591,7 +592,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 							indentationOffset = -1;
 							indentationLevel += popExclusiveUntilBlock();
 						}
-						if (previousToken == Scanner.TokenNameCOMMENT_LINE && inAssignment) {
+						if (previousToken == TerminalTokens.TokenNameCOMMENT_LINE && inAssignment) {
 							// PR 1FI5IPO
 							currentLineIndentationLevel++;
 						} else {
@@ -839,18 +840,18 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 					case TokenNameEQUAL :
 						inAssignment = true;
 						break;
-					case Scanner.TokenNameCOMMENT_LINE :
+					case TerminalTokens.TokenNameCOMMENT_LINE :
 						pendingNewLines = 1;
 						if (inAssignment) {
 							currentLineIndentationLevel++;
 						}
 						break; // a line is always inserted after a one-line comment
-					case Scanner.TokenNameCOMMENT_JAVADOC :
-					case Scanner.TokenNameCOMMENT_BLOCK :
+					case TerminalTokens.TokenNameCOMMENT_JAVADOC :
+					case TerminalTokens.TokenNameCOMMENT_BLOCK :
 						currentCommentOffset = getCurrentCommentOffset();
 						pendingNewLines = 1;
 						break;
-					case Scanner.TokenNameWHITESPACE :
+					case TerminalTokens.TokenNameWHITESPACE :
 
 						// Count the number of line terminators in the whitespace so
 						// line spacing can be preserved near comments.
@@ -894,7 +895,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 						break;
 				}
 				// Do not output whitespace tokens.
-				if (token != Scanner.TokenNameWHITESPACE) {
+				if (token != TerminalTokens.TokenNameWHITESPACE) {
 
 					/* Add pending space to the formatted source string.
 					Do not output a space under the following circumstances:
@@ -915,7 +916,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 						&& insertSpaceAfter(previousToken)
 						&& !(inAssignment
 							&& (previousToken == TokenNameLBRACE || token == TokenNameRBRACE))
-						&& previousToken != Scanner.TokenNameCOMMENT_LINE) {
+						&& previousToken != TerminalTokens.TokenNameCOMMENT_LINE) {
 						if ((!(options.compactAssignmentMode && token == TokenNameEQUAL))
 							&& !openAndCloseBrace) {
 								if (previousCompilableToken == TokenNameRPAREN) {
@@ -952,7 +953,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 					}
 					// Add the next token to the formatted source string.
 					outputCurrentToken(token);
-					if (token == Scanner.TokenNameCOMMENT_LINE && openParenthesisCount > 1) {
+					if (token == TerminalTokens.TokenNameCOMMENT_LINE && openParenthesisCount > 1) {
 						pendingNewLines = 0;
 						currentLineBuffer.append(options.lineSeparatorSequence);
 						increaseLineDelta(options.lineSeparatorSequence.length);
@@ -960,11 +961,11 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 					pendingSpace = true;
 				}
 				// Whitespace tokens do not need to be remembered.
-				if (token != Scanner.TokenNameWHITESPACE) {
+				if (token != TerminalTokens.TokenNameWHITESPACE) {
 					previousToken = token;
-					if (token != Scanner.TokenNameCOMMENT_BLOCK
-						&& token != Scanner.TokenNameCOMMENT_LINE
-						&& token != Scanner.TokenNameCOMMENT_JAVADOC) {
+					if (token != TerminalTokens.TokenNameCOMMENT_BLOCK
+						&& token != TerminalTokens.TokenNameCOMMENT_LINE
+						&& token != TerminalTokens.TokenNameCOMMENT_JAVADOC) {
 						previousCompilableToken = token;
 					}
 				}
@@ -997,8 +998,8 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 	 * @param indentationLevel the initial indentation level
 	 * @return the formatted ouput.
 	 */
-	public String format(String string, int indentationLevel) {
-		return format(string, indentationLevel, (int[])null);
+	public String format(String string, int indentLevel) {
+		return format(string, indentLevel, (int[])null);
 	}	
 	
 	/** 
@@ -1010,23 +1011,22 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 	 * @param positions the array of positions to map
 	 * @return the formatted ouput.
 	 */
-	public String format(String string, int indentationLevel, int[] positions) {
-		return this.format(string, indentationLevel, positions, null);
+	public String format(String string, int indentLevel, int[] positions) {
+		return this.format(string, indentLevel, positions, null);
 	}
 	
-	public String format(String string, int indentationLevel, int[] positions, String lineSeparator) {
+	public String format(String string, int indentLevel, int[] positions, String lineSeparator) {
 		if (lineSeparator != null){
 			this.options.setLineSeparator(lineSeparator);
 		}
 		if (positions != null) {
 			this.setPositionsToMap(positions);
-			this.setInitialIndentationLevel(indentationLevel);
+			this.setInitialIndentationLevel(indentLevel);
 			String formattedString = this.formatSourceString(string);
-			int[] mappedPositions = this.getMappedPositions();
-			System.arraycopy(mappedPositions, 0, positions, 0, positions.length);
+			System.arraycopy(this.mappedPositions, 0, positions, 0, positions.length);
 			return formattedString;
 		} else {
-			this.setInitialIndentationLevel(indentationLevel);
+			this.setInitialIndentationLevel(indentLevel);
 			return this.formatSourceString(string);
 		}
 	}	
@@ -1232,7 +1232,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 			case TokenNameDOT :
 			case 0 : // no token
 			case TokenNameLBRACKET :
-			case Scanner.TokenNameCOMMENT_LINE :
+			case TerminalTokens.TokenNameCOMMENT_LINE :
 				return false;
 			default :
 				return true;
@@ -1256,9 +1256,9 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 
 	private static boolean isComment(int token) {
 		boolean result =
-			token == Scanner.TokenNameCOMMENT_BLOCK
-				|| token == Scanner.TokenNameCOMMENT_LINE
-				|| token == Scanner.TokenNameCOMMENT_JAVADOC;
+			token == TerminalTokens.TokenNameCOMMENT_BLOCK
+				|| token == TerminalTokens.TokenNameCOMMENT_LINE
+				|| token == TerminalTokens.TokenNameCOMMENT_JAVADOC;
 		return result;
 	}
 
@@ -1465,14 +1465,14 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 		int startPosition = scanner.startPosition;
 
 		switch (token) {
-			case Scanner.TokenNameCOMMENT_JAVADOC :
-			case Scanner.TokenNameCOMMENT_BLOCK :
-			case Scanner.TokenNameCOMMENT_LINE :
+			case TerminalTokens.TokenNameCOMMENT_JAVADOC :
+			case TerminalTokens.TokenNameCOMMENT_BLOCK :
+			case TerminalTokens.TokenNameCOMMENT_LINE :
 				boolean endOfLine = false;
-				int currentCommentOffset = getCurrentCommentOffset();
+				int commentOffset = getCurrentCommentOffset();
 				int beginningOfLineSpaces = 0;
 				endOfLine = false;
-				currentCommentOffset = getCurrentCommentOffset();
+				commentOffset = getCurrentCommentOffset();
 				beginningOfLineSpaces = 0;
 				boolean pendingCarriageReturn = false;
 				for (int i = startPosition, max = scanner.currentPosition; i < max; i++) {
@@ -1505,7 +1505,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 							if (endOfLine) {
 								// we remove a maximum of currentCommentOffset characters (tabs are converted to space numbers).
 								beginningOfLineSpaces += options.tabSize;
-								if (beginningOfLineSpaces > currentCommentOffset) {
+								if (beginningOfLineSpaces > commentOffset) {
 									currentLineBuffer.append(currentCharacter);
 								} else {
 									increaseGlobalDelta(-1);
@@ -1525,7 +1525,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 							if (endOfLine) {
 								// we remove a maximum of currentCommentOffset characters (tabs are converted to space numbers).
 								beginningOfLineSpaces++;
-								if (beginningOfLineSpaces > currentCommentOffset) {
+								if (beginningOfLineSpaces > commentOffset) {
 									currentLineBuffer.append(currentCharacter);
 								} else {
 									increaseGlobalDelta(-1);
@@ -2036,7 +2036,7 @@ public class CodeFormatter implements TerminalTokens, ICodeFormatter {
 			while (true) {
 				// takes the next token
 				try {
-					if (currentToken != Scanner.TokenNameWHITESPACE)
+					if (currentToken != TerminalTokens.TokenNameWHITESPACE)
 						previousToken = currentToken;
 					currentToken = splitScanner.getNextToken();
 				} catch (InvalidInputException e) {

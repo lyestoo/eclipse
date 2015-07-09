@@ -1,18 +1,19 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
+import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
 
 /**
  * String literal nodes.
@@ -112,7 +113,7 @@ public class StringLiteral extends Expression {
 		try {
 			int tokenType = scanner.getNextToken();
 			switch(tokenType) {
-				case Scanner.TokenNameStringLiteral:
+				case TerminalTokens.TokenNameStringLiteral:
 					break;
 				default:
 					throw new IllegalArgumentException();
@@ -150,96 +151,22 @@ public class StringLiteral extends Expression {
 		if (len < 2 || s.charAt(0) != '\"' || s.charAt(len-1) != '\"' ) {
 			throw new IllegalArgumentException();
 		}
-		StringBuffer b = new StringBuffer(len - 2);
-		for (int i = 1; i< len - 1; i++) {
-			char c = s.charAt(i);
-			if (c == '\"') {
-				throw new IllegalArgumentException();
+		
+		Scanner scanner = getAST().scanner;
+		char[] source = s.toCharArray();
+		scanner.setSource(source);
+		scanner.resetTo(0, source.length);
+		try {
+			int tokenType = scanner.getNextToken();
+			switch(tokenType) {
+				case TerminalTokens.TokenNameStringLiteral:
+					return new String(scanner.getCurrentTokenSourceString());
+				default:
+					throw new IllegalArgumentException();
 			}
-			if (c == '\\') {
-				// legal: b, t, n, f, r, ", ', \, 0, 1, 2, 3, 4, 5, 6, or 7
-				char nextChar;
-				if ((i + 1) < len - 1) {
-					nextChar = s.charAt(i + 1);
-					i++;
-					switch(nextChar) {
-						case 'b' :
-							b.append('\b');
-							break;
-						case 't' :
-							b.append('\t');
-							break;
-						case 'n' :
-							b.append('\n');
-							break;
-						case 'f' :
-							b.append('\f');
-							break;
-						case 'r' :
-							b.append('\r');
-							break;
-						case '\"':
-							b.append('\"');
-							break;
-						case '\'':
-							b.append('\'');
-							break;
-						case '\\':
-							b.append('\\');
-							break;
-						case '0' :
-							b.append('\0');
-							break;
-						case '1' :
-							b.append('\1');
-							break;
-						case '2' :
-							b.append('\2');
-							break;
-						case '3' :
-							b.append('\3');
-							break;
-						case '4' :
-							b.append('\4');
-							break;
-						case '5' :
-							b.append('\5');
-							break;
-						case '6' :
-							b.append('\6');
-							break;
-						case '7' :
-							b.append('\7');
-							break;
-						case 'u' :
-							//handle the case of unicode.
-							int currentPosition = i + 1;
-							int c1 = 0, c2 = 0, c3 = 0, c4 = 0;
-							if ((c1 = Character.getNumericValue(s.charAt(currentPosition++))) > 15
-								|| c1 < 0
-								|| (c2 = Character.getNumericValue(s.charAt(currentPosition++))) > 15
-								|| c2 < 0
-								|| (c3 = Character.getNumericValue(s.charAt(currentPosition++))) > 15
-								|| c3 < 0
-								|| (c4 = Character.getNumericValue(s.charAt(currentPosition++))) > 15
-								|| c4 < 0){
-								throw new IllegalArgumentException("Invalid string literal"); //$NON-NLS-1$
-							} else {
-								b.append((char) (((c1 * 16 + c2) * 16 + c3) * 16 + c4));
-								i = currentPosition - 1;
-							}
-							break;
-						default:
-							throw new IllegalArgumentException("Invalid string literal");//$NON-NLS-1$
-					}
-				} else {
-					throw new IllegalArgumentException("Invalid string literal");//$NON-NLS-1$
-				}
-			} else {
-				b.append(c);
-			}
+		} catch(InvalidInputException e) {
+			throw new IllegalArgumentException();
 		}
-		return b.toString();			
 	}
 
 	/**
@@ -347,4 +274,3 @@ public class StringLiteral extends Expression {
 		return memSize();
 	}
 }
-

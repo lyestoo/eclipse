@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.core.resources.IResourceDelta;
@@ -41,7 +41,7 @@ import org.eclipse.core.resources.IResourceDelta;
  * has been closed. This flag is only valid if the element is an <code>IJavaProject</code>.</li>
  * <li><code>F_CONTENT</code> - The contents of the element have been altered.  This flag
  * is only valid for elements which correspond to files.</li>
- *<li><code>F_FINE_GRAINED</code> - The delta is a fine-grained delta, i.e.&nbsp;an analysis down
+ *<li><code>F_FINE_GRAINED</code> - The delta is a fine-grained delta, that is, an analysis down
  * to the members level was done to determine if there were structural changes to members of the element.</li>
  * <li><code>F_MODIFIERS</code> - The modifiers on the element have changed in some way. 
  * This flag is only valid if the element is an <code>IMember</code>.</li>
@@ -128,84 +128,93 @@ public interface IJavaElementDelta {
 	 * Change flag indicating that the content of the element has changed.
 	 * This flag is only valid for elements which correspond to files.
 	 */
-	public int F_CONTENT = 0x0001;
+	public int F_CONTENT = 0x00001;
 
 	/**
 	 * Change flag indicating that the modifiers of the element have changed.
 	 * This flag is only valid if the element is an <code>IMember</code>. 
 	 */
-	public int F_MODIFIERS = 0x0002;
+	public int F_MODIFIERS = 0x00002;
 
 	/**
 	 * Change flag indicating that there are changes to the children of the element.
 	 * This flag is only valid if the element is an <code>IParent</code>. 
 	 */
-	public int F_CHILDREN = 0x0008;
+	public int F_CHILDREN = 0x00008;
 
 	/**
 	 * Change flag indicating that the element was moved from another location.
 	 * The location of the old element can be retrieved using <code>getMovedFromElement</code>.
 	 */
-	public int F_MOVED_FROM = 0x0010;
+	public int F_MOVED_FROM = 0x00010;
 
 	/**
 	 * Change flag indicating that the element was moved to another location.
 	 * The location of the new element can be retrieved using <code>getMovedToElement</code>.
 	 */
-	public int F_MOVED_TO = 0x0020;
+	public int F_MOVED_TO = 0x00020;
 
 	/**
 	 * Change flag indicating that a classpath entry corresponding to the element has been added to the project's classpath. 
 	 * This flag is only valid if the element is an <code>IPackageFragmentRoot</code>.
 	 */
-	public int F_ADDED_TO_CLASSPATH = 0x0040;
+	public int F_ADDED_TO_CLASSPATH = 0x00040;
 
 	/**
 	 * Change flag indicating that a classpath entry corresponding to the element has been removed from the project's 
 	 * classpath. This flag is only valid if the element is an <code>IPackageFragmentRoot</code>.
 	 */
-	public int F_REMOVED_FROM_CLASSPATH = 0x0080;
+	public int F_REMOVED_FROM_CLASSPATH = 0x00080;
 
 	/**
 	 * Change flag indicating that a classpath entry corresponding to the element has changed position in the project's 
 	 * classpath. This flag is only valid if the element is an <code>IPackageFragmentRoot</code>.
+	 * @deprecated Use F_REORDER instead.
 	 */
-	public int F_CLASSPATH_REORDER = 0x0100;
+	public int F_CLASSPATH_REORDER = 0x00100;
+	/**
+	 * Change flag indicating that the element has changed position relatively to its siblings. 
+	 * If the element is an <code>IPackageFragmentRoot</code>,  a classpath entry corresponding 
+	 * to the element has changed position in the project's classpath.
+	 * 
+	 * @since 2.1
+	 */
+	public int F_REORDER = 0x00100;
 
 	/**
 	 * Change flag indicating that the underlying <code>IProject</code> has been
 	 * opened. This flag is only valid if the element is an <code>IJavaProject</code>. 
 	 */
-	public int F_OPENED = 0x0200;
+	public int F_OPENED = 0x00200;
 
 	/**
 	 * Change flag indicating that the underlying <code>IProject</code> has been
 	 * closed. This flag is only valid if the element is an <code>IJavaProject</code>. 
 	 */
-	public int F_CLOSED = 0x0400;
+	public int F_CLOSED = 0x00400;
 
 	/**
 	 * Change flag indicating that one of the supertypes of an <code>IType</code>
 	 * has changed.
 	 */
-	public int F_SUPER_TYPES = 0x0800;
+	public int F_SUPER_TYPES = 0x00800;
 
 	/**
 	 * Change flag indicating that the source attachment path or the source attachment root path of a classpath entry 
 	 * corresponding to the element was added. This flag is only valid if the element is an 
 	 * <code>IPackageFragmentRoot</code>.
 	 */
-	public int F_SOURCEATTACHED = 0x1000;	
+	public int F_SOURCEATTACHED = 0x01000;	
 
 	/**
 	 * Change flag indicating that the source attachment path or the source attachment root path of a classpath entry 
 	 * corresponding to the element was removed. This flag is only valid if the element is an 
 	 * <code>IPackageFragmentRoot</code>.
 	 */
-	public int F_SOURCEDETACHED = 0x2000;	
+	public int F_SOURCEDETACHED = 0x02000;	
 	
 	/**
-	 * Change flag indicating that this is a fine-grained delta, i.e.&nbsp;an analysis down
+	 * Change flag indicating that this is a fine-grained delta, that is, an analysis down
 	 * to the members level was done to determine if there were structural changes to
 	 * members.
 	 * <p>
@@ -217,7 +226,7 @@ public interface IJavaElementDelta {
      * 
      * @since 2.0
 	 */
-	public int F_FINE_GRAINED = 0x4000;
+	public int F_FINE_GRAINED = 0x04000;
 
 	/**
 	 * Change flag indicating that the element's archive content on the classpath has changed.
@@ -227,94 +236,100 @@ public interface IJavaElementDelta {
 	 * @see IPackageFragmentRoot#isArchive
 	 * @since 2.0
 	 */
-	public int F_ARCHIVE_CONTENT_CHANGED = 0x8000;
-
-//	/**
-//	 * Change flag indicating that the project custom options have changed on the file system,
-//	 * i.e. independently from a change performed using the <code>IJavaProject#setOptions</code>
-//	 * functionality.
-//	 * This flag is only valid if the element is an <code>IJavaProject</code>
-//	 * 
-//	 * @see IJavaProject#setOptions(Map)
-//	 * @since 2.1
-//	 */
-//	public int F_OPTIONS_CHANGED = 0x10000;
+	public int F_ARCHIVE_CONTENT_CHANGED = 0x08000;
 	
+	/**
+	 * Change flag indicating that a compilation unit has become a primary working copy, or that a 
+	 * primary working copy has reverted to a compilation unit.
+	 * This flag is only valid if the element is an <code>ICompilationUnit</code>.
+	 * 
+	 * @since 3.0
+	 */
+	public int F_PRIMARY_WORKING_COPY = 0x10000;
 
-/**
- * Returns deltas for the children that have been added.
- * @return deltas for the children that have been added
- */
-public IJavaElementDelta[] getAddedChildren();
-/**
- * Returns deltas for the affected (added, removed, or changed) children.
- * @return deltas for the affected (added, removed, or changed) children
- */
-public IJavaElementDelta[] getAffectedChildren();
-/**
- * Returns deltas for the children which have changed.
- * @return deltas for the children which have changed
- */
-public IJavaElementDelta[] getChangedChildren();
-/**
- * Returns the element that this delta describes a change to.
- * @return the element that this delta describes a change to
- */
-public IJavaElement getElement();
-/**
- * Returns flags that describe how an element has changed. 
- * Such flags should be tested using the <code>&</code> operand, e.g.
- * <pre>
- * if ((delta.getFlags() & IJavaElementDelta.F_CONTENT) != 0) {
- * 	// the delta indicates a content change
- * }
- * </pre>
- *
- * @return flags that describe how an element has changed
- */
-public int getFlags();
-/**
- * Returns the kind of this delta - one of <code>ADDED</code>, <code>REMOVED</code>,
- * or <code>CHANGED</code>.
- * 
- * @return the kind of this delta
- */
-public int getKind();
-/**
- * Returns an element describing this element before it was moved
- * to its current location, or <code>null</code> if the
- * <code>F_MOVED_FROM</code> change flag is not set. 
- * 
- * @return an element describing this element before it was moved
- * to its current location, or <code>null</code> if the
- * <code>F_MOVED_FROM</code> change flag is not set
- */
-public IJavaElement getMovedFromElement();
-/**
- * Returns an element describing this element in its new location,
- * or <code>null</code> if the <code>F_MOVED_TO</code> change
- * flag is not set.
- * 
- * @return an element describing this element in its new location,
- * or <code>null</code> if the <code>F_MOVED_TO</code> change
- * flag is not set
- */
-public IJavaElement getMovedToElement();
-/**
- * Returns deltas for the children which have been removed.
- * 
- * @return deltas for the children which have been removed
- */
-public IJavaElementDelta[] getRemovedChildren();
-/**
- * Returns the collection of resource deltas.
- * <p>
- * Note that resource deltas, like Java element deltas, are generally only valid
- * for the dynamic scope of an event notification. Clients must not hang on to
- * these objects.
- * </p>
- *
- * @return the underlying resource deltas, or <code>null</code> if none
- */
-public IResourceDelta[] getResourceDeltas();
+	/**
+	 * Returns deltas for the children that have been added.
+	 * @return deltas for the children that have been added
+	 */
+	public IJavaElementDelta[] getAddedChildren();
+
+	/**
+	 * Returns deltas for the affected (added, removed, or changed) children.
+	 * @return deltas for the affected (added, removed, or changed) children
+	 */
+	public IJavaElementDelta[] getAffectedChildren();
+
+	/**
+	 * Returns deltas for the children which have changed.
+	 * @return deltas for the children which have changed
+	 */
+	public IJavaElementDelta[] getChangedChildren();
+
+	/**
+	 * Returns the element that this delta describes a change to.
+	 * @return the element that this delta describes a change to
+	 */
+	public IJavaElement getElement();
+
+	/**
+	 * Returns flags that describe how an element has changed. 
+	 * Such flags should be tested using the <code>&</code> operand. For example:
+	 * <pre>
+	 * if ((delta.getFlags() & IJavaElementDelta.F_CONTENT) != 0) {
+	 * 	// the delta indicates a content change
+	 * }
+	 * </pre>
+	 *
+	 * @return flags that describe how an element has changed
+	 */
+	public int getFlags();
+
+	/**
+	 * Returns the kind of this delta - one of <code>ADDED</code>, <code>REMOVED</code>,
+	 * or <code>CHANGED</code>.
+	 * 
+	 * @return the kind of this delta
+	 */
+	public int getKind();
+
+	/**
+	 * Returns an element describing this element before it was moved
+	 * to its current location, or <code>null</code> if the
+	 * <code>F_MOVED_FROM</code> change flag is not set. 
+	 * 
+	 * @return an element describing this element before it was moved
+	 * to its current location, or <code>null</code> if the
+	 * <code>F_MOVED_FROM</code> change flag is not set
+	 */
+	public IJavaElement getMovedFromElement();
+
+	/**
+	 * Returns an element describing this element in its new location,
+	 * or <code>null</code> if the <code>F_MOVED_TO</code> change
+	 * flag is not set.
+	 * 
+	 * @return an element describing this element in its new location,
+	 * or <code>null</code> if the <code>F_MOVED_TO</code> change
+	 * flag is not set
+	 */
+	public IJavaElement getMovedToElement();
+
+	/**
+	 * Returns deltas for the children which have been removed.
+	 * 
+	 * @return deltas for the children which have been removed
+	 */
+	public IJavaElementDelta[] getRemovedChildren();
+
+	/**
+	 * Returns the collection of resource deltas.
+	 * <p>
+	 * Note that resource deltas, like Java element deltas, are generally only valid
+	 * for the dynamic scope of an event notification. Clients must not hang on to
+	 * these objects.
+	 * </p>
+	 *
+	 * @return the underlying resource deltas, or <code>null</code> if none
+	 */
+	public IResourceDelta[] getResourceDeltas();
 }

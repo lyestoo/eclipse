@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -30,17 +30,21 @@ public class UnaryExpression extends OperatorExpression {
 		BlockScope currentScope,
 		FlowContext flowContext,
 		FlowInfo flowInfo) {
+			
 		if (((bits & OperatorMASK) >> OperatorSHIFT) == NOT) {
-			return expression
+			return this.expression
 				.analyseCode(currentScope, flowContext, flowInfo)
 				.asNegatedCondition();
 		} else {
-			return expression.analyseCode(currentScope, flowContext, flowInfo);
+			return this.expression.analyseCode(currentScope, flowContext, flowInfo);
 		}
 	}
 
-	public Constant conditionalConstant() {
-		return optimizedBooleanConstant == null ? constant : optimizedBooleanConstant;
+	public Constant optimizedBooleanConstant() {
+		
+		return this.optimizedBooleanConstant == null 
+				? this.constant 
+				: this.optimizedBooleanConstant;
 	}
 
 	/**
@@ -54,23 +58,24 @@ public class UnaryExpression extends OperatorExpression {
 		BlockScope currentScope,
 		CodeStream codeStream,
 		boolean valueRequired) {
+			
 		int pc = codeStream.position;
 		Label falseLabel, endifLabel;
-		if (constant != Constant.NotAConstant) {
+		if (this.constant != Constant.NotAConstant) {
 			// inlined value
 			if (valueRequired) {
-				codeStream.generateConstant(constant, implicitConversion);
+				codeStream.generateConstant(this.constant, this.implicitConversion);
 			}
 			codeStream.recordPositionsFrom(pc, this.sourceStart);
 			return;
 		}
 		switch ((bits & OperatorMASK) >> OperatorSHIFT) {
 			case NOT :
-				switch (expression.implicitConversion >> 4) /* runtime type */ {
+				switch (this.expression.implicitConversion >> 4) /* runtime type */ {
 					case T_boolean :
 						// ! <boolean>
 						// Generate code for the condition
-						expression.generateOptimizedBoolean(
+						this.expression.generateOptimizedBoolean(
 							currentScope,
 							codeStream,
 							null,
@@ -92,18 +97,18 @@ public class UnaryExpression extends OperatorExpression {
 				}
 				break;
 			case TWIDDLE :
-				switch (expression.implicitConversion >> 4 /* runtime */
+				switch (this.expression.implicitConversion >> 4 /* runtime */
 					) {
 					case T_int :
 						// ~int
-						expression.generateCode(currentScope, codeStream, valueRequired);
+						this.expression.generateCode(currentScope, codeStream, valueRequired);
 						if (valueRequired) {
 							codeStream.iconst_m1();
 							codeStream.ixor();
 						}
 						break;
 					case T_long :
-						expression.generateCode(currentScope, codeStream, valueRequired);
+						this.expression.generateCode(currentScope, codeStream, valueRequired);
 						if (valueRequired) {
 							codeStream.ldc2_w(-1L);
 							codeStream.lxor();
@@ -112,28 +117,26 @@ public class UnaryExpression extends OperatorExpression {
 				break;
 			case MINUS :
 				// - <num>
-				if (constant != NotAConstant) {
+				if (this.constant != NotAConstant) {
 					if (valueRequired) {
-						switch (expression.implicitConversion >> 4 /* runtime */
-							) {
+						switch (this.expression.implicitConversion >> 4){ /* runtime */
 							case T_int :
-								codeStream.generateInlinedValue(constant.intValue() * -1);
+								codeStream.generateInlinedValue(this.constant.intValue() * -1);
 								break;
 							case T_float :
-								codeStream.generateInlinedValue(constant.floatValue() * -1.0f);
+								codeStream.generateInlinedValue(this.constant.floatValue() * -1.0f);
 								break;
 							case T_long :
-								codeStream.generateInlinedValue(constant.longValue() * -1L);
+								codeStream.generateInlinedValue(this.constant.longValue() * -1L);
 								break;
 							case T_double :
-								codeStream.generateInlinedValue(constant.doubleValue() * -1.0);
+								codeStream.generateInlinedValue(this.constant.doubleValue() * -1.0);
 						}
 					}
 				} else {
-					expression.generateCode(currentScope, codeStream, valueRequired);
+					this.expression.generateCode(currentScope, codeStream, valueRequired);
 					if (valueRequired) {
-						switch (expression.implicitConversion >> 4 /* runtime type */
-							) {
+						switch (expression.implicitConversion >> 4){ /* runtime type */
 							case T_int :
 								codeStream.ineg();
 								break;
@@ -150,10 +153,10 @@ public class UnaryExpression extends OperatorExpression {
 				}
 				break;
 			case PLUS :
-				expression.generateCode(currentScope, codeStream, valueRequired);
+				this.expression.generateCode(currentScope, codeStream, valueRequired);
 		}
 		if (valueRequired) {
-			codeStream.generateImplicitConversion(implicitConversion);
+			codeStream.generateImplicitConversion(this.implicitConversion);
 		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
@@ -169,7 +172,7 @@ public class UnaryExpression extends OperatorExpression {
 		Label falseLabel,
 		boolean valueRequired) {
 
-		if ((constant != Constant.NotAConstant) && (constant.typeID() == T_boolean)) {
+		if ((this.constant != Constant.NotAConstant) && (this.constant.typeID() == T_boolean)) {
 			super.generateOptimizedBoolean(
 				currentScope,
 				codeStream,
@@ -178,8 +181,8 @@ public class UnaryExpression extends OperatorExpression {
 				valueRequired);
 			return;
 		}
-		if (((bits & OperatorMASK) >> OperatorSHIFT) == NOT) {
-			expression.generateOptimizedBoolean(
+		if (((this.bits & OperatorMASK) >> OperatorSHIFT) == NOT) {
+			this.expression.generateOptimizedBoolean(
 				currentScope,
 				codeStream,
 				falseLabel,
@@ -195,19 +198,28 @@ public class UnaryExpression extends OperatorExpression {
 		}
 	}
 
+	public StringBuffer printExpressionNoParenthesis(int indent, StringBuffer output) {
+		
+		output.append(operatorToString()).append(' ');
+		return this.expression.printExpression(0, output);
+	} 
+	
 	public TypeBinding resolveType(BlockScope scope) {
-		TypeBinding expressionTb = expression.resolveType(scope);
-		if (expressionTb == null) {
-			constant = NotAConstant;
+		
+		boolean expressionIsCast;
+		if ((expressionIsCast = this.expression instanceof CastExpression) == true) this.expression.bits |= IgnoreNeedForCastCheckMASK; // will check later on
+		TypeBinding expressionType = this.expression.resolveType(scope);
+		if (expressionType == null) {
+			this.constant = NotAConstant;
 			return null;
 		}
-		int expressionId = expressionTb.id;
-		if (expressionId > 15) {
-			constant = NotAConstant;
-			scope.problemReporter().invalidOperator(this, expressionTb);
+		int expressionTypeId = expressionType.id;
+		if (expressionTypeId > 15) {
+			this.constant = NotAConstant;
+			scope.problemReporter().invalidOperator(this, expressionType);
 			return null;
 		}
-
+	
 		int tableId;
 		switch ((bits & OperatorMASK) >> OperatorSHIFT) {
 			case NOT :
@@ -219,15 +231,15 @@ public class UnaryExpression extends OperatorExpression {
 			default :
 				tableId = MINUS;
 		} //+ and - cases
-
+	
 		// the code is an int
 		// (cast)  left   Op (cast)  rigth --> result
 		//  0000   0000       0000   0000      0000
 		//  <<16   <<12       <<8    <<4       <<0
-		int result = ResolveTypeTables[tableId][(expressionId << 4) + expressionId];
-		expression.implicitConversion = result >>> 12;
-		bits |= result & 0xF;
-		switch (result & 0xF) { // only switch on possible result type.....
+		int operatorSignature = OperatorSignatures[tableId][(expressionTypeId << 4) + expressionTypeId];
+		this.expression.implicitConversion = operatorSignature >>> 12;
+		this.bits |= operatorSignature & 0xF;
+		switch (operatorSignature & 0xF) { // only switch on possible result type.....
 			case T_boolean :
 				this.resolvedType = BooleanBinding;
 				break;
@@ -250,38 +262,39 @@ public class UnaryExpression extends OperatorExpression {
 				this.resolvedType = LongBinding;
 				break;
 			default : //error........
-				constant = Constant.NotAConstant;
-				if (expressionId != T_undefined)
-					scope.problemReporter().invalidOperator(this, expressionTb);
+				this.constant = Constant.NotAConstant;
+				if (expressionTypeId != T_undefined)
+					scope.problemReporter().invalidOperator(this, expressionType);
 				return null;
 		}
 		// compute the constant when valid
-		if (expression.constant != Constant.NotAConstant) {
-			constant =
+		if (this.expression.constant != Constant.NotAConstant) {
+			this.constant =
 				Constant.computeConstantOperation(
-					expression.constant,
-					expressionId,
+					this.expression.constant,
+					expressionTypeId,
 					(bits & OperatorMASK) >> OperatorSHIFT);
 		} else {
-			constant = Constant.NotAConstant;
+			this.constant = Constant.NotAConstant;
 			if (((bits & OperatorMASK) >> OperatorSHIFT) == NOT) {
-				Constant cst = expression.conditionalConstant();
-				if (cst.typeID() == T_boolean)
-					optimizedBooleanConstant = Constant.fromValue(!cst.booleanValue());
+				Constant cst = expression.optimizedBooleanConstant();
+				if (cst != Constant.NotAConstant) 
+					this.optimizedBooleanConstant = Constant.fromValue(!cst.booleanValue());
 			}
+		}
+		if (expressionIsCast) {
+		// check need for operand cast
+			CastExpression.checkNeedForArgumentCast(scope, tableId, operatorSignature, this.expression, expressionTypeId);
 		}
 		return this.resolvedType;
 	}
 
-	public String toStringExpressionNoParenthesis() {
-		return operatorToString() + " " + expression.toStringExpression(); //$NON-NLS-1$
-	} 
-	
 	public void traverse(
 		IAbstractSyntaxTreeVisitor visitor,
 		BlockScope blockScope) {
+			
 		if (visitor.visit(this, blockScope)) {
-			expression.traverse(visitor, blockScope);
+			this.expression.traverse(visitor, blockScope);
 		}
 		visitor.endVisit(this, blockScope);
 	}

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -47,7 +47,7 @@ public BinaryTypeBinding(PackageBinding packageBinding, IBinaryType binaryType, 
 	this.tagBits |= IsBinaryBinding;
 	this.environment = environment;
 	this.fPackage = packageBinding;
-	this.	fileName = binaryType.getFileName();
+	this.fileName = binaryType.getFileName();
 
 	// source name must be one name without "$".
 	char[] possibleSourceName = this.compoundName[this.compoundName.length - 1];
@@ -62,6 +62,14 @@ public BinaryTypeBinding(PackageBinding packageBinding, IBinaryType binaryType, 
 	this.modifiers = binaryType.getModifiers();
 	if (binaryType.isInterface())
 		this.modifiers |= AccInterface;
+		
+	if (binaryType.isAnonymous()) {
+		this.tagBits |= AnonymousTypeMask;
+	} else if (binaryType.isLocal()) {
+		this.tagBits |= LocalTypeMask;
+	} else if (binaryType.isMember()) {
+		this.tagBits |= MemberTypeMask;
+	}
 }
 
 public FieldBinding[] availableFields() {
@@ -73,6 +81,7 @@ public FieldBinding[] availableFields() {
 			availableFields[count] = resolveTypeFor(fields[i]);
 			count++;
 		} catch (AbortCompilation a){
+			// silent abort
 		}
 	}
 	
@@ -92,6 +101,7 @@ public MethodBinding[] availableMethods() {
 			availableMethods[count] = resolveTypesFor(methods[i]);
 			count++;
 		} catch (AbortCompilation a){
+			// silent abort
 		}
 	}
 	System.arraycopy(availableMethods, 0, availableMethods = new MethodBinding[count], 0, count);
@@ -155,7 +165,7 @@ private void createFields(IBinaryField[] iFields) {
 					new FieldBinding(
 						field.getName(),
 						environment.getTypeFromSignature(field.getTypeName(), 0, -1),
-						field.getModifiers(),
+						field.getModifiers() | AccUnresolved,
 						this,
 						field.getConstant());
 			}
@@ -163,7 +173,7 @@ private void createFields(IBinaryField[] iFields) {
 	}
 }
 private MethodBinding createMethod(IBinaryMethod method) {
-	int modifiers = method.getModifiers() | AccUnresolved;
+	int methodModifiers = method.getModifiers() | AccUnresolved;
 
 	ReferenceBinding[] exceptions = NoExceptions;
 	char[][] exceptionTypes = method.getExceptionTypeNames();
@@ -177,15 +187,15 @@ private MethodBinding createMethod(IBinaryMethod method) {
 	}
 
 	TypeBinding[] parameters = NoParameters;
-	char[] signature = method.getMethodDescriptor();   // of the form (I[Ljava/jang/String;)V
+	char[] methodSignature = method.getMethodDescriptor();   // of the form (I[Ljava/jang/String;)V
 	int numOfParams = 0;
 	char nextChar;
 	int index = 0;   // first character is always '(' so skip it
-	while ((nextChar = signature[++index]) != ')') {
+	while ((nextChar = methodSignature[++index]) != ')') {
 		if (nextChar != '[') {
 			numOfParams++;
 			if (nextChar == 'L')
-				while ((nextChar = signature[++index]) != ';');
+				while ((nextChar = methodSignature[++index]) != ';');
 		}
 	}
 
@@ -197,40 +207,51 @@ private MethodBinding createMethod(IBinaryMethod method) {
 		index = 1;
 		int end = 0;   // first character is always '(' so skip it
 		for (int i = 0; i < numOfParams; i++) {
-			while ((nextChar = signature[++end]) == '[');
+			while ((nextChar = methodSignature[++end]) == '[');
 			if (nextChar == 'L')
-				while ((nextChar = signature[++end]) != ';');
+				while ((nextChar = methodSignature[++end]) != ';');
 
 			if (i >= startIndex)   // skip the synthetic arg if necessary
-				parameters[i - startIndex] = environment.getTypeFromSignature(signature, index, end);
+				parameters[i - startIndex] = environment.getTypeFromSignature(methodSignature, index, end);
 			index = end + 1;
 		}
 	}
 
 	MethodBinding binding = null;
 	if (method.isConstructor())
-		binding = new MethodBinding(modifiers, parameters, exceptions, this);
+		binding = new MethodBinding(methodModifiers, parameters, exceptions, this);
 	else
 		binding = new MethodBinding(
-			modifiers,
+			methodModifiers,
 			method.getSelector(),
-			environment.getTypeFromSignature(signature, index + 1, -1),   // index is currently pointing at the ')'
+			environment.getTypeFromSignature(methodSignature, index + 1, -1),   // index is currently pointing at the ')'
 			parameters,
 			exceptions,
 			this);
 	return binding;
 }
+/**
+ * Create method bindings for binary type, filtering out <clinit> and synthetics
+ */
 private void createMethods(IBinaryMethod[] iMethods) {
-	int total = 0;
-	int clinitIndex = -1;
+	int total = 0, initialTotal = 0, iClinit = -1;
+	int[] toSkip = null;
 	if (iMethods != null) {
-		total = iMethods.length;
+		total = initialTotal = iMethods.length;
 		for (int i = total; --i >= 0;) {
-			char[] methodName = iMethods[i].getSelector();
-			if (methodName[0] == '<' && methodName.length == 8) { // Can only match <clinit>
+			IBinaryMethod method = iMethods[i];
+			if ((method.getModifiers() & AccSynthetic) != 0) {
+				// discard synthetics methods
+				if (toSkip == null) toSkip = new int[iMethods.length];
+				toSkip[i] = -1;
 				total--;
-				clinitIndex = i;
-				break;
+			} else if (iClinit == -1) {
+				char[] methodName = method.getSelector();
+				if (methodName.length == 8 && methodName[0] == '<') {
+					// discard <clinit>
+					iClinit = i;
+					total--;
+				}
 			}
 		}
 	}
@@ -240,10 +261,14 @@ private void createMethods(IBinaryMethod[] iMethods) {
 	}
 
 	this.methods = new MethodBinding[total];
-	int next = 0;
-	for (int i = 0, length = iMethods.length; i < length; i++)
-		if (i != clinitIndex)
-			this.methods[next++] = createMethod(iMethods[i]);
+	if (total == initialTotal) {
+		for (int i = 0; i < initialTotal; i++)
+			this.methods[i] = createMethod(iMethods[i]);
+	} else {
+		for (int i = 0, index = 0; i < initialTotal; i++)
+			if (iClinit != i && (toSkip == null || toSkip[i] != -1))
+				this.methods[index++] = createMethod(iMethods[i]);
+	}
 	modifiers |= AccUnresolved; // until methods() is sent
 }
 /* Answer the receiver's enclosing type... null if the receiver is a top level type.
@@ -372,7 +397,7 @@ public MethodBinding[] methods() {
 	modifiers ^= AccUnresolved;
 	return methods;
 }
-private TypeBinding resolveType(TypeBinding type) {
+TypeBinding resolveType(TypeBinding type) {
 	if (type instanceof UnresolvedReferenceBinding)
 		return ((UnresolvedReferenceBinding) type).resolve(environment);
 	if (type instanceof ArrayBinding) {
@@ -383,7 +408,10 @@ private TypeBinding resolveType(TypeBinding type) {
 	return type;
 }
 private FieldBinding resolveTypeFor(FieldBinding field) {
-	field.type = resolveType(field.type);
+	if ((field.modifiers & AccUnresolved) != 0) {
+		field.type = resolveType(field.type);
+		field.modifiers ^= AccUnresolved;
+	}
 	return field;
 }
 private MethodBinding resolveTypesFor(MethodBinding method) {
@@ -419,6 +447,9 @@ public ReferenceBinding[] superInterfaces() {
 		if (superInterfaces[i] instanceof UnresolvedReferenceBinding)
 			superInterfaces[i] = ((UnresolvedReferenceBinding) superInterfaces[i]).resolve(environment);
 	return superInterfaces;
+}
+MethodBinding[] unResolvedMethods() { // for the MethodVerifier so it doesn't resolve types
+	return methods;
 }
 public String toString() {
 	String s = ""; //$NON-NLS-1$

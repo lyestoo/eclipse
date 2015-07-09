@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.impl;
 
 /*
@@ -15,6 +15,7 @@ package org.eclipse.jdt.internal.codeassist.impl;
  *
  */
 
+import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.AstNode;
 import org.eclipse.jdt.internal.compiler.ast.Block;
@@ -76,12 +77,12 @@ public abstract class AssistParser extends Parser {
 	
 	protected boolean isFirst = false;
 
-public AssistParser(ProblemReporter problemReporter, boolean assertMode) {
-	super(problemReporter, true, assertMode);
+public AssistParser(ProblemReporter problemReporter) {
+	super(problemReporter, true);
 }
 public abstract char[] assistIdentifier();
 public int bodyEnd(AbstractMethodDeclaration method){
-	return method.declarationSourceEnd;
+	return method.bodyEnd;
 }
 public int bodyEnd(Initializer initializer){
 	return initializer.declarationSourceEnd;
@@ -117,7 +118,7 @@ public RecoveredElement buildInitialRecoveryState(){
 						&& field.declarationSourceStart <= scanner.initialPosition
 						&& scanner.initialPosition <= field.declarationSourceEnd
 						&& scanner.eofPosition <= field.declarationSourceEnd+1){
-					element = new RecoveredInitializer((Initializer) field, null, 1, this);
+					element = new RecoveredInitializer(field, null, 1, this);
 					lastCheckPoint = field.declarationSourceStart;					
 					break;
 				}
@@ -181,7 +182,7 @@ public RecoveredElement buildInitialRecoveryState(){
 			Initializer initializer = (Initializer) node;
 			if (initializer.declarationSourceEnd == 0){
 				element = element.add(initializer, 1);
-				lastCheckPoint = initializer.bodyStart;				
+				lastCheckPoint = initializer.sourceStart;				
 			} else {
 				element = element.add(initializer, 0);
 				lastCheckPoint = initializer.declarationSourceEnd + 1;
@@ -411,7 +412,7 @@ protected void consumeSingleTypeImportDeclarationName() {
 		length); 
 
 	/* build specific assist node on import statement */
-	ImportReference reference = this.createAssistImportReference(subset, positions);
+	ImportReference reference = this.createAssistImportReference(subset, positions, AccDefault/*TODO: (olivier) update for static imports*/);
 	assistNode = reference;
 	this.lastCheckPoint = reference.sourceEnd + 1;
 
@@ -509,7 +510,7 @@ protected void consumeTypeImportOnDemandDeclarationName() {
 		length); 
 
 	/* build specific assist node on import statement */
-	ImportReference reference = this.createAssistImportReference(subset, positions);
+	ImportReference reference = this.createAssistImportReference(subset, positions, AccDefault/*TODO: (olivier) update for static imports*/);
 	reference.onDemand = true;
 	assistNode = reference;
 	this.lastCheckPoint = reference.sourceEnd + 1;
@@ -534,12 +535,12 @@ protected void consumeTypeImportOnDemandDeclarationName() {
 		restartRecovery = true; // used to avoid branching back into the regular automaton		
 	}
 }
-public abstract ImportReference createAssistImportReference(char[][] tokens, long[] positions);
+public abstract ImportReference createAssistImportReference(char[][] tokens, long[] positions, int mod);
 public abstract ImportReference createAssistPackageReference(char[][] tokens, long[] positions);
-public abstract NameReference createQualifiedAssistNameReference(char[][] previousIdentifiers, char[] name, long[] positions);
-public abstract TypeReference createQualifiedAssistTypeReference(char[][] previousIdentifiers, char[] name, long[] positions);
-public abstract NameReference createSingleAssistNameReference(char[] name, long position);
-public abstract TypeReference createSingleAssistTypeReference(char[] name, long position);
+public abstract NameReference createQualifiedAssistNameReference(char[][] previousIdentifiers, char[] assistName, long[] positions);
+public abstract TypeReference createQualifiedAssistTypeReference(char[][] previousIdentifiers, char[] assistName, long[] positions);
+public abstract NameReference createSingleAssistNameReference(char[] assistName, long position);
+public abstract TypeReference createSingleAssistTypeReference(char[] assistName, long position);
 /*
  * Flush parser/scanner state regarding to code assist
  */
@@ -634,7 +635,7 @@ protected NameReference getUnspecifiedReferenceOptimized() {
 	} else {
 		/* completion inside subsequent identifier */
 		reference = this.createQualifiedAssistNameReference(subset, assistIdentifier(), positions);
-	};
+	}
 	reference.bits &= ~AstNode.RestrictiveFlagMASK;
 	reference.bits |= LOCAL | FIELD;
 	
@@ -643,19 +644,7 @@ protected NameReference getUnspecifiedReferenceOptimized() {
 	return reference;
 }
 public void goForBlockStatementsopt() {
-	//tells the scanner to go for block statements opt parsing
-
-	firstToken = TokenNameTWIDDLE;
-	scanner.recordLineSeparator = false;
-	
-	isFirst = true;
-}
-public void goForConstructorBlockStatementsopt() {
-	//tells the scanner to go for constructor block statements opt parsing
-
-	firstToken = TokenNameNOT;
-	scanner.recordLineSeparator = false;
-	
+	super.goForBlockStatementsopt();
 	isFirst = true;
 }
 public void goForHeaders(){
@@ -819,7 +808,7 @@ public void parseBlockStatements(ConstructorDeclaration cd, CompilationUnitDecla
 	initialize();
 	
 	// simulate goForConstructorBody except that we don't want to balance brackets because they are not going to be balanced
-	goForConstructorBlockStatementsopt();
+	goForBlockStatementsopt();
 
 	referenceContext = cd;
 	compilationUnit = unit;
@@ -831,13 +820,53 @@ public void parseBlockStatements(ConstructorDeclaration cd, CompilationUnitDecla
 	} catch (AbortCompilation ex) {
 		lastAct = ERROR_ACTION;
 	}
+	
+	if (lastAct == ERROR_ACTION) {
+		return;
+	}
+
+	// attach the statements as we might be searching for a reference to a local type
+	cd.explicitDeclarations = realBlockStack[realBlockPtr--];
+	int length;
+	if ((length = astLengthStack[astLengthPtr--]) != 0) {
+		astPtr -= length;
+		if (astStack[astPtr + 1] instanceof ExplicitConstructorCall)
+			//avoid a isSomeThing that would only be used here BUT what is faster between two alternatives ?
+			{
+			System.arraycopy(
+				astStack, 
+				astPtr + 2, 
+				cd.statements = new Statement[length - 1], 
+				0, 
+				length - 1); 
+			cd.constructorCall = (ExplicitConstructorCall) astStack[astPtr + 1];
+		} else { //need to add explicitly the super();
+			System.arraycopy(
+				astStack, 
+				astPtr + 1, 
+				cd.statements = new Statement[length], 
+				0, 
+				length); 
+			cd.constructorCall = SuperReference.implicitSuperConstructorCall();
+		}
+	} else {
+		cd.constructorCall = SuperReference.implicitSuperConstructorCall();
+		if (!containsComment(cd.bodyStart, cd.bodyEnd)) {
+			cd.bits |= AstNode.UndocumentedEmptyBlockMASK;
+		}		
+	}
+
+	if (cd.constructorCall.sourceEnd == 0) {
+		cd.constructorCall.sourceEnd = cd.sourceEnd;
+		cd.constructorCall.sourceStart = cd.sourceStart;
+	}
 }
 /**
  * Parse the block statements inside the given initializer and try to complete at the
  * cursor location.
  */
 public void parseBlockStatements(
-	Initializer ini,
+	Initializer initializer,
 	TypeDeclaration type, 
 	CompilationUnitDeclaration unit) {
 
@@ -849,7 +878,7 @@ public void parseBlockStatements(
 	referenceContext = type;
 	compilationUnit = unit;
 
-	scanner.resetTo(ini.sourceStart, bodyEnd(ini)); // just after the beginning {
+	scanner.resetTo(initializer.sourceStart, bodyEnd(initializer)); // just after the beginning {
 	consumeNestedMethod();
 	try {
 		parse();
@@ -858,6 +887,27 @@ public void parseBlockStatements(
 	} finally {
 		nestedMethod[nestedType]--;
 	}
+	
+	if (lastAct == ERROR_ACTION) {
+		return;
+	}
+
+	// attach the statements as we might be searching for a reference to a local type
+	initializer.block.explicitDeclarations = realBlockStack[realBlockPtr--];
+	int length;
+	if ((length = astLengthStack[astLengthPtr--]) > 0) {
+		System.arraycopy(astStack, (astPtr -= length) + 1, initializer.block.statements = new Statement[length], 0, length); 
+	} else {
+		// check whether this block at least contains some comment in it
+		if (!containsComment(initializer.block.sourceStart, initializer.block.sourceEnd)) {
+			initializer.block.bits |= AstNode.UndocumentedEmptyBlockMASK;
+		}
+	}
+	
+	// mark initializer with local type if one was found during parsing
+	if ((type.bits & AstNode.HasLocalTypeMASK) != 0) {
+		initializer.bits |= AstNode.HasLocalTypeMASK;
+	}	
 }
 /**
  * Parse the block statements inside the given method declaration and try to complete at the
@@ -893,6 +943,27 @@ public void parseBlockStatements(MethodDeclaration md, CompilationUnitDeclaratio
 	} finally {
 		nestedMethod[nestedType]--;		
 	}
+	
+	if (lastAct == ERROR_ACTION) {
+		return;
+	}
+
+	// attach the statements as we might be searching for a reference to a local type
+	md.explicitDeclarations = realBlockStack[realBlockPtr--];
+	int length;
+	if ((length = astLengthStack[astLengthPtr--]) != 0) {
+		System.arraycopy(
+			astStack, 
+			(astPtr -= length) + 1, 
+			md.statements = new Statement[length], 
+			0, 
+			length); 
+	} else {
+		if (!containsComment(md.bodyStart, md.bodyEnd)) {
+			md.bits |= AstNode.UndocumentedEmptyBlockMASK;
+		}
+	}
+
 }
 protected void popElement(int kind){
 	if(elementPtr < 0 || elementKindStack[elementPtr] != kind) return;
@@ -912,7 +983,7 @@ protected void popUntilElement(int kind){
 	while (i >= 0 && elementKindStack[i] != kind) {
 		i--;
 	}
-	if(i > 0) {
+	if(i >= 0) {
 		if(i < elementPtr) {
 			previousKind = elementKindStack[i+1];
 			previousInfo = elementInfoStack[i+1];

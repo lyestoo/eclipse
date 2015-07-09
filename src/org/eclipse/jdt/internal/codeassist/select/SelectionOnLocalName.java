@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.select;
 
 import org.eclipse.jdt.internal.compiler.ast.Expression;
@@ -15,24 +15,28 @@ import org.eclipse.jdt.internal.compiler.ast.LocalDeclaration;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 
 public class SelectionOnLocalName extends LocalDeclaration{
+	
 	public SelectionOnLocalName(Expression expr, char[] name,	int sourceStart, int sourceEnd) {
+
 		super(expr, name, sourceStart, sourceEnd);
 	}
 	
 	public void resolve(BlockScope scope) {
+
 		super.resolve(scope);
 		throw new SelectionNodeFound(binding);
 	}
 	
-	public String toString(int tab) {
-		String s = tabString(tab);
-		s += "<SelectionOnLocalName:"; //$NON-NLS-1$
-		if (modifiers != AccDefault) {
-			s += modifiersString(modifiers);
+	public StringBuffer printStatement(int tab, StringBuffer output) {
+		
+		printIndent(tab, output);
+		output.append("<SelectionOnLocalName:"); //$NON-NLS-1$
+		printModifiers(this.modifiers, output);
+		 type.print(0, output).append(' ').append(this.name);
+		if (initialization != null) {
+			output.append(" = "); //$NON-NLS-1$
+			initialization.printExpression(0, output);
 		}
-		s += type.toString(0) + " " + new String(name()); //$NON-NLS-1$
-		if (initialization != null) s += " = " + initialization.toStringExpression(); //$NON-NLS-1$
-		s+= ">";//$NON-NLS-1$
-		return s;	
+		return output.append(">;"); //$NON-NLS-1$
 	}
 }

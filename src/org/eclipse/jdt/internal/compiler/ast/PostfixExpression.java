@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -40,7 +40,7 @@ public class PostfixExpression extends CompoundAssignment {
 		// just a local variable.
 
 		int pc = codeStream.position;
-		lhs.generatePostIncrement(currentScope, codeStream, this, valueRequired);
+		 ((Reference) lhs).generatePostIncrement(currentScope, codeStream, this, valueRequired);
 		if (valueRequired) {
 			codeStream.generateImplicitConversion(implicitConversion);
 		}
@@ -57,16 +57,16 @@ public class PostfixExpression extends CompoundAssignment {
 		return "unknown operator"; //$NON-NLS-1$
 	}
 	
+	public StringBuffer printExpressionNoParenthesis(int indent, StringBuffer output) {
+
+		return lhs.printExpression(indent, output).append(' ').append(operatorToString()); 
+	} 
+
 	public boolean restrainUsageToNumericTypes() {
 
 		return true;
 	}
 	
-	public String toStringExpressionNoParenthesis() {
-
-		return lhs.toStringExpression() + " " + operatorToString(); //$NON-NLS-1$
-	} 
-
 	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
 
 		if (visitor.visit(this, scope)) {

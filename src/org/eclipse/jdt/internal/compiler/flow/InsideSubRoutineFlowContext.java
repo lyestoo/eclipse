@@ -1,16 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
 import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.SubRoutineStatement;
 
 /**
  * Reflects the context of code analysis, keeping track of enclosing
@@ -24,19 +25,35 @@ public class InsideSubRoutineFlowContext extends FlowContext {
 		FlowContext parent,
 		AstNode associatedNode) {
 		super(parent, associatedNode);
-		this.initsOnReturn = FlowInfo.DeadEnd;				
+		this.initsOnReturn = FlowInfo.DEAD_END;				
 	}
-	
+
+	public String individualToString() {
+		
+		StringBuffer buffer = new StringBuffer("Inside SubRoutine flow context"); //$NON-NLS-1$
+		buffer.append("[initsOnReturn -").append(initsOnReturn.toString()).append(']'); //$NON-NLS-1$
+		return buffer.toString();
+	}
+		
+	public UnconditionalFlowInfo initsOnReturn(){
+		return this.initsOnReturn;
+	}
+		
 	public boolean isNonReturningContext() {
-		return associatedNode.cannotReturn();
+		return subRoutine().isSubRoutineEscaping();
 	}
 	
-	public AstNode subRoutine() {
-		return associatedNode;
+	public SubRoutineStatement subRoutine() {
+		return (SubRoutineStatement)associatedNode;
 	}
 	
-	public void recordReturnFrom(UnconditionalFlowInfo flowInfo) {
-		// record initializations which were performed at the return point
-		initsOnReturn = initsOnReturn.mergedWith(flowInfo);
+	public void recordReturnFrom(FlowInfo flowInfo) {
+
+		if (!flowInfo.isReachable()) return; 
+		if (initsOnReturn == FlowInfo.DEAD_END) {
+			initsOnReturn = flowInfo.copy().unconditionalInits();
+		} else {
+			initsOnReturn = initsOnReturn.mergedWith(flowInfo.unconditionalInits());
+		}
 	}
 }

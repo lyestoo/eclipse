@@ -1,7 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2003 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
@@ -11,8 +11,10 @@
  *                       container for generic container operations.
  * 						 - canUpdateClasspathContainer(IPath, IJavaProject)
  * 						 - requestClasspathContainerUpdate(IPath, IJavaProject, IClasspathContainer)
- ******************************************************************************/
-
+ *     IBM Corporation - allow initializers to provide a readable description
+ *                       of a container reference, ahead of actual resolution.
+ * 						 - getDescription(IPath, IJavaProject)
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.core.runtime.CoreException;
@@ -29,8 +31,8 @@ import org.eclipse.core.runtime.IPath;
  * <p>
  * Multiple classpath containers can be registered, each of them declares
  * the container ID they can handle, so as to narrow the set of containers they
- * can resolve, i.e. a container initializer is guaranteed to only be activated to 
- * resolve containers which match the ID they registered onto.
+ * can resolve, in other words, a container initializer is guaranteed to only be 
+ * activated to resolve containers which match the ID they registered onto.
  * <p>
  * In case multiple container initializers collide on the same container ID, the first
  * registered one will be invoked.
@@ -46,6 +48,7 @@ public abstract class ClasspathContainerInitializer {
      * Creates a new classpath container initializer.
      */
     public ClasspathContainerInitializer() {
+    	// a classpath container initializer must have a public 0-argument constructor
     }
 
     /**
@@ -121,10 +124,11 @@ public abstract class ClasspathContainerInitializer {
 	 * target container (see <code>IClasspathContainer.getDescription()</code>).
 	 * 
 	 * @param containerPath the path of the container which requires a readable description
+	 * @param project the project from which the container is referenced
 	 * @return a string description of the container
 	 * @since 2.1
 	 */    
-    public String getDescription(IPath containerPath) {
+    public String getDescription(IPath containerPath, IJavaProject project) {
     	
     	// By default, a container path is the only available description
     	return containerPath.makeRelative().toString();

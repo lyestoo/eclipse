@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.complete;
 
 /*
@@ -47,30 +47,26 @@ public class CompletionOnMessageSend extends MessageSend {
 		if (receiver.isImplicitThis())
 			throw new CompletionNodeFound(this, null, scope);
 
-		TypeBinding receiverType = receiver.resolveType(scope);
-		if (receiverType == null || receiverType.isBaseType())
+		this.receiverType = receiver.resolveType(scope);
+		if (this.receiverType == null || this.receiverType.isBaseType())
 			throw new CompletionNodeFound();
 
-		if (receiverType.isArrayType())
-			receiverType = scope.getJavaLangObject();
-		throw new CompletionNodeFound(this, receiverType, scope);
+		if (this.receiverType.isArrayType())
+			this.receiverType = scope.getJavaLangObject();
+		throw new CompletionNodeFound(this, this.receiverType, scope);
 	}
 
-	public String toStringExpression() {
+	public StringBuffer printExpression(int indent, StringBuffer output) {
 
-		String s = "<CompleteOnMessageSend:"; //$NON-NLS-1$
-		if (!receiver.isImplicitThis())
-			s = s + receiver.toStringExpression() + "."; //$NON-NLS-1$
-		s = s + new String(selector) + "("; //$NON-NLS-1$
+		output.append("<CompleteOnMessageSend:"); //$NON-NLS-1$
+		if (!receiver.isImplicitThis()) receiver.printExpression(0, output).append('.'); //$NON-NLS-1$
+		output.append(selector).append('('); //$NON-NLS-1$
 		if (arguments != null) {
 			for (int i = 0; i < arguments.length; i++) {
-				s += arguments[i].toStringExpression();
-				if (i != arguments.length - 1) {
-					s += ", "; //$NON-NLS-1$
-				}
-			};
+				if (i > 0) output.append(", "); //$NON-NLS-1$
+				arguments[i].printExpression(0, output);
+			}
 		}
-		s = s + ")>"; //$NON-NLS-1$
-		return s;
+		return output.append(")>"); //$NON-NLS-1$
 	}
 }

@@ -1,41 +1,47 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.Util;
 
 public abstract class Statement extends AstNode {
 	
+	public abstract FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo);
+	
 	/**
-	 * Statement constructor comment.
+	 * INTERNAL USE ONLY.
+	 * This is used to redirect inter-statements jumps.
 	 */
-	public Statement() {
-		super();
+	public void branchChainTo(Label label) {
+		// do nothing by default
 	}
 	
-	public FlowInfo analyseCode(
-		BlockScope currentScope,
-		FlowContext flowContext,
-		FlowInfo flowInfo) {
-		return flowInfo;
+	// Report an error if necessary
+	public boolean complainIfUnreachable(FlowInfo flowInfo, BlockScope scope, boolean didAlreadyComplain) {
+	
+		if ((flowInfo.reachMode() & FlowInfo.UNREACHABLE) != 0) {
+			this.bits &= ~AstNode.IsReachableMASK;
+			boolean reported = flowInfo == FlowInfo.DEAD_END;
+			if (!didAlreadyComplain && reported) {
+				scope.problemReporter().unreachableCode(this);
+			}
+			return reported; // keep going for fake reachable
+		}
+		return false;
 	}
 	
-	public void generateCode(BlockScope currentScope, CodeStream codeStream) {
-		throw new ShouldNotImplement(Util.bind("ast.missingStatement")); //$NON-NLS-1$
-	}
+	public abstract void generateCode(BlockScope currentScope, CodeStream codeStream);
 	
 	public boolean isEmptyBlock() {
 		return false;
@@ -56,26 +62,22 @@ public abstract class Statement extends AstNode {
 		return true;
 	}
 	
-	public void resolve(BlockScope scope) {
+	public StringBuffer print(int indent, StringBuffer output) {
+		return printStatement(indent, output);
+	}
+	public abstract StringBuffer printStatement(int indent, StringBuffer output);
+
+	public void resetStateForCodeGeneration() {
+		// do nothing by default
 	}
 	
-	public Constant resolveCase(
-		BlockScope scope,
-		TypeBinding testType,
-		SwitchStatement switchStatement) {
+	public abstract void resolve(BlockScope scope);
+	
+	public Constant resolveCase(BlockScope scope, TypeBinding testType, SwitchStatement switchStatement) {
 		// statement within a switch that are not case are treated as normal statement.... 
 
 		resolve(scope);
 		return null;
 	}
-	
-	public void resetStateForCodeGeneration() {
-	}
-	
-	/**
-	 * INTERNAL USE ONLY.
-	 * Do nothing by default. This is used to redirect inter-statements jumps.
-	 */
-	public void branchChainTo(Label label) {
-	}
+
 }

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.impl.*;
@@ -33,18 +33,26 @@ public abstract class Expression extends Statement {
 		super();
 	}
 
-	public FlowInfo analyseCode(
-		BlockScope currentScope,
-		FlowContext flowContext,
-		FlowInfo flowInfo,
-		boolean valueRequired) {
+	public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
+
+		return flowInfo;
+	}
+
+	public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo, boolean valueRequired) {
 
 		return analyseCode(currentScope, flowContext, flowInfo);
 	}
 
-	public Constant conditionalConstant() {
+	/**
+	 * Constant usable for bytecode pattern optimizations, but cannot be inlined
+	 * since it is not strictly equivalent to the definition of constant expressions.
+	 * In particular, some side-effects may be required to occur (only the end value
+	 * is known).
+	 * Constant is known to be of boolean type
+	 */ 
+	public Constant optimizedBooleanConstant() {
 
-		return constant;
+		return this.constant;
 	}
 
 	public static final boolean isConstantValueRepresentable(
@@ -310,6 +318,9 @@ public abstract class Expression extends Statement {
 		org.eclipse.jdt.internal.compiler.codegen.CodeStream codeStream,
 		int typeID) {
 
+		if (typeID == T_String && this.constant != NotAConstant && this.constant.stringValue().length() == 0) {
+			return; // optimize str + ""
+		}
 		generateCode(blockScope, codeStream, true);
 		codeStream.invokeStringBufferAppendForType(typeID);
 	}
@@ -336,9 +347,14 @@ public abstract class Expression extends Statement {
 		}
 		codeStream.newStringBuffer();
 		codeStream.dup();
-		if ((typeID == T_String) || (typeID == T_null)) {
+		if (typeID == T_String || typeID == T_null) {
 			if (constant != NotAConstant) {
-				codeStream.ldc(constant.stringValue());
+				String stringValue = constant.stringValue();
+				if (stringValue.length() == 0) {  // optimize ""+<str> 
+					codeStream.invokeStringBufferDefaultConstructor();
+					return;
+				}
+				codeStream.ldc(stringValue);
 			} else {
 				generateCode(blockScope, codeStream, true);
 				codeStream.invokeStringValueOf(T_Object);
@@ -358,15 +374,15 @@ public abstract class Expression extends Statement {
 		if (runtimeTimeType == null || compileTimeType == null)
 			return;
 
-		if (compileTimeType.id == T_null) {
-			// this case is possible only for constant null
-			// The type of runtime is a reference type
-			// The code gen use the constant id thus any value
-			// for the runtime id (akak the <<4) could be used.
-			// T_Object is used as some general T_reference
-			implicitConversion = (T_Object << 4) + T_null;
-			return;
-		}
+//		if (compileTimeType.id == T_null) {
+//			// this case is possible only for constant null
+//			// The type of runtime is a reference type
+//			// The code gen use the constant id thus any value
+//			// for the runtime id (akak the <<4) could be used.
+//			// T_Object is used as some general T_reference
+//			implicitConversion = (T_Object << 4) + T_null;
+//			return;
+//		}
 
 		switch (runtimeTimeType.id) {
 			case T_byte :
@@ -434,42 +450,28 @@ public abstract class Expression extends Statement {
 
 	public TypeBinding resolveTypeExpecting(
 		BlockScope scope,
-		TypeBinding expectedTb) {
+		TypeBinding expectedType) {
 
-		TypeBinding thisTb = this.resolveType(scope);
-		if (thisTb == null)
-			return null;
-		if (!Scope.areTypesCompatible(thisTb, expectedTb)) {
-			scope.problemReporter().typeMismatchError(thisTb, expectedTb, this);
+		TypeBinding expressionType = this.resolveType(scope);
+		if (expressionType == null) return null;
+		if (expressionType == expectedType) return expressionType;
+		
+		if (!expressionType.isCompatibleWith(expectedType)) {
+			scope.problemReporter().typeMismatchError(expressionType, expectedType, this);
 			return null;
 		}
-		return thisTb;
+		return expressionType;
 	}
 
-	public String toString(int tab) {
-
-		//Subclass re-define toStringExpression
-		String s = tabString(tab);
-		if (constant != null)
-			//before TC has runned
-			if (constant != NotAConstant)
-				//after the TC has runned
-				s += " /*cst:" + constant.toString() + "*/ "; //$NON-NLS-1$ //$NON-NLS-2$
-		return s + toStringExpression(tab);
+	public StringBuffer print(int indent, StringBuffer output) {
+		printIndent(indent, output);
+		return printExpression(indent, output);
 	}
 
-	//Subclass re-define toStringExpression
-	//This method is abstract and should never be called
-	//but we provide some code that is running.....just in case
-	//of developpement time (while every  thing is not built)
-	public String toStringExpression() {
-
-		return super.toString(0);
-	}
-
-	public String toStringExpression(int tab) {
-		// default is regular toString expression (qualified allocation expressions redifine this method)
-		return this.toStringExpression();
+	public abstract StringBuffer printExpression(int indent, StringBuffer output);
+	
+	public StringBuffer printStatement(int indent, StringBuffer output) {
+		return print(indent, output).append(";"); //$NON-NLS-1$
 	}
 
 	public Expression toTypeReference() {

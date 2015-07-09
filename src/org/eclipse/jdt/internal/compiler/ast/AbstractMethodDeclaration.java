@@ -1,20 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.*;
+import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
+import org.eclipse.jdt.internal.compiler.flow.InitializationFlowContext;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
-import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
@@ -38,10 +39,12 @@ public abstract class AbstractMethodDeclaration
 	public MethodBinding binding;
 	public boolean ignoreFurtherInvestigation = false;
 	public boolean needFreeReturn = false;
-
+	
 	public int bodyStart;
 	public int bodyEnd = -1;
 	public CompilationResult compilationResult;
+	
+	public boolean errorInSignature = false; 
 	
 	AbstractMethodDeclaration(CompilationResult compilationResult){
 		this.compilationResult = compilationResult;
@@ -52,80 +55,21 @@ public abstract class AbstractMethodDeclaration
 	 */
 	public void abort(int abortLevel) {
 
-		if (scope == null) {
-			throw new AbortCompilation(); // cannot do better
-		}
-
-		CompilationResult compilationResult =
-			scope.referenceCompilationUnit().compilationResult;
-
 		switch (abortLevel) {
 			case AbortCompilation :
-				throw new AbortCompilation(compilationResult);
+				throw new AbortCompilation(this.compilationResult);
 			case AbortCompilationUnit :
-				throw new AbortCompilationUnit(compilationResult);
+				throw new AbortCompilationUnit(this.compilationResult);
 			case AbortType :
-				throw new AbortType(compilationResult);
+				throw new AbortType(this.compilationResult);
 			default :
-				throw new AbortMethod(compilationResult);
+				throw new AbortMethod(this.compilationResult);
 		}
 	}
 
-	public void analyseCode(
-		ClassScope currentScope,
-		FlowContext flowContext,
-		FlowInfo flowInfo) {
+	public abstract void analyseCode(ClassScope classScope, InitializationFlowContext initializationContext, FlowInfo info);
 
-		// starting of the code analysis for methods
-		if (ignoreFurtherInvestigation)
-			return;
-		try {
-			if (binding == null)
-				return;
-			// may be in a non necessary <clinit> for innerclass with static final constant fields
-			if (binding.isAbstract() || binding.isNative())
-				return;
-
-			ExceptionHandlingFlowContext methodContext =
-				new ExceptionHandlingFlowContext(
-					flowContext,
-					this,
-					binding.thrownExceptions,
-					scope,
-					FlowInfo.DeadEnd);
-
-			// propagate to statements
-			if (statements != null) {
-				for (int i = 0, count = statements.length; i < count; i++) {
-					Statement stat;
-					if (!flowInfo.complainIfUnreachable((stat = statements[i]), scope)) {
-						flowInfo = stat.analyseCode(scope, methodContext, flowInfo);
-					}
-				}
-			}
-			// check for missing returning path
-			TypeBinding returnType = binding.returnType;
-			if ((returnType == VoidBinding) || isAbstract()) {
-				needFreeReturn =
-					!((flowInfo == FlowInfo.DeadEnd) || flowInfo.isFakeReachable());
-			} else {
-				if (flowInfo != FlowInfo.DeadEnd) {
-					// special test for empty methods that should return something
-					if ((statements == null) && (returnType != VoidBinding)) {
-						scope.problemReporter().shouldReturn(returnType, this);
-					} else {
-						scope.problemReporter().shouldReturn(
-							returnType,
-							statements[statements.length - 1]);
-					}
-				}
-			}
-		} catch (AbortMethod e) {
-			this.ignoreFurtherInvestigation = true;
-		}
-	}
-
-	/**
+		/**
 	 * Bind and add argument's binding into the scope of the method
 	 */
 	public void bindArguments() {
@@ -223,7 +167,7 @@ public abstract class AbstractMethodDeclaration
 				} catch (AbortMethod e2) {
 					int problemsLength;
 					IProblem[] problems =
-						scope.referenceCompilationUnit().compilationResult.getProblems();
+						scope.referenceCompilationUnit().compilationResult.getAllProblems();
 					IProblem[] problemsCopy = new IProblem[problemsLength = problems.length];
 					System.arraycopy(problems, 0, problemsCopy, 0, problemsLength);
 					classFile.addProblemMethod(this, binding, problemsCopy, problemResetPC);
@@ -232,7 +176,7 @@ public abstract class AbstractMethodDeclaration
 				// produce a problem method accounting for this fatal error
 				int problemsLength;
 				IProblem[] problems =
-					scope.referenceCompilationUnit().compilationResult.getProblems();
+					scope.referenceCompilationUnit().compilationResult.getAllProblems();
 				IProblem[] problemsCopy = new IProblem[problemsLength = problems.length];
 				System.arraycopy(problems, 0, problemsCopy, 0, problemsLength);
 				classFile.addProblemMethod(this, binding, problemsCopy, problemResetPC);
@@ -251,7 +195,7 @@ public abstract class AbstractMethodDeclaration
 			CodeStream codeStream = classFile.codeStream;
 			codeStream.reset(this, classFile);
 			// initialize local positions
-			scope.computeLocalVariablePositions(binding.isStatic() ? 0 : 1, codeStream);
+			this.scope.computeLocalVariablePositions(binding.isStatic() ? 0 : 1, codeStream);
 
 			// arguments initialization for local variable debug attributes
 			if (arguments != null) {
@@ -265,7 +209,7 @@ public abstract class AbstractMethodDeclaration
 				for (int i = 0, max = statements.length; i < max; i++)
 					statements[i].generateCode(scope, codeStream);
 			}
-			if (needFreeReturn) {
+			if (this.needFreeReturn) {
 				codeStream.return_();
 			}
 			// local variable attributes
@@ -273,6 +217,8 @@ public abstract class AbstractMethodDeclaration
 			codeStream.recordPositionsFrom(0, this.declarationSourceEnd);
 			classFile.completeCodeAttribute(codeAttributeOffset);
 			attributeNumber++;
+		} else {
+			checkArgumentsSize();
 		}
 		classFile.completeMethodInfo(methodAttributeOffset, attributeNumber);
 
@@ -282,6 +228,22 @@ public abstract class AbstractMethodDeclaration
 		}
 	}
 
+	private void checkArgumentsSize() {
+		TypeBinding[] parameters = binding.parameters;
+		int size = 1; // an abstact method or a native method cannot be static
+		for (int i = 0, max = parameters.length; i < max; i++) {
+			TypeBinding parameter = parameters[i];
+			if (parameter == LongBinding || parameter == DoubleBinding) {
+				size += 2;
+			} else {
+				size++;
+			}
+			if (size > 0xFF) {
+				scope.problemReporter().noMoreAvailableSpaceForArgument(scope.locals[i], scope.locals[i].declaration);
+			}
+		}
+	}
+	
 	public boolean hasErrors() {
 		return this.ignoreFurtherInvestigation;
 	}
@@ -334,6 +296,51 @@ public abstract class AbstractMethodDeclaration
 		Parser parser,
 		CompilationUnitDeclaration unit);
 
+	public StringBuffer print(int tab, StringBuffer output) {
+
+		printIndent(tab, output);
+		printModifiers(modifiers, output);
+		printReturnType(0, output).append(selector).append('(');
+		if (arguments != null) {
+			for (int i = 0; i < arguments.length; i++) {
+				if (i > 0) output.append(", "); //$NON-NLS-1$
+				arguments[i].print(0, output);
+			}
+		}
+		output.append(')');
+		if (thrownExceptions != null) {
+			output.append(" throws "); //$NON-NLS-1$
+			for (int i = 0; i < thrownExceptions.length; i++) {
+				if (i > 0) output.append(", "); //$NON-NLS-1$
+				thrownExceptions[i].print(0, output);
+			}
+		}
+		printBody(tab + 1, output);
+		return output;
+	}
+
+	public StringBuffer printBody(int indent, StringBuffer output) {
+
+		if (isAbstract() || (this.modifiers & AccSemicolonBody) != 0) 
+			return output.append(';');
+
+		output.append(" {"); //$NON-NLS-1$
+		if (statements != null) {
+			for (int i = 0; i < statements.length; i++) {
+				output.append('\n');
+				statements[i].printStatement(indent, output); 
+			}
+		}
+		output.append('\n'); //$NON-NLS-1$
+		printIndent(indent == 0 ? 0 : indent - 1, output).append('}');
+		return output;
+	}
+
+	public StringBuffer printReturnType(int indent, StringBuffer output) {
+		
+		return output;
+	}
+
 	public void resolve(ClassScope upperScope) {
 
 		if (binding == null) {
@@ -343,24 +350,21 @@ public abstract class AbstractMethodDeclaration
 		try {
 			bindArguments(); 
 			bindThrownExceptions();
-			resolveStatements(upperScope);
+			resolveStatements();
 		} catch (AbortMethod e) {	// ========= abort on fatal error =============
 			this.ignoreFurtherInvestigation = true;
 		} 
 	}
 
-	public void resolveStatements(ClassScope upperScope) {
+	public void resolveStatements() {
 
 		if (statements != null) {
-			int i = 0, length = statements.length;
-			while (i < length)
-				statements[i++].resolve(scope);
+			for (int i = 0, length = statements.length; i < length; i++) {
+				statements[i].resolve(scope);
+			}
+		} else if ((this.bits & UndocumentedEmptyBlockMASK) != 0) {
+			scope.problemReporter().undocumentedEmptyBlock(this.bodyStart-1, this.bodyEnd+1);
 		}
-	}
-
-	public String returnTypeToString(int tab) {
-
-		return ""; //$NON-NLS-1$
 	}
 
 	public void tagAsHavingErrors() {
@@ -368,56 +372,9 @@ public abstract class AbstractMethodDeclaration
 		ignoreFurtherInvestigation = true;
 	}
 
-	public String toString(int tab) {
-
-		String s = tabString(tab);
-		if (modifiers != AccDefault) {
-			s += modifiersString(modifiers);
-		}
-
-		s += returnTypeToString(0);
-		s += new String(selector) + "("; //$NON-NLS-1$
-		if (arguments != null) {
-			for (int i = 0; i < arguments.length; i++) {
-				s += arguments[i].toString(0);
-				if (i != (arguments.length - 1))
-					s = s + ", "; //$NON-NLS-1$
-			};
-		};
-		s += ")"; //$NON-NLS-1$
-		if (thrownExceptions != null) {
-			s += " throws "; //$NON-NLS-1$
-			for (int i = 0; i < thrownExceptions.length; i++) {
-				s += thrownExceptions[i].toString(0);
-				if (i != (thrownExceptions.length - 1))
-					s = s + ", "; //$NON-NLS-1$
-			};
-		};
-
-		s += toStringStatements(tab + 1);
-		return s;
-	}
-
-	public String toStringStatements(int tab) {
-
-		if (isAbstract() || (this.modifiers & AccSemicolonBody) != 0)
-			return ";"; //$NON-NLS-1$
-
-		String s = " {"; //$NON-NLS-1$
-		if (statements != null) {
-			for (int i = 0; i < statements.length; i++) {
-				s = s + "\n" + statements[i].toString(tab); //$NON-NLS-1$
-				if (!(statements[i] instanceof Block)) {
-					s += ";"; //$NON-NLS-1$
-				}
-			}
-		}
-		s += "\n" + tabString(tab == 0 ? 0 : tab - 1) + "}"; //$NON-NLS-2$ //$NON-NLS-1$
-		return s;
-	}
-
 	public void traverse(
 		IAbstractSyntaxTreeVisitor visitor,
 		ClassScope classScope) {
+		// default implementation: subclass will define it
 	}
 }

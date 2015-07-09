@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
@@ -31,6 +31,7 @@ class BindingResolver {
 	 * Creates a binding resolver.
 	 */
 	BindingResolver() {
+		// default implementation: do nothing
 	}
 
 	/**
@@ -38,8 +39,8 @@ class BindingResolver {
 	 * resolveBinding methods. If the number changed, all resolve bindings methods
 	 * simply return null.
 	 */
-	protected void storeModificationCount(long modificationCount) {
-		this.modificationCount = modificationCount;
+	protected void storeModificationCount(long modificationCounter) {
+		this.modificationCount = modificationCounter;
 	}
 	
 	/**
@@ -54,6 +55,7 @@ class BindingResolver {
 	 * @param oldNode the old AST node
 	 */
 	void store(ASTNode newNode, AstNode oldASTNode) {
+		// default implementation: do nothing
 	}
 
 	/**
@@ -289,7 +291,49 @@ class BindingResolver {
 	ITypeBinding resolveExpressionType(Expression expression) {
 		return null;
 	}
-	
+
+	/**
+	 * Resolves the given field access and returns the binding for it.
+	 * <p>
+	 * The implementation of <code>FieldAccess.resolveFieldBinding</code>
+	 * forwards to this method. How the field resolves is often a function of
+	 * the context in which the field access node is embedded as well as
+	 * the field access subtree itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param fieldAccess the field access of interest
+	 * @return the binding for the given field access, or 
+	 *    <code>null</code> if no binding is available
+	 */
+	IVariableBinding resolveField(FieldAccess fieldAccess) {
+		return null;
+	}
+		
+	/**
+	 * Resolves the given super field access and returns the binding for it.
+	 * <p>
+	 * The implementation of <code>SuperFieldAccess.resolveFieldBinding</code>
+	 * forwards to this method. How the field resolves is often a function of
+	 * the context in which the super field access node is embedded as well as
+	 * the super field access subtree itself.
+	 * </p>
+	 * <p>
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param fieldAccess the super field access of interest
+	 * @return the binding for the given field access, or 
+	 *    <code>null</code> if no binding is available
+	 */
+	IVariableBinding resolveField(SuperFieldAccess fieldAccess) {
+		return null;
+	}
+
 	/**
 	 * Resolves the given import declaration and returns the binding for it.
 	 * <p>
@@ -520,6 +564,7 @@ class BindingResolver {
 	 * @param newNode the new AST node
 	 */
 	void updateKey(ASTNode node, ASTNode newNode) {
+		// default implementation: do nothing
 	}
 	
 	/**
@@ -529,17 +574,23 @@ class BindingResolver {
 	 * The default implementation of this method does nothing.
 	 * Subclasses may reimplement.
 	 * </p>
-	 *	 * @param currentNode the new node	 * @return AstNode	 */
+	 *
+	 * @param currentNode the new node
+	 * @return AstNode
+	 */
 	AstNode getCorrespondingNode(ASTNode currentNode) {
 		return null;
 	} 
 
 	/**
-	 * This method is used to record the scope and its corresponding node.	 * <p>
+	 * This method is used to record the scope and its corresponding node.
+	 * <p>
 	 * The default implementation of this method does nothing.
 	 * Subclasses may reimplement.
 	 * </p>
-	 * @param astNode	 */	
+	 * @param astNode
+	 */	
 	void recordScope(ASTNode astNode, BlockScope blockScope) {
+		// default implementation: do nothing
 	}
 }

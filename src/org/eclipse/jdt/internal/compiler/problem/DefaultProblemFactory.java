@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.problem;
 
 import java.util.Locale;
@@ -17,16 +17,21 @@ import java.util.ResourceBundle;
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.IProblemFactory;
+import org.eclipse.jdt.internal.compiler.util.Util;
 
 public class DefaultProblemFactory implements IProblemFactory {
 
-
+	public static final int MAX_MESSAGES = 500;
+	
 	public String[] messageTemplates;
 	private Locale locale;
 	private static String[] DEFAULT_LOCALE_TEMPLATES;
 	private final static char[] DOUBLE_QUOTES = "''".toCharArray(); //$NON-NLS-1$
 	private final static char[] SINGLE_QUOTE = "'".toCharArray(); //$NON-NLS-1$
 
+public DefaultProblemFactory() {
+	this(Locale.getDefault());
+}
 /**
  * @param loc the locale used to get the right message
  */
@@ -91,11 +96,10 @@ public Locale getLocale() {
 }
 public final String getLocalizedMessage(int id, String[] problemArguments) {
 	StringBuffer output = new StringBuffer(80);
-	String message = 
-		messageTemplates[(id & IProblem.IgnoreCategoriesMask)]; 
+	String message = messageTemplates[id & IProblem.IgnoreCategoriesMask]; 
 	if (message == null) {
 		return "Unable to retrieve the error message for problem id: " //$NON-NLS-1$
-			+ id
+			+ (id & IProblem.IgnoreCategoriesMask)
 			+ ". Check compiler resources.";  //$NON-NLS-1$
 	}
 
@@ -116,9 +120,13 @@ public final String getLocalizedMessage(int id, String[] problemArguments) {
 				} catch (NumberFormatException nfe) {
 					output.append(message.substring(end + 1, start + 1));
 				} catch (ArrayIndexOutOfBoundsException e) {
-					return "Corrupted compiler resources for problem id: " //$NON-NLS-1$
+					return "Cannot bind message for problem (id: " //$NON-NLS-1$
 						+ (id & IProblem.IgnoreCategoriesMask)
-						+ ". Check compiler resources.";  //$NON-NLS-1$
+						+ ") \""  //$NON-NLS-1$
+						+ message
+						+ "\" with arguments: {" //$NON-NLS-1$
+						+ Util.toString(problemArguments)
+						+"}"; //$NON-NLS-1$
 				}
 			} else {
 				output.append(message.substring(end, length));
@@ -144,8 +152,15 @@ public final String localizedMessage(IProblem problem) {
  * to the current Locale.
  */
 public static String[] loadMessageTemplates(Locale loc) {
-	ResourceBundle bundle = ResourceBundle.getBundle("org.eclipse.jdt.internal.compiler.problem.messages", loc); //$NON-NLS-1$
-	String[] templates = new String[500];
+	ResourceBundle bundle = null;
+	String bundleName = "org.eclipse.jdt.internal.compiler.problem.messages"; //$NON-NLS-1$
+	try {
+		bundle = ResourceBundle.getBundle(bundleName, loc); 
+	} catch(MissingResourceException e) {
+		System.out.println("Missing resource : " + bundleName.replace('.', '/') + ".properties for locale " + loc); //$NON-NLS-1$//$NON-NLS-2$
+		throw e;
+	}
+	String[] templates = new String[MAX_MESSAGES];
 	for (int i = 0, max = templates.length; i < max; i++) {
 		try {
 			templates[i] = bundle.getString(String.valueOf(i));
@@ -156,7 +171,4 @@ public static String[] loadMessageTemplates(Locale loc) {
 	return templates;
 }
 
-public DefaultProblemFactory() {
-	this(Locale.getDefault());
-}
 }

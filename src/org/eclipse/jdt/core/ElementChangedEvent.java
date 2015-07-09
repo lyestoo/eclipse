@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import java.util.EventObject;
@@ -51,9 +51,9 @@ public class ElementChangedEvent extends EventObject {
 	 *
 	 * Note: this notification occurs during the corresponding PRE_AUTO_BUILD
 	 * resource change notification. The delta, which is notified here, only contains
-	 * information relative to the previous JavaModel operations (i.e. ignores the
-	 * possible resources which have changed outside Java operations). In
-	 * particular, it is possible that the JavaModel be inconsistent with respect to
+	 * information relative to the previous JavaModel operations (in other words, 
+	 * it ignores the possible resources which have changed outside Java operations). 
+	 * In particular, it is possible that the JavaModel be inconsistent with respect to
 	 * resources, which got modified outside JavaModel operations (it will only be
 	 * fully consistent once the POST_CHANGE notification has occurred).
 	 * 
@@ -61,6 +61,7 @@ public class ElementChangedEvent extends EventObject {
 	 * @see org.eclipse.core.resources.IResourceChangeEvent
 	 * @see #getDelta()
 	 * @since 2.0
+	 * @deprecated - no longer used, such deltas are now notified during POST_CHANGE
 	 */
 	public static final int PRE_AUTO_BUILD = 2;
 

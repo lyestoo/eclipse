@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 /**
@@ -57,7 +57,7 @@ public interface IRegion {
 	 * Removes the specified element from the region and returns
 	 * <code>true</code> if successful, <code>false</code> if the remove
 	 * fails. If an ancestor of the given element is included, the
-	 * remove fails (i.e. not possible to selectively
+	 * remove fails (in other words, it is not possible to selectively
 	 * exclude descendants of included ancestors).
 	 * 
 	 * @param element the given element

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
@@ -134,6 +134,22 @@ public class SuperFieldAccess extends Expression {
 			getAST().setModificationCount(count);
 		}
 		return fieldName;
+	}
+
+	/**
+	 * Resolves and returns the binding for the field accessed by this
+	 * expression.
+	 * <p>
+	 * Note that bindings are generally unavailable unless requested when the
+	 * AST is being built.
+	 * </p>
+	 *
+	 * @return the variable binding, or <code>null</code> if the binding cannot
+	 * be resolved
+	 * @since 3.0
+	 */
+	public IVariableBinding resolveFieldBinding() {
+		return getAST().getBindingResolver().resolveField(this);
 	}
 		
 	/**

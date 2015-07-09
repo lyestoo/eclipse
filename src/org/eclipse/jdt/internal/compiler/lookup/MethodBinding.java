@@ -1,15 +1,16 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
 
@@ -22,7 +23,9 @@ public class MethodBinding extends Binding implements BaseTypes, TypeConstants {
 	public ReferenceBinding declaringClass;
 
 	char[] signature;
+
 protected MethodBinding() {
+	// for creating problem or synthetic method
 }
 public MethodBinding(int modifiers, char[] selector, TypeBinding returnType, TypeBinding[] args, ReferenceBinding[] exceptions, ReferenceBinding declaringClass) {
 	this.modifiers = modifiers;
@@ -204,120 +207,162 @@ public final boolean canBeSeenBy(TypeBinding receiverType, InvocationSite invoca
 	} while ((type = type.superclass()) != null);
 	return false;
 }
+/* 
+ * Answer the declaring class to use in the constant pool
+ * may not be a reference binding (see subtypes)
+ */
+public TypeBinding constantPoolDeclaringClass() {
+	return this.declaringClass;
+}
 /* Answer the receiver's constant pool name.
 *
 * <init> for constructors
 * <clinit> for clinit methods
 * or the source name of the method
 */
-
 public final char[] constantPoolName() {
 	return selector;
 }
 public final int getAccessFlags() {
 	return modifiers & AccJustFlag;
 }
+
 /* Answer true if the receiver is an abstract method
 */
-
 public final boolean isAbstract() {
 	return (modifiers & AccAbstract) != 0;
 }
+
 /* Answer true if the receiver is a constructor
 */
-
 public final boolean isConstructor() {
 	return selector == ConstructorDeclaration.ConstantPoolName;
 }
 protected boolean isConstructorRelated() {
 	return isConstructor();
 }
+
 /* Answer true if the receiver has default visibility
 */
-
 public final boolean isDefault() {
 	return !isPublic() && !isProtected() && !isPrivate();
 }
+
 /* Answer true if the receiver is a system generated default abstract method
 */
-
 public final boolean isDefaultAbstract() {
 	return (modifiers & AccDefaultAbstract) != 0;
 }
+
 /* Answer true if the receiver is a deprecated method
 */
-
 public final boolean isDeprecated() {
 	return (modifiers & AccDeprecated) != 0;
 }
+
 /* Answer true if the receiver is final and cannot be overridden
 */
-
 public final boolean isFinal() {
 	return (modifiers & AccFinal) != 0;
 }
+
+/* Answer true if the receiver is implementing another method
+ * in other words, it is overriding and concrete, and overriden method is abstract
+ * Only set for source methods
+*/
+public final boolean isImplementing() {
+	return (modifiers & AccImplementing) != 0;
+}
+
 /* Answer true if the receiver is a native method
 */
-
 public final boolean isNative() {
 	return (modifiers & AccNative) != 0;
 }
+
+/* Answer true if the receiver is overriding another method
+ * Only set for source methods
+*/
+public final boolean isOverriding() {
+	return (modifiers & AccOverriding) != 0;
+}
+/*
+ * Answer true if the receiver is a "public static void main(String[])" method
+ */
+public final boolean isMain() {
+	if (this.selector.length == 4 && CharOperation.equals(this.selector, MAIN)
+			&& ((this.modifiers & (AccPublic | AccStatic)) != 0)
+			&& VoidBinding == this.returnType  
+			&& this.parameters.length == 1) {
+		TypeBinding paramType = this.parameters[0];
+		if (paramType.dimensions() == 1 && paramType.leafComponentType().id == TypeIds.T_JavaLangString) {
+			return true;
+		}
+	}
+	return false;
+}
 /* Answer true if the receiver has private visibility
 */
-
 public final boolean isPrivate() {
 	return (modifiers & AccPrivate) != 0;
 }
+
+/* Answer true if the receiver has private visibility and is used locally
+*/
+public final boolean isPrivateUsed() {
+	return (modifiers & AccPrivateUsed) != 0;
+}
+
 /* Answer true if the receiver has protected visibility
 */
-
 public final boolean isProtected() {
 	return (modifiers & AccProtected) != 0;
 }
+
 /* Answer true if the receiver has public visibility
 */
-
 public final boolean isPublic() {
 	return (modifiers & AccPublic) != 0;
 }
+
 /* Answer true if the receiver got requested to clear the private modifier
  * during private access emulation.
  */
-
 public final boolean isRequiredToClearPrivateModifier() {
 	return (modifiers & AccClearPrivateModifier) != 0;
 }
+
 /* Answer true if the receiver is a static method
 */
-
 public final boolean isStatic() {
 	return (modifiers & AccStatic) != 0;
 }
+
 /* Answer true if all float operations must adher to IEEE 754 float/double rules
 */
-
 public final boolean isStrictfp() {
 	return (modifiers & AccStrictfp) != 0;
 }
+
 /* Answer true if the receiver is a synchronized method
 */
-
 public final boolean isSynchronized() {
 	return (modifiers & AccSynchronized) != 0;
 }
+
 /* Answer true if the receiver has public visibility
 */
-
 public final boolean isSynthetic() {
 	return (modifiers & AccSynthetic) != 0;
 }
+
 /* Answer true if the receiver's declaring type is deprecated (or any of its enclosing types)
 */
-
 public final boolean isViewedAsDeprecated() {
 	return (modifiers & AccDeprecated) != 0 ||
 		(modifiers & AccDeprecatedImplicitly) != 0;
 }
+
 public char[] readableName() /* foo(int, Thread) */ {
 	StringBuffer buffer = new StringBuffer(parameters.length + 1 * 20);
 	if (isConstructor())
@@ -335,6 +380,7 @@ public char[] readableName() /* foo(int, Thread) */ {
 	buffer.append(')');
 	return buffer.toString().toCharArray();
 }
+
 /**
  * @see org.eclipse.jdt.internal.compiler.lookup.Binding#shortReadableName()
  */
@@ -356,37 +402,56 @@ public char[] shortReadableName() {
 	return buffer.toString().toCharArray();
 }
 
-protected final void selector(char[] selector) {
+protected final void setSelector(char[] selector) {
 	this.selector = selector;
 	this.signature = null;
 }
+
 /* Answer the receiver's signature.
 *
 * NOTE: This method should only be used during/after code gen.
 * The signature is cached so if the signature of the return type or any parameter
 * type changes, the cached state is invalid.
 */
-
 public final char[] signature() /* (ILjava/lang/Thread;)Ljava/lang/Object; */ {
 	if (signature != null)
 		return signature;
 
 	StringBuffer buffer = new StringBuffer(parameters.length + 1 * 20);
 	buffer.append('(');
-	if (isConstructorRelated() && declaringClass.isNestedType()) {
+	
+	TypeBinding[] targetParameters = this.parameters;
+	boolean considerSynthetics = isConstructorRelated() && declaringClass.isNestedType();
+	if (considerSynthetics) {
+		
 		// take into account the synthetic argument type signatures as well
 		ReferenceBinding[] syntheticArgumentTypes = declaringClass.syntheticEnclosingInstanceTypes();
 		int count = syntheticArgumentTypes == null ? 0 : syntheticArgumentTypes.length;
-		for (int i = 0; i < count; i++)
+		for (int i = 0; i < count; i++) {
 			buffer.append(syntheticArgumentTypes[i].signature());
-		SyntheticArgumentBinding[] syntheticArguments = declaringClass.syntheticOuterLocalVariables();
-		count = syntheticArguments == null ? 0 : syntheticArguments.length;
-		for (int i = 0; i < count; i++)
-			buffer.append(syntheticArguments[i].type.signature());
+		}
+		
+		if (this instanceof SyntheticAccessMethodBinding) {
+			targetParameters = ((SyntheticAccessMethodBinding)this).targetMethod.parameters;
+		}
 	}
-	if (parameters != NoParameters)
-		for (int i = 0, length = parameters.length; i < length; i++)
+
+	if (targetParameters != NoParameters) {
+		for (int i = 0; i < targetParameters.length; i++) {
+			buffer.append(targetParameters[i].signature());
+		}
+	}
+	if (considerSynthetics) {
+		SyntheticArgumentBinding[] syntheticOuterArguments = declaringClass.syntheticOuterLocalVariables();
+		int count = syntheticOuterArguments == null ? 0 : syntheticOuterArguments.length;
+		for (int i = 0; i < count; i++) {
+			buffer.append(syntheticOuterArguments[i].type.signature());
+		}
+		// move the extra padding arguments of the synthetic constructor invocation to the end		
+		for (int i = targetParameters.length, extraLength = parameters.length; i < extraLength; i++) {
 			buffer.append(parameters[i].signature());
+		}
+	}
 	buffer.append(')');
 	buffer.append(returnType.signature());
 	return signature = buffer.toString().toCharArray();

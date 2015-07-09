@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.internal.compiler.ast.SuperReference;
@@ -18,7 +18,7 @@ import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
 /**
  * A super reference inside a code snippet denotes a reference to the super type of 
- * the remote receiver object (i.e.&nbsp;the one of the context in the stack frame). This is 
+ * the remote receiver object (that is, the receiver of the context in the stack frame). This is 
  * used to report an error through JavaModelException according to the fact that super
  * reference are not supported in code snippet.
  */

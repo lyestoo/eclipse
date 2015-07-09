@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.parser;
 
 /**
@@ -36,7 +36,7 @@ public int sourceEnd(){
 	return this.statement.sourceEnd;
 }
 public String toString(int tab){
-	return tabString(tab) + "Recovered statement:\n" + statement.toString(tab + 1); //$NON-NLS-1$
+	return tabString(tab) + "Recovered statement:\n" + statement.print(tab + 1, new StringBuffer(10)); //$NON-NLS-1$
 }
 public Statement updatedStatement(){
 	return statement;
@@ -47,8 +47,8 @@ public void updateParseTree(){
 /*
  * Update the declarationSourceEnd of the corresponding parse node
  */
-public void updateSourceEndIfNecessary(int sourceEnd){
+public void updateSourceEndIfNecessary(int bodyStart, int bodyEnd){
 	if (this.statement.sourceEnd == 0)	
-		this.statement.sourceEnd = sourceEnd;
+		this.statement.sourceEnd = bodyEnd;
 }
 }

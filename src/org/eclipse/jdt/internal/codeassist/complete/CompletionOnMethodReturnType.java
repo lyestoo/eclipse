@@ -1,19 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.complete;
 
 import org.eclipse.jdt.internal.compiler.CompilationResult;
 import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
-import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
 
 public class CompletionOnMethodReturnType extends MethodDeclaration {
 	public CompletionOnMethodReturnType(TypeReference returnType, CompilationResult compilationResult){
@@ -23,12 +22,12 @@ public class CompletionOnMethodReturnType extends MethodDeclaration {
 		this.sourceEnd = returnType.sourceEnd;
 	}
 	
-	public void resolveStatements(ClassScope upperScope) {
-			throw new CompletionNodeFound(this, upperScope);
+	public void resolveStatements() {
+			throw new CompletionNodeFound(this, this.scope);
 	}
 	
-	public String toString(int tab) {
-		return returnType.toString(tab);
+	public StringBuffer print(int tab, StringBuffer output) {
+		return returnType.print(tab, output);
 	}
 
 }

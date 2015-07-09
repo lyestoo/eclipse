@@ -1,19 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.AstNode;
 import org.eclipse.jdt.internal.compiler.ast.Reference;
+import org.eclipse.jdt.internal.compiler.ast.SubRoutineStatement;
+import org.eclipse.jdt.internal.compiler.ast.TryStatement;
 import org.eclipse.jdt.internal.compiler.codegen.Label;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
@@ -31,9 +33,7 @@ public class FlowContext implements TypeConstants {
 	public AstNode associatedNode;
 	public FlowContext parent;
 
-	public final static FlowContext NotContinuableContext =
-
-		new FlowContext(null, null);
+	public final static FlowContext NotContinuableContext = new FlowContext(null, null);
 		
 	public FlowContext(FlowContext parent, AstNode associatedNode) {
 
@@ -74,8 +74,8 @@ public class FlowContext implements TypeConstants {
 		FlowContext traversedContext = this;
 
 		while (traversedContext != null) {
-			AstNode sub;
-			if (((sub = traversedContext.subRoutine()) != null) && sub.cannotReturn()) {
+			SubRoutineStatement sub;
+			if (((sub = traversedContext.subRoutine()) != null) && sub.isSubRoutineEscaping()) {
 				// traversing a non-returning subroutine means that all unhandled 
 				// exceptions will actually never get sent...
 				return;
@@ -134,8 +134,8 @@ public class FlowContext implements TypeConstants {
 					for (int i = 0; i < raisedCount; i++) {
 						TypeBinding raisedException;
 						if ((raisedException = raisedExceptions[i]) != null) {
-							if (Scope.areTypesCompatible(raisedException, scope.getJavaLangRuntimeException())
-								|| Scope.areTypesCompatible(raisedException, scope.getJavaLangError())) {
+							if (raisedException.isCompatibleWith(scope.getJavaLangRuntimeException())
+								|| raisedException.isCompatibleWith(scope.getJavaLangError())) {
 								remainingCount--;
 								raisedExceptions[i] = null;
 							}
@@ -161,6 +161,11 @@ public class FlowContext implements TypeConstants {
 			}
 			if (remainingCount == 0)
 				return;
+				
+			traversedContext.recordReturnFrom(flowInfo.unconditionalInits());
+			if (traversedContext.associatedNode instanceof TryStatement){
+				flowInfo = flowInfo.copy().addInitializationsFrom(((TryStatement) traversedContext.associatedNode).subRoutineInits);
+			}
 			traversedContext = traversedContext.parent;
 		}
 		// if reaches this point, then there are some remaining unhandled exception types.	
@@ -189,12 +194,13 @@ public class FlowContext implements TypeConstants {
 		// until the point where it is safely handled (Smarter - see comment at the end)
 		FlowContext traversedContext = this;
 		while (traversedContext != null) {
-			AstNode sub;
-			if (((sub = traversedContext.subRoutine()) != null) && sub.cannotReturn()) {
+			SubRoutineStatement sub;
+			if (((sub = traversedContext.subRoutine()) != null) && sub.isSubRoutineEscaping()) {
 				// traversing a non-returning subroutine means that all unhandled 
 				// exceptions will actually never get sent...
 				return;
 			}
+			
 			// filter exceptions that are locally caught from the innermost enclosing 
 			// try statement to the outermost ones.
 			if (traversedContext instanceof ExceptionHandlingFlowContext) {
@@ -233,8 +239,8 @@ public class FlowContext implements TypeConstants {
 				}
 				// method treatment for unchecked exceptions
 				if (exceptionContext.isMethodContext) {
-					if (Scope.areTypesCompatible(raisedException, scope.getJavaLangRuntimeException())
-						|| Scope.areTypesCompatible(raisedException, scope.getJavaLangError()))
+					if (raisedException.isCompatibleWith(scope.getJavaLangRuntimeException())
+						|| raisedException.isCompatibleWith(scope.getJavaLangError()))
 						return;
 						
 					// anonymous constructors are allowed to throw any exceptions (their thrown exceptions
@@ -249,6 +255,11 @@ public class FlowContext implements TypeConstants {
 					}
 					break; // not handled anywhere, thus jump to error handling
 				}
+			}
+
+			traversedContext.recordReturnFrom(flowInfo.unconditionalInits());
+			if (traversedContext.associatedNode instanceof TryStatement){
+				flowInfo = flowInfo.copy().addInitializationsFrom(((TryStatement) traversedContext.associatedNode).subRoutineInits);
 			}
 			traversedContext = traversedContext.parent;
 		}
@@ -337,7 +348,7 @@ public class FlowContext implements TypeConstants {
 			if (current.isNonReturningContext()) {
 				lastNonReturningSubRoutine = current;
 			}
-			if (current.isBreakable()) {
+			if (current.isBreakable() && current.labelName() == null) {
 				if (lastNonReturningSubRoutine == null) {
 					return current;
 				} else {
@@ -380,7 +391,12 @@ public class FlowContext implements TypeConstants {
 
 	public FlowInfo initsOnBreak() {
 
-		return FlowInfo.DeadEnd;
+		return FlowInfo.DEAD_END;
+	}
+
+	public UnconditionalFlowInfo initsOnReturn() {
+
+		return FlowInfo.DEAD_END;
 	}
 
 	public boolean isBreakable() {
@@ -409,9 +425,11 @@ public class FlowContext implements TypeConstants {
 	}
 
 	public void recordBreakFrom(FlowInfo flowInfo) {
+		// default implementation: do nothing
 	}
 
 	public void recordContinueFrom(FlowInfo flowInfo) {
+		// default implementation: do nothing
 	}
 
 	boolean recordFinalAssignment(
@@ -421,7 +439,8 @@ public class FlowContext implements TypeConstants {
 		return true; // keep going
 	}
 
-	public void recordReturnFrom(UnconditionalFlowInfo flowInfo) {
+	public void recordReturnFrom(FlowInfo flowInfo) {
+		// default implementation: do nothing
 	}
 
 	public void recordSettingFinal(
@@ -439,9 +458,10 @@ public class FlowContext implements TypeConstants {
 	}
 
 	void removeFinalAssignmentIfAny(Reference reference) {
+		// default implementation: do nothing
 	}
 
-	public AstNode subRoutine() {
+	public SubRoutineStatement subRoutine() {
 
 		return null;
 	}

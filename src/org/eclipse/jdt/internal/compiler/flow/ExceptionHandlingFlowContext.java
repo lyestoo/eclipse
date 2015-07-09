@@ -1,21 +1,23 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
 import java.util.ArrayList;
 
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.AstNode;
 import org.eclipse.jdt.internal.compiler.ast.TryStatement;
 import org.eclipse.jdt.internal.compiler.codegen.ObjectCache;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
+import org.eclipse.jdt.internal.compiler.lookup.MethodScope;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Scope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
@@ -63,15 +65,30 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 				isReached[cacheIndex] |= bitMask;
 				this.initsOnExceptions[i] = flowInfo.copy().unconditionalInits();
 			} else {
-				this.initsOnExceptions[i] = FlowInfo.DeadEnd;
+				this.initsOnExceptions[i] = FlowInfo.DEAD_END;
 			}
 		}
 		System.arraycopy(this.isReached, 0, this.isNeeded, 0, cacheSize);
-		this.initsOnReturn = FlowInfo.DeadEnd;	
+		this.initsOnReturn = FlowInfo.DEAD_END;	
 	}
 
+	public void complainIfUnusedExceptionHandlers(AbstractMethodDeclaration method) {
+		MethodScope scope = method.scope;
+		// report errors for unreachable exception handlers
+		for (int i = 0, count = handledExceptions.length; i < count; i++) {
+			int index = indexes.get(handledExceptions[i]);
+			int cacheIndex = index / BitCacheSize;
+			int bitMask = 1 << (index % BitCacheSize);
+			if ((isReached[cacheIndex] & bitMask) == 0) {
+				scope.problemReporter().unusedDeclaredThrownException(
+					handledExceptions[index],
+					method,
+					method.thrownExceptions[index]);
+			}
+		}
+	}
+	
 	public void complainIfUnusedExceptionHandlers(
-		AstNode[] exceptionHandlers,
 		BlockScope scope,
 		TryStatement tryStatement) {
 		// report errors for unreachable exception handlers
@@ -80,19 +97,17 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 			int cacheIndex = index / BitCacheSize;
 			int bitMask = 1 << (index % BitCacheSize);
 			if ((isReached[cacheIndex] & bitMask) == 0) {
-				scope.problemReporter().unreachableExceptionHandler(
+				scope.problemReporter().unreachableCatchBlock(
 					handledExceptions[index],
-					exceptionHandlers[index]);
+					tryStatement.catchArguments[index].type);
 			} else {
 				if ((isNeeded[cacheIndex] & bitMask) == 0) {
-					scope.problemReporter().maskedExceptionHandler(
+					scope.problemReporter().hiddenCatchBlock(
 						handledExceptions[index],
-						exceptionHandlers[index]);
+						tryStatement.catchArguments[index].type);
 				}
 			}
 		}
-		// will optimized out unnecessary catch block during code gen
-		tryStatement.preserveExceptionHandler = isNeeded;
 	}
 
 	public String individualToString() {
@@ -114,6 +129,7 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 			}
 			buffer.append('-').append(initsOnExceptions[i].toString()).append(']');
 		}
+		buffer.append("[initsOnReturn -").append(initsOnReturn.toString()).append(']'); //$NON-NLS-1$
 		return buffer.toString();
 	}
 
@@ -121,11 +137,15 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 		
 		int index;
 		if ((index = indexes.get(exceptionType)) < 0) {
-			return FlowInfo.DeadEnd;
+			return FlowInfo.DEAD_END;
 		}
 		return initsOnExceptions[index];
 	}
 
+	public UnconditionalFlowInfo initsOnReturn(){
+		return this.initsOnReturn;
+	}
+	
 	public void recordHandlingException(
 		ReferenceBinding exceptionType,
 		UnconditionalFlowInfo flowInfo,
@@ -141,16 +161,21 @@ public class ExceptionHandlingFlowContext extends FlowContext {
 			this.isNeeded[cacheIndex] |= bitMask;
 		}
 		this.isReached[cacheIndex] |= bitMask;
+		
 		initsOnExceptions[index] =
-			initsOnExceptions[index] == FlowInfo.DeadEnd
+			initsOnExceptions[index] == FlowInfo.DEAD_END
 				? flowInfo.copy().unconditionalInits()
 				: initsOnExceptions[index].mergedWith(flowInfo);
 	}
 	
-	public void recordReturnFrom(UnconditionalFlowInfo flowInfo) {
-		
-		// record initializations which were performed at the return point
-		initsOnReturn = initsOnReturn.mergedWith(flowInfo);
+	public void recordReturnFrom(FlowInfo flowInfo) {
+
+		if (!flowInfo.isReachable()) return; 
+		if (initsOnReturn == FlowInfo.DEAD_END) {
+			initsOnReturn = flowInfo.copy().unconditionalInits();
+		} else {
+			initsOnReturn = initsOnReturn.mergedWith(flowInfo.unconditionalInits());
+		}
 	}
 	
 	/*

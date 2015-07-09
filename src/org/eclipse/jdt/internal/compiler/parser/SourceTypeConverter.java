@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.parser;
 
 /**
@@ -40,9 +40,10 @@ import org.eclipse.jdt.internal.compiler.ast.SingleTypeReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.env.ISourceField;
+import org.eclipse.jdt.internal.compiler.env.ISourceImport;
 import org.eclipse.jdt.internal.compiler.env.ISourceMethod;
 import org.eclipse.jdt.internal.compiler.env.ISourceType;
-import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+
 import org.eclipse.jdt.internal.compiler.lookup.CompilerModifiers;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 
@@ -94,7 +95,7 @@ public class SourceTypeConverter implements CompilerModifiers {
 		if (sourceType.getName() == null)
 			return null; // do a basic test that the sourceType is valid
 
-		this.unit = new CompilationUnitDeclaration(problemReporter, compilationResult, 0);
+		this.unit = new CompilationUnitDeclaration(this.problemReporter, compilationResult, 0);
 		// not filled at this point
 
 		/* only positions available */
@@ -106,12 +107,19 @@ public class SourceTypeConverter implements CompilerModifiers {
 			&& sourceType.getPackageName().length > 0)
 			// if its null then it is defined in the default package
 			this.unit.currentPackage =
-				createImportReference(sourceType.getPackageName(), start, end);
-		char[][] importNames = sourceType.getImports();
-		int importCount = importNames == null ? 0 : importNames.length;
+				createImportReference(sourceType.getPackageName(), start, end, false, AccDefault);
+		ISourceImport[]  sourceImports = sourceType.getImports();
+		int importCount = sourceImports == null ? 0 : sourceImports.length;
 		this.unit.imports = new ImportReference[importCount];
-		for (int i = 0; i < importCount; i++)
-			this.unit.imports[i] = createImportReference(importNames[i], start, end);
+		for (int i = 0; i < importCount; i++) {
+			ISourceImport sourceImport = sourceImports[i];
+			this.unit.imports[i] = createImportReference(
+				sourceImport.getName(), 
+				sourceImport.getDeclarationSourceStart(),
+				sourceImport.getDeclarationSourceEnd(),
+				sourceImport.onDemand(),
+				sourceImport.getModifiers());
+		}
 		/* convert type(s) */
 		int typeCount = sourceTypes.length;
 		this.unit.types = new TypeDeclaration[typeCount];
@@ -145,11 +153,7 @@ public class SourceTypeConverter implements CompilerModifiers {
 			char[] initializationSource = sourceField.getInitializationSource();
 			if (initializationSource != null) {
 				if (this.parser == null) {
-					this.parser = 
-						new Parser(
-							this.problemReporter, 
-							true, 
-							this.problemReporter.options.sourceLevel >= CompilerOptions.JDK1_4);
+					this.parser = new Parser(this.problemReporter, true);
 				}
 				this.parser.parse(field, type, this.unit, initializationSource);
 			}
@@ -280,12 +284,15 @@ public class SourceTypeConverter implements CompilerModifiers {
 
 			/* source type has a constructor ?           */
 			/* by default, we assume that one is needed. */
-			int neededCount = 1;
-			for (int i = 0; i < sourceMethodCount; i++) {
-				if (sourceMethods[i].isConstructor()) {
-					neededCount = 0;
-					// Does not need the extra constructor since one constructor already exists.
-					break;
+			int neededCount = 0;
+			if (!type.isInterface()) {
+				neededCount = 1;
+				for (int i = 0; i < sourceMethodCount; i++) {
+					if (sourceMethods[i].isConstructor()) {
+						neededCount = 0;
+						// Does not need the extra constructor since one constructor already exists.
+						break;
+					}
 				}
 			}
 			type.methods = new AbstractMethodDeclaration[sourceMethodCount + neededCount];
@@ -310,29 +317,21 @@ public class SourceTypeConverter implements CompilerModifiers {
 	private ImportReference createImportReference(
 		char[] importName,
 		int start,
-		int end) {
-
-		/* count identifiers */
-		int max = importName.length;
-		int identCount = 0;
-		for (int i = 0; i < max; i++) {
-			if (importName[i] == '.')
-				identCount++;
-		}
-		/* import on demand? */
-		boolean onDemand = importName[max - 1] == '*';
-		if (!onDemand)
-			identCount++; // one more ident than dots
-
-		long[] positions = new long[identCount];
+		int end, 
+		boolean onDemand,
+		int modifiers) {
+	
+		char[][] qImportName = CharOperation.splitOn('.', importName);
+		long[] positions = new long[qImportName.length];
 		long position = (long) start << 32 + end;
-		for (int i = 0; i < identCount; i++) {
-			positions[i] = position;
+		for (int i = 0; i < qImportName.length; i++) {
+			positions[i] = position; // dummy positions
 		}
 		return new ImportReference(
-			CharOperation.splitOn('.', importName, 0, max - (onDemand ? 3 : 1)),
+			qImportName,
 			positions,
-			onDemand);
+			onDemand,
+			modifiers);
 	}
 
 	/*
@@ -376,7 +375,7 @@ public class SourceTypeConverter implements CompilerModifiers {
 				positions[i] = pos;
 			}
 			char[][] identifiers =
-				CharOperation.splitOn('.', typeSignature, 0, dimStart - 1);
+				CharOperation.splitOn('.', typeSignature, 0, dimStart);
 			if (dim == 0) {
 				return new QualifiedTypeReference(identifiers, positions);
 			} else {

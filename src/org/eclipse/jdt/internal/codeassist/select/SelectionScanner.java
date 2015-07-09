@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.select;
 
 /*
@@ -16,7 +16,6 @@ package org.eclipse.jdt.internal.codeassist.select;
  *
  * Source positions are zero-based and inclusive.
  */
-import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
 
 public class SelectionScanner extends Scanner {
@@ -29,8 +28,8 @@ public class SelectionScanner extends Scanner {
  *
  */
  
-public SelectionScanner(boolean assertMode) {
-	super(false /*comment*/, false /*whitespace*/, false /*nls*/, assertMode /*assert*/, false /*strict comment*/, null /*taskTags*/, null/*taskPriorities*/);
+public SelectionScanner(long sourceLevel) {
+	super(false /*comment*/, false /*whitespace*/, false /*nls*/, sourceLevel, null /*taskTags*/, null/*taskPriorities*/);
 }
 
 public char[] getCurrentIdentifierSource() {
@@ -53,7 +52,7 @@ public char[] getCurrentIdentifierSource() {
  * In case we actually read a keyword which corresponds to the selected
  * range, we pretend we read an identifier.
  */
-public int scanIdentifierOrKeyword() throws InvalidInputException {
+public int scanIdentifierOrKeyword() {
 
 	int id = super.scanIdentifierOrKeyword();
 

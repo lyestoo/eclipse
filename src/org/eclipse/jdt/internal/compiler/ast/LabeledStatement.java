@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -27,12 +27,14 @@ public class LabeledStatement extends Statement {
 	/**
 	 * LabeledStatement constructor comment.
 	 */
-	public LabeledStatement(char[] l, Statement st, int s, int e) {
+	public LabeledStatement(char[] label, Statement statement, int sourceStart, int sourceEnd) {
 		
-		this.statement = st;
-		this.label = l;
-		this.sourceStart = s;
-		this.sourceEnd = e;
+		this.statement = statement;
+		// remember useful empty statement
+		if (statement instanceof EmptyStatement) statement.bits |= IsUsefulEmptyStatementMASK;
+		this.label = label;
+		this.sourceStart = sourceStart;
+		this.sourceEnd = sourceEnd;
 	}
 	
 	public FlowInfo analyseCode(
@@ -98,30 +100,37 @@ public class LabeledStatement extends Statement {
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 	
-	public void resolve(BlockScope scope) {
-		
-		statement.resolve(scope);
+	public StringBuffer printStatement(int tab, StringBuffer output) {
+
+		printIndent(tab, output).append(label).append(": "); //$NON-NLS-1$
+		if (this.statement == null) 
+			output.append(';');
+		else 
+			this.statement.printStatement(0, output); 
+		return output;
 	}
 	
-	public String toString(int tab) {
-
-		String s = tabString(tab);
-		s += new String(label) + ": " + statement.toString(0); //$NON-NLS-1$
-		return s;
+	public void resolve(BlockScope scope) {
+		
+		if (this.statement != null) {
+			this.statement.resolve(scope);
+		}
 	}
+
 
 	public void traverse(
 		IAbstractSyntaxTreeVisitor visitor,
 		BlockScope blockScope) {
 
 		if (visitor.visit(this, blockScope)) {
-			statement.traverse(visitor, blockScope);
+			if (this.statement != null) this.statement.traverse(visitor, blockScope);
 		}
 		visitor.endVisit(this, blockScope);
 	}
 
 	public void resetStateForCodeGeneration() {
-
-		this.targetLabel.resetStateForCodeGeneration();
+		if (this.targetLabel != null) {	
+			this.targetLabel.resetStateForCodeGeneration();
+		}
 	}
 }

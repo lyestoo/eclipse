@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.impl;
 
 public class ByteConstant extends Constant {
@@ -16,25 +16,25 @@ public ByteConstant(byte value) {
 	this.value = value;
 }
 public byte byteValue() {
-	return (byte) value;
+	return this.value;
 }
 public char charValue() {
 	return (char) value;
 }
 public double doubleValue() {
-	return (double) value;
+	return value; // implicit cast to return type
 }
 public float floatValue() {
-	return (float) value;
+	return value; // implicit cast to return type
 }
 public int intValue() {
-	return (int) value;
+	return value; // implicit cast to return type
 }
 public long longValue() {
-	return (long) value;
+	return value; // implicit cast to return type
 }
 public short shortValue() {
-	return (short) value;
+	return value; // implicit cast to return type
 }
 public String stringValue() {
 	//spec 15.17.11

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -38,7 +38,7 @@ public class ClassScope extends Scope {
 			sourceType.superInterfaces = new ReferenceBinding[] { supertype };
 		} else {
 			sourceType.superclass = supertype;
-			sourceType.superInterfaces = TypeBinding.NoSuperInterfaces;
+			sourceType.superInterfaces = TypeConstants.NoSuperInterfaces;
 		}
 		connectMemberTypes();
 		buildFieldsAndMethods();
@@ -70,7 +70,7 @@ public class ClassScope extends Scope {
 				if (referenceContext.binding.isInterface())
 					problemReporter().interfaceCannotHaveInitializers(referenceContext.binding, field);
 			} else {
-				FieldBinding fieldBinding = new FieldBinding(field, null, referenceContext.binding);
+				FieldBinding fieldBinding = new FieldBinding(field, null, field.modifiers | AccUnresolved, referenceContext.binding);
 				// field's type will be resolved when needed for top level types
 				checkAndSetModifiersForField(fieldBinding, field);
 
@@ -469,6 +469,9 @@ public class ClassScope extends Scope {
 				fieldBinding.declaringClass,
 				fieldDecl);
 
+		if (fieldDecl.initialization == null && (modifiers & AccFinal) != 0) {
+			modifiers |= AccBlankFinal;
+		}
 		fieldBinding.modifiers = modifiers;
 	}
 	
@@ -565,12 +568,16 @@ public class ClassScope extends Scope {
 	*/
 	private boolean connectSuperclass() {
 		SourceTypeBinding sourceType = referenceContext.binding;
+		if (isJavaLangObject(sourceType)) { // handle the case of redefining java.lang.Object up front
+			sourceType.superclass = null;
+			sourceType.superInterfaces = NoSuperInterfaces;
+			if (referenceContext.superclass != null || referenceContext.superInterfaces != null)
+				problemReporter().objectCannotHaveSuperTypes(sourceType);
+			return true; // do not propagate Object's hierarchy problems down to every subtype
+		}
 		if (referenceContext.superclass == null) {
-			if (isJavaLangObject(sourceType))
-				return true;
 			sourceType.superclass = getJavaLangObject();
 			return !detectCycle(sourceType, sourceType.superclass, null);
-			// ensure Object is initialized if it comes from a source file
 		}
 		ReferenceBinding superclass = findSupertype(referenceContext.superclass);
 		if (superclass != null) { // is null if a cycle was detected cycle
@@ -580,11 +587,6 @@ public class ClassScope extends Scope {
 				problemReporter().superclassMustBeAClass(sourceType, referenceContext.superclass, superclass);
 			} else if (superclass.isFinal()) {
 				problemReporter().classExtendFinalClass(sourceType, referenceContext.superclass, superclass);
-			} else if (isJavaLangObject(sourceType)) {
-				// can only happen if Object extends another type... will never happen unless we're testing for it.
-				sourceType.tagBits |= HierarchyHasProblems;
-				sourceType.superclass = null;
-				return true;
 			} else {
 				// only want to reach here when no errors are reported
 				referenceContext.superclass.resolvedType = superclass;
@@ -593,12 +595,9 @@ public class ClassScope extends Scope {
 			}
 		}
 		sourceType.tagBits |= HierarchyHasProblems;
-		if (!isJavaLangObject(sourceType)) {
-			sourceType.superclass = getJavaLangObject();
-			if ((sourceType.superclass.tagBits & BeginHierarchyCheck) == 0)
-				detectCycle(sourceType, sourceType.superclass, null);
-			// ensure Object is initialized if it comes from a source file
-		}
+		sourceType.superclass = getJavaLangObject();
+		if ((sourceType.superclass.tagBits & BeginHierarchyCheck) == 0)
+			detectCycle(sourceType, sourceType.superclass, null);
 		return false; // reported some error against the source type
 	}
 
@@ -616,6 +615,8 @@ public class ClassScope extends Scope {
 		SourceTypeBinding sourceType = referenceContext.binding;
 		sourceType.superInterfaces = NoSuperInterfaces;
 		if (referenceContext.superInterfaces == null)
+			return true;
+		if (isJavaLangObject(sourceType)) // already handled the case of redefining java.lang.Object
 			return true;
 
 		boolean noProblems = true;
@@ -651,6 +652,7 @@ public class ClassScope extends Scope {
 				noProblems = false;
 				continue nextInterface;
 			}
+
 			referenceContext.superInterfaces[i].resolvedType = superInterface;
 			// only want to reach here when no errors are reported
 			interfaceBindings[count++] = superInterface;
@@ -857,8 +859,7 @@ public class ClassScope extends Scope {
 	}
 
 	/* Answer the reference type of this scope.
-	*
-	* i.e. the nearest enclosing type of this scope.
+	* It is the nearest enclosing type of this scope.
 	*/
 	public TypeDeclaration referenceType() {
 		return referenceContext;

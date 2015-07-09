@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -21,6 +21,7 @@ public class PackageBinding extends Binding implements TypeConstants {
 	HashtableOfType knownTypes;
 	HashtableOfPackage knownPackages;
 protected PackageBinding() {
+	// for creating problem package
 }
 public PackageBinding(char[][] compoundName, PackageBinding parent, LookupEnvironment environment) {
 	this.compoundName = compoundName;
@@ -65,10 +66,10 @@ private PackageBinding findPackage(char[] name) {
 	if (!environment.isPackage(this.compoundName, name))
 		return null;
 
-	char[][] compoundName = CharOperation.arrayConcat(this.compoundName, name);
-	PackageBinding newPackageBinding = new PackageBinding(compoundName, this, environment);
-	addPackage(newPackageBinding);
-	return newPackageBinding;
+	char[][] subPkgCompoundName = CharOperation.arrayConcat(this.compoundName, name);
+	PackageBinding subPackageBinding = new PackageBinding(subPkgCompoundName, this, environment);
+	addPackage(subPackageBinding);
+	return subPackageBinding;
 }
 /* Answer the subpackage named name; ask the oracle for the package if its not in the cache.
 * Answer null if it could not be resolved.
@@ -165,11 +166,10 @@ public Binding getTypeOrPackage(char[] name) {
 		return typeBinding;
 	}
 
-	if (typeBinding == null && packageBinding == null) {
-		// find the package
-		if ((packageBinding = findPackage(name)) != null)
-			return packageBinding;
-
+	// always look for the name as a sub-package if its not a known type
+	if (packageBinding == null && (packageBinding = findPackage(name)) != null)
+		return packageBinding;
+	if (typeBinding == null) {
 		// if no package was found, find the type named name relative to the receiver
 		if ((typeBinding = environment.askForType(this, name)) != null) {
 			if (typeBinding.isNestedType())

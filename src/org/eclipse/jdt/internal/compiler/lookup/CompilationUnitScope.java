@@ -1,38 +1,43 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ImportReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
-import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 import org.eclipse.jdt.internal.compiler.util.CompoundNameVector;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
 import org.eclipse.jdt.internal.compiler.util.HashtableOfType;
 import org.eclipse.jdt.internal.compiler.util.ObjectVector;
 import org.eclipse.jdt.internal.compiler.util.SimpleNameVector;
 
 public class CompilationUnitScope extends Scope {
+	
 	public LookupEnvironment environment;
 	public CompilationUnitDeclaration referenceContext;
 	public char[][] currentPackageName;
 	public PackageBinding fPackage;
 	public ImportBinding[] imports;
+	public HashtableOfObject resolvedSingeTypeImports;
 	
 	public SourceTypeBinding[] topLevelTypes;
 
 	private CompoundNameVector qualifiedReferences;
 	private SimpleNameVector simpleNameReferences;
 	private ObjectVector referencedTypes;
+	
+	HashtableOfType constantPoolNameUsage;
 
 public CompilationUnitScope(CompilationUnitDeclaration unit, LookupEnvironment environment) {
 	super(COMPILATION_UNIT_SCOPE, null);
@@ -99,10 +104,7 @@ void buildTypeBindings() {
 			problemReporter().duplicateTypes(referenceContext, typeDecl);
 			continue nextType;
 		}
-		boolean packageExists = currentPackageName == CharOperation.NO_CHAR_CHAR
-			? environment.getTopLevelPackage(typeDecl.name) != null
-			: (fPackage.getPackage(typeDecl.name)) != null;
-		if (packageExists) {
+		if (fPackage != environment.defaultPackage && fPackage.getPackage(typeDecl.name) != null) {
 			// if a package exists, it must be a valid package - cannot be a NotFound problem package
 			problemReporter().typeCollidesWithPackage(referenceContext, typeDecl);
 			continue nextType;
@@ -118,7 +120,10 @@ void buildTypeBindings() {
 		}
 
 		ClassScope child = new ClassScope(this, typeDecl);
-		topLevelTypes[count++] = child.buildType(null, fPackage);
+		SourceTypeBinding type = child.buildType(null, fPackage);
+		if(type != null) {
+			topLevelTypes[count++] = type;
+		}
 	}
 
 	// shrink topLevelTypes... only happens if an error was reported
@@ -185,6 +190,65 @@ void checkAndSetImports() {
 		System.arraycopy(resolvedImports, 0, resolvedImports = new ImportBinding[index], 0, index);
 	imports = resolvedImports;
 }
+/*
+ * INTERNAL USE-ONLY
+ * Innerclasses get their name computed as they are generated, since some may not
+ * be actually outputed if sitting inside unreachable code.
+ */
+public char[] computeConstantPoolName(LocalTypeBinding localType) {
+	if (localType.constantPoolName() != null) {
+		return localType.constantPoolName();
+	}
+	// delegates to the outermost enclosing classfile, since it is the only one with a global vision of its innertypes.
+
+	if (constantPoolNameUsage == null)
+		constantPoolNameUsage = new HashtableOfType();
+
+	ReferenceBinding outerMostEnclosingType = localType.scope.outerMostClassScope().enclosingSourceType();
+	
+	// ensure there is not already such a local type name defined by the user
+	int index = 0;
+	char[] candidateName;
+	while(true) {
+		if (localType.isMemberType()){
+			if (index == 0){
+				candidateName = CharOperation.concat(
+					localType.enclosingType().constantPoolName(),
+					localType.sourceName,
+					'$');
+			} else {
+				// in case of collision, then member name gets extra $1 inserted
+				// e.g. class X { { class L{} new X(){ class L{} } } }
+				candidateName = CharOperation.concat(
+					localType.enclosingType().constantPoolName(),
+					'$',
+					String.valueOf(index).toCharArray(),
+					'$',
+					localType.sourceName);
+			}
+		} else if (localType.isAnonymousType()){
+				candidateName = CharOperation.concat(
+					outerMostEnclosingType.constantPoolName(),
+					String.valueOf(index+1).toCharArray(),
+					'$');
+		} else {
+				candidateName = CharOperation.concat(
+					outerMostEnclosingType.constantPoolName(),
+					'$',
+					String.valueOf(index+1).toCharArray(),
+					'$',
+					localType.sourceName);
+		}						
+		if (constantPoolNameUsage.get(candidateName) != null) {
+			index ++;
+		} else {
+			constantPoolNameUsage.put(candidateName, localType);
+			break;
+		}
+	}
+	return candidateName;
+}
+
 void connectTypeHierarchy() {
 	for (int i = 0, length = topLevelTypes.length; i < length; i++)
 		topLevelTypes[i].scope.connectTypeHierarchy();
@@ -226,10 +290,12 @@ void faultInImports() {
 		for (int j = 0; j < index; j++)
 			if (resolvedImports[j].onDemand == importReference.onDemand)
 				if (CharOperation.equals(compoundName, resolvedImports[j].compoundName)) {
+					problemReporter().unusedImport(importReference); // since skipped, must be reported now
 					continue nextImport;
 				}
 		if (importReference.onDemand == true)
 			if (CharOperation.equals(compoundName, currentPackageName)) {
+				problemReporter().unusedImport(importReference); // since skipped, must be reported now
 				continue nextImport;
 			}
 		if (importReference.onDemand) {
@@ -248,6 +314,12 @@ void faultInImports() {
 			if (typeBinding instanceof PackageBinding) {
 				problemReporter().cannotImportPackage(importReference);
 				continue nextImport;
+			}
+			if (typeBinding instanceof ReferenceBinding) {
+				ReferenceBinding referenceBinding = (ReferenceBinding) typeBinding;
+				if (importReference.isTypeUseDeprecated(referenceBinding, this)) {
+					problemReporter().deprecatedType((TypeBinding) typeBinding, importReference);
+				}
 			}
 			ReferenceBinding existingType = typesBySimpleNames.get(compoundName[compoundName.length - 1]);
 			if (existingType != null) {
@@ -274,6 +346,14 @@ void faultInImports() {
 	if (resolvedImports.length > index)
 		System.arraycopy(resolvedImports, 0, resolvedImports = new ImportBinding[index], 0, index);
 	imports = resolvedImports;
+
+	int length = imports.length;
+	resolvedSingeTypeImports = new HashtableOfObject(length);
+	for (int i = 0; i < length; i++) {
+		ImportBinding binding = imports[i];
+		if (!binding.onDemand)
+			resolvedSingeTypeImports.put(binding.compoundName[binding.compoundName.length - 1], binding);
+	}
 }
 public void faultInTypes() {
 	faultInImports();
@@ -306,7 +386,7 @@ private Binding findOnDemandImport(char[][] compoundName) {
 	ReferenceBinding type;
 	if (binding == null) {
 		if (environment.defaultPackage == null
-				|| environment.options.complianceLevel >= CompilerOptions.JDK1_4){
+				|| environment.options.complianceLevel >= ClassFileConstants.JDK1_4){
 			return new ProblemReferenceBinding(
 				CharOperation.subarray(compoundName, 0, i),
 				NotFound);
@@ -322,11 +402,15 @@ private Binding findOnDemandImport(char[][] compoundName) {
 	}
 
 	for (; i < length; i++) {
+		if (!type.canBeSeenBy(fPackage)) {
+			return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, i), type, NotVisible);		
+		}
 		// does not look for inherited member types on purpose
-		if ((type = type.getMemberType(compoundName[i])) == null)
+		if ((type = type.getMemberType(compoundName[i])) == null) {
 			return new ProblemReferenceBinding(
 				CharOperation.subarray(compoundName, 0, i + 1),
 				NotFound);
+		}
 	}
 	if (!type.canBeSeenBy(fPackage))
 		return new ProblemReferenceBinding(compoundName, type, NotVisible);
@@ -337,7 +421,7 @@ private Binding findSingleTypeImport(char[][] compoundName) {
 		// findType records the reference
 		// the name cannot be a package
 		if (environment.defaultPackage == null 
-			|| environment.options.complianceLevel >= CompilerOptions.JDK1_4)
+			|| environment.options.complianceLevel >= ClassFileConstants.JDK1_4)
 			return new ProblemReferenceBinding(compoundName, NotFound);
 		ReferenceBinding typeBinding = findType(compoundName[0], environment.defaultPackage, fPackage);
 		if (typeBinding == null)

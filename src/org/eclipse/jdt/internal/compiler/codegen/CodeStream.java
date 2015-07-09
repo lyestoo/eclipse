@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.codegen;
 
 import org.eclipse.jdt.internal.compiler.*;
@@ -26,7 +26,7 @@ public class CodeStream implements OperatorIds, ClassFileConstants, Opcodes, Bas
 	public int stackMax; // Use Ints to keep from using extra bc when adding
 	public int stackDepth; // Use Ints to keep from using extra bc when adding
 	public int maxLocals;
-	public static final int max = 100; // Maximum size of the code array
+	public static final int MAXCODE = 100; // Maximum size of the code array
 	public static final int growFactor = 400;
 	public static final int LABELS_INCREMENT = 5;
 	public byte[] bCodeStream;
@@ -259,28 +259,6 @@ public final void anewarray(TypeBinding typeBinding) {
 		resizeByteArray(OPC_anewarray);
 	}
 	writeUnsignedShort(constantPool.literalIndex(typeBinding));
-}
-public void anewarrayJavaLangClass() {
-	// anewarray: java.lang.Class
-	countLabels = 0;
-	try {
-		position++;
-		bCodeStream[classFileOffset++] = OPC_anewarray;
-	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray(OPC_anewarray);
-	}
-	writeUnsignedShort(constantPool.literalIndexForJavaLangClass());
-}
-public void anewarrayJavaLangObject() {
-	// anewarray: java.lang.Object
-	countLabels = 0;
-	try {
-		position++;
-		bCodeStream[classFileOffset++] = OPC_anewarray;
-	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray(OPC_anewarray);
-	}
-	writeUnsignedShort(constantPool.literalIndexForJavaLangObject());
 }
 final public void areturn() {
 	countLabels = 0;
@@ -533,16 +511,6 @@ public final void checkcast(TypeBinding typeBinding) {
 		resizeByteArray(OPC_checkcast);
 	}
 	writeUnsignedShort(constantPool.literalIndex(typeBinding));
-}
-public final void checkcastJavaLangError() {
-	countLabels = 0;
-	try {
-		position++;
-		bCodeStream[classFileOffset++] = OPC_checkcast;
-	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray(OPC_checkcast);
-	}
-	writeUnsignedShort(constantPool.literalIndexForJavaLangError());
 }
 final public void d2f() {
 	countLabels = 0;
@@ -1376,9 +1344,19 @@ public void generateClassLiteralAccessForType(TypeBinding accessedType, FieldBin
 
 	// Wrap the code in an exception handler to convert a ClassNotFoundException into a NoClassDefError
 
-	anyExceptionHandler = new ExceptionLabel(this, TypeBinding.NullBinding /* represents ClassNotFoundException*/);
-	this.ldc(accessedType == TypeBinding.NullBinding ? "java.lang.Object" : String.valueOf(accessedType.constantPoolName()).replace('/', '.')); //$NON-NLS-1$
+	anyExceptionHandler = new ExceptionLabel(this, BaseTypes.NullBinding /* represents ClassNotFoundException*/);
+	if (accessedType == BaseTypes.NullBinding) {
+		this.ldc("java.lang.Object"); //$NON-NLS-1$
+	} else if (accessedType.isArrayType()) {
+		this.ldc(String.valueOf(accessedType.constantPoolName()).replace('/', '.'));
+	} else {
+		// we make it an array type (to avoid class initialization)
+		this.ldc("[L" + String.valueOf(accessedType.constantPoolName()).replace('/', '.') + ";"); //$NON-NLS-1$//$NON-NLS-2$
+	}
 	this.invokeClassForName();
+	if (!accessedType.isArrayType()) { // extract the component type, which doesn't initialize the class
+		this.invokeJavaLangClassGetComponentType();
+	}	
 
 	/* We need to protect the runtime code from binary inconsistencies
 	in case the accessedType is missing, the ClassNotFoundException has to be converted
@@ -1418,44 +1396,14 @@ public void generateClassLiteralAccessForType(TypeBinding accessedType, FieldBin
 	stackDepth = saveStackSize;
 }
 /**
- * This method returns the exception handler to be able to generate the exception handler
- * attribute.
+ * This method generates the code attribute bytecode
  */
-final public int[] generateCodeAttributeForProblemMethod(String errorName, String problemMessage) {
-	/**
-	 * Equivalent code:
-	 *	try {
-	 *		throw ((Error) (Class.forName(errorName).getConstructor(new Class[] {Class.forName("java.lang.String")})).newInstance(new Object[] {problemMessage}));
-	 *	} catch (Exception e) {
-	 *		throw (NullPointerException) null;
-	 *	}
-	 */
-	int endPC, handlerPC;
-	ldc(errorName);
-	invokeClassForName();
-	iconst_1();
-	anewarrayJavaLangClass();
+final public void generateCodeAttributeForProblemMethod(String problemMessage) {
+	newJavaLangError();
 	dup();
-	iconst_0();
-	ldc("java.lang.String"); //$NON-NLS-1$
-	invokeClassForName();
-	aastore();
-	invokeConstructorGetConstructor();
-	iconst_1();
-	anewarrayJavaLangObject();
-	dup();
-	iconst_0();
 	ldc(problemMessage);
-	aastore();
-	invokeObjectNewInstance();
-	checkcastJavaLangError();
+	invokeJavaLangErrorConstructor();
 	athrow();
-	endPC = handlerPC = position;
-	pop();
-	aconst_null();
-	athrow();
-	return_();
-	return new int[] {0, endPC, handlerPC};
 }
 public void generateConstant(Constant constant, int implicitConversionCode) {
 	int targetTypeID = implicitConversionCode >> 4;
@@ -1484,14 +1432,8 @@ public void generateConstant(Constant constant, int implicitConversionCode) {
 		case T_double :
 			generateInlinedValue(constant.doubleValue());
 			break;
-		case T_String :
-			this.ldc(constant.stringValue());
-			break;
-		default : //reference object (constant can be from T_null or T_String)
-			if (constant.typeID() == T_String)
-				ldc(constant.stringValue());
-			else
-				aconst_null();
+		default : //String or Object
+			ldc(constant.stringValue());
 	}
 }
 /**
@@ -1621,7 +1563,7 @@ public void generateInlinedValue(byte inlinedValue) {
 			break;
 		default :
 			if ((-128 <= inlinedValue) && (inlinedValue <= 127)) {
-				this.bipush((byte) inlinedValue);
+				this.bipush(inlinedValue);
 				return;
 			}
 	}
@@ -1773,21 +1715,28 @@ public void generateInlinedValue(boolean inlinedValue) {
 	else
 		this.iconst_0();
 }
-public void generateOuterAccess(Object[] mappingSequence, AstNode invocationSite, Scope scope) {
-	if (mappingSequence == null)
-		return;
-	if (mappingSequence == BlockScope.EmulationPathToImplicitThis) {
-		if (scope.methodScope().isConstructorCall){
-			scope.problemReporter().errorThisSuperInStatic(invocationSite);
+public void generateOuterAccess(Object[] mappingSequence, AstNode invocationSite, Binding target, Scope scope) {
+	if (mappingSequence == null) {
+		if (target instanceof LocalVariableBinding) {
+			scope.problemReporter().needImplementation(); //TODO: (philippe) should improve local emulation failure reporting
+		} else {
+			scope.problemReporter().noSuchEnclosingInstance((ReferenceBinding)target, invocationSite, false);
 		}
-		this.aload_0();
 		return;
 	}
-	if (mappingSequence[0] instanceof FieldBinding) {
+	if (mappingSequence == BlockScope.NoEnclosingInstanceInConstructorCall) {
+		scope.problemReporter().noSuchEnclosingInstance((ReferenceBinding)target, invocationSite, true);
+		return;
+	} else if (mappingSequence == BlockScope.NoEnclosingInstanceInStaticContext) {
+		scope.problemReporter().noSuchEnclosingInstance((ReferenceBinding)target, invocationSite, false);
+		return;
+	}
+	
+	if (mappingSequence == BlockScope.EmulationPathToImplicitThis) {
+		this.aload_0();
+		return;
+	} else if (mappingSequence[0] instanceof FieldBinding) {
 		FieldBinding fieldBinding = (FieldBinding) mappingSequence[0];
-		if (scope.methodScope().isConstructorCall){
-			scope.problemReporter().errorThisSuperInStatic(invocationSite);
-		}
 		this.aload_0();
 		this.getfield(fieldBinding);
 	} else {
@@ -1802,6 +1751,7 @@ public void generateOuterAccess(Object[] mappingSequence, AstNode invocationSite
 		}
 	}
 }
+
 /**
  * The equivalent code performs a string conversion:
  *
@@ -1832,57 +1782,76 @@ public void generateStringAppend(BlockScope blockScope, Expression oper1, Expres
 	this.invokeStringBufferToString();
 }
 /**
- * Code responsible to generate the suitable code to supply values for the synthetic arguments of
- * a constructor invocation of a nested type.
+ * Code responsible to generate the suitable code to supply values for the synthetic enclosing
+ * instance arguments of a constructor invocation of a nested type.
  */
-public void generateSyntheticArgumentValues(BlockScope currentScope, ReferenceBinding targetType, Expression enclosingInstance, AstNode invocationSite) {
+public void generateSyntheticEnclosingInstanceValues(
+		BlockScope currentScope, 
+		ReferenceBinding targetType, 
+		Expression enclosingInstance, 
+		AstNode invocationSite) {
+
+	// supplying enclosing instance for the anonymous type's superclass
+	ReferenceBinding checkedTargetType = targetType.isAnonymousType() ? targetType.superclass() : targetType;
+	boolean hasExtraEnclosingInstance = enclosingInstance != null;
+	if (hasExtraEnclosingInstance 
+			&& (!checkedTargetType.isNestedType() || checkedTargetType.isStatic())) {
+		currentScope.problemReporter().unnecessaryEnclosingInstanceSpecification(enclosingInstance, checkedTargetType);
+		return;
+	}
 
 	// perform some emulation work in case there is some and we are inside a local type only
-	boolean hasExtraEnclosingInstance = enclosingInstance != null;
 	ReferenceBinding[] syntheticArgumentTypes;
-
 	if ((syntheticArgumentTypes = targetType.syntheticEnclosingInstanceTypes()) != null) {
 
-		ReferenceBinding targetEnclosingType = targetType.isAnonymousType() ? 
-				targetType.superclass().enclosingType() // supplying enclosing instance for the anonymous type's superclass
-				: targetType.enclosingType();
-				
+		ReferenceBinding targetEnclosingType = checkedTargetType.enclosingType();
+		boolean complyTo14 = currentScope.environment().options.complianceLevel >= ClassFileConstants.JDK1_4;
+		// deny access to enclosing instance argument for allocation and super constructor call (if 1.4)
+		boolean ignoreEnclosingArgInConstructorCall = invocationSite instanceof AllocationExpression
+					|| (complyTo14 && ((invocationSite instanceof ExplicitConstructorCall && ((ExplicitConstructorCall)invocationSite).isSuperAccess())));
+						
 		for (int i = 0, max = syntheticArgumentTypes.length; i < max; i++) {
 			ReferenceBinding syntheticArgType = syntheticArgumentTypes[i];
 			if (hasExtraEnclosingInstance && syntheticArgType == targetEnclosingType) {
 				hasExtraEnclosingInstance = false;
 				enclosingInstance.generateCode(currentScope, this, true);
-			} else {
-				Object[] emulationPath = currentScope.getCompatibleEmulationPath(syntheticArgType);
-				if (emulationPath == null) {
-					currentScope.problemReporter().missingEnclosingInstanceSpecification(syntheticArgType, invocationSite);
-				} else {
-					this.generateOuterAccess(emulationPath, invocationSite, currentScope);
+				if (complyTo14){
+					dup();
+					invokeObjectGetClass(); // will perform null check
+					pop();
 				}
+			} else {
+				Object[] emulationPath = currentScope.getEmulationPath(
+						syntheticArgType, 
+						false /*not only exact match (that is, allow compatible)*/,
+						ignoreEnclosingArgInConstructorCall);
+				this.generateOuterAccess(emulationPath, invocationSite, syntheticArgType, currentScope);
 			}
 		}
 		if (hasExtraEnclosingInstance){
-			currentScope.problemReporter().unnecessaryEnclosingInstanceSpecification(enclosingInstance, targetType);
-		}
-	} else { // we may still have an enclosing instance to consider
-		if (hasExtraEnclosingInstance) {
-			currentScope.problemReporter().unnecessaryEnclosingInstanceSpecification(enclosingInstance, targetType);
+			currentScope.problemReporter().unnecessaryEnclosingInstanceSpecification(enclosingInstance, checkedTargetType);
 		}
 	}
+}
+
+/**
+ * Code responsible to generate the suitable code to supply values for the synthetic outer local
+ * variable arguments of a constructor invocation of a nested type.
+ * (bug 26122) - synthetic values for outer locals must be passed after user arguments, e.g. new X(i = 1){}
+ */
+public void generateSyntheticOuterArgumentValues(BlockScope currentScope, ReferenceBinding targetType, AstNode invocationSite) {
+
 	// generate the synthetic outer arguments then
 	SyntheticArgumentBinding syntheticArguments[];
 	if ((syntheticArguments = targetType.syntheticOuterLocalVariables()) != null) {
 		for (int i = 0, max = syntheticArguments.length; i < max; i++) {
-			VariableBinding[] emulationPath = currentScope.getEmulationPath(syntheticArguments[i].actualOuterLocalVariable);
-			if (emulationPath == null) {
-				// could not emulate a path to a given outer local variable (internal error)
-				currentScope.problemReporter().needImplementation();
-			} else {
-				this.generateOuterAccess(emulationPath, invocationSite, currentScope);
-			}
+			LocalVariableBinding targetVariable = syntheticArguments[i].actualOuterLocalVariable;
+			VariableBinding[] emulationPath = currentScope.getEmulationPath(targetVariable);
+			this.generateOuterAccess(emulationPath, invocationSite, targetVariable, currentScope);
 		}
 	}
 }
+
 /**
  * @param parameters org.eclipse.jdt.internal.compiler.lookup.TypeBinding[]
  * @param constructorBinding org.eclipse.jdt.internal.compiler.lookup.MethodBinding
@@ -1907,7 +1876,18 @@ public void generateSyntheticBodyForConstructorAccess(SyntheticAccessMethodBindi
 			else
 				resolvedPosition++;
 		}
-		syntheticArguments = nestedType.syntheticOuterLocalVariables();
+	}
+	for (int i = 0; i < length; i++) {
+		load(parameters[i], resolvedPosition);
+		if ((parameters[i] == DoubleBinding) || (parameters[i] == LongBinding))
+			resolvedPosition += 2;
+		else
+			resolvedPosition++;
+	}
+	
+	if (constructorBinding.declaringClass.isNestedType()) {
+		NestedTypeBinding nestedType = (NestedTypeBinding) constructorBinding.declaringClass;
+		SyntheticArgumentBinding[] syntheticArguments = nestedType.syntheticOuterLocalVariables();
 		for (int i = 0; i < (syntheticArguments == null ? 0 : syntheticArguments.length); i++) {
 			TypeBinding type;
 			load((type = syntheticArguments[i].type), resolvedPosition);
@@ -1916,13 +1896,6 @@ public void generateSyntheticBodyForConstructorAccess(SyntheticAccessMethodBindi
 			else
 				resolvedPosition++;
 		}
-	}
-	for (int i = 0; i < length; i++) {
-		load(parameters[i], resolvedPosition);
-		if ((parameters[i] == DoubleBinding) || (parameters[i] == LongBinding))
-			resolvedPosition += 2;
-		else
-			resolvedPosition++;
 	}
 	this.invokespecial(constructorBinding);
 	this.return_();
@@ -2412,7 +2385,7 @@ final public void if_acmpeq(Label lbl) {
 	countLabels = 0;
 	stackDepth-=2;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_if_acmpeq, lbl);
+		generateWideRevertedConditionalBranch(OPC_if_acmpne, lbl);
 	} else {	
 		try {
 			position++;
@@ -2427,7 +2400,7 @@ final public void if_acmpne(Label lbl) {
 	countLabels = 0;
 	stackDepth-=2;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_if_acmpne, lbl);
+		generateWideRevertedConditionalBranch(OPC_if_acmpeq, lbl);
 	} else {	
 		try {
 			position++;
@@ -2442,7 +2415,7 @@ final public void if_icmpeq(Label lbl) {
 	countLabels = 0;
 	stackDepth -= 2;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_if_icmpeq, lbl);
+		generateWideRevertedConditionalBranch(OPC_if_icmpne, lbl);
 	} else {	
 		try {
 			position++;
@@ -2457,7 +2430,7 @@ final public void if_icmpge(Label lbl) {
 	countLabels = 0;
 	stackDepth -= 2;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_if_icmpge, lbl);
+		generateWideRevertedConditionalBranch(OPC_if_icmplt, lbl);
 	} else {	
 		try {
 			position++;
@@ -2472,7 +2445,7 @@ final public void if_icmpgt(Label lbl) {
 	countLabels = 0;
 	stackDepth -= 2;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_if_icmpgt, lbl);
+		generateWideRevertedConditionalBranch(OPC_if_icmple, lbl);
 	} else {	
 		try {
 			position++;
@@ -2487,7 +2460,7 @@ final public void if_icmple(Label lbl) {
 	countLabels = 0;
 	stackDepth -= 2;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_if_icmple, lbl);
+		generateWideRevertedConditionalBranch(OPC_if_icmpgt, lbl);
 	} else {	
 		try {
 			position++;
@@ -2502,7 +2475,7 @@ final public void if_icmplt(Label lbl) {
 	countLabels = 0;
 	stackDepth -= 2;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_if_icmplt, lbl);
+		generateWideRevertedConditionalBranch(OPC_if_icmpge, lbl);
 	} else {
 		try {
 			position++;
@@ -2517,7 +2490,7 @@ final public void if_icmpne(Label lbl) {
 	countLabels = 0;
 	stackDepth -= 2;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_if_icmpne, lbl);
+		generateWideRevertedConditionalBranch(OPC_if_icmpeq, lbl);
 	} else {
 		try {
 			position++;
@@ -2532,7 +2505,7 @@ final public void ifeq(Label lbl) {
 	countLabels = 0;
 	stackDepth--;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_ifeq, lbl);
+		generateWideRevertedConditionalBranch(OPC_ifne, lbl);
 	} else {
 		try {
 			position++;
@@ -2547,7 +2520,7 @@ final public void ifge(Label lbl) {
 	countLabels = 0;
 	stackDepth--;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_ifge, lbl);
+		generateWideRevertedConditionalBranch(OPC_iflt, lbl);
 	} else {
 		try {
 			position++;
@@ -2562,7 +2535,7 @@ final public void ifgt(Label lbl) {
 	countLabels = 0;
 	stackDepth--;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_ifgt, lbl);
+		generateWideRevertedConditionalBranch(OPC_ifle, lbl);
 	} else {
 		try {
 			position++;
@@ -2577,7 +2550,7 @@ final public void ifle(Label lbl) {
 	countLabels = 0;
 	stackDepth--;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_ifle, lbl);
+		generateWideRevertedConditionalBranch(OPC_ifgt, lbl);
 	} else {
 		try {
 			position++;
@@ -2592,7 +2565,7 @@ final public void iflt(Label lbl) {
 	countLabels = 0;
 	stackDepth--;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_iflt, lbl);
+		generateWideRevertedConditionalBranch(OPC_ifge, lbl);
 	} else {
 		try {
 			position++;
@@ -2607,7 +2580,7 @@ final public void ifne(Label lbl) {
 	countLabels = 0;
 	stackDepth--;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_ifne, lbl);
+		generateWideRevertedConditionalBranch(OPC_ifeq, lbl);
 	} else {
 		try {
 			position++;
@@ -2622,7 +2595,7 @@ final public void ifnonnull(Label lbl) {
 	countLabels = 0;
 	stackDepth--;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_ifnonnull, lbl);
+		generateWideRevertedConditionalBranch(OPC_ifnull, lbl);
 	} else {
 		try {
 			position++;
@@ -2637,7 +2610,7 @@ final public void ifnull(Label lbl) {
 	countLabels = 0;
 	stackDepth--;
 	if (this.wideMode) {
-		generateWideConditionalBranch(OPC_ifnull, lbl);
+		generateWideRevertedConditionalBranch(OPC_ifnonnull, lbl);
 	} else {
 		try {
 			position++;
@@ -2813,11 +2786,11 @@ final public void ineg() {
 		resizeByteArray(OPC_ineg);
 	}
 }
-public void init(ClassFile classFile) {
-	this.classFile = classFile;
-	this.constantPool = classFile.constantPool;
-	this.bCodeStream = classFile.contents;
-	this.classFileOffset = classFile.contentsOffset;
+public void init(ClassFile targetClassFile) {
+	this.classFile = targetClassFile;
+	this.constantPool = targetClassFile.constantPool;
+	this.bCodeStream = targetClassFile.contents;
+	this.classFileOffset = targetClassFile.contentsOffset;
 	this.startingClassFileOffset = this.classFileOffset;
 	pcToSourceMapSize = 0;
 	lastEntryPC = 0;
@@ -2967,18 +2940,18 @@ public void invokeJavaLangClassDesiredAssertionStatus() {
 	writeUnsignedShort(constantPool.literalIndexForJavaLangClassDesiredAssertionStatus());
 }
 
-public void invokeConstructorGetConstructor() {
-	// invokevirtual: java.lang.Class.getConstructor(java.lang.Class[])Ljava.lang.reflect.Constructor;
+public void invokeJavaLangClassGetComponentType() {
+	// invokevirtual: java.lang.Class.getComponentType()java.lang.Class;
 	countLabels = 0;
-	stackDepth--;
 	try {
 		position++;
 		bCodeStream[classFileOffset++] = OPC_invokevirtual;
 	} catch (IndexOutOfBoundsException e) {
 		resizeByteArray(OPC_invokevirtual);
 	}
-	writeUnsignedShort(constantPool.literalIndexForJavaLangClassGetConstructor());
+	writeUnsignedShort(constantPool.literalIndexForJavaLangClassGetComponentType());
 }
+
 final public void invokeinterface(MethodBinding methodBinding) {
 	// initialized to 1 to take into account this  immediately
 	countLabels = 0;
@@ -2999,8 +2972,12 @@ final public void invokeinterface(MethodBinding methodBinding) {
 	writeUnsignedByte(argCount);
 	// Generate a  0 into the byte array. Like the array is already fill with 0, we just need to increment
 	// the number of bytes.
-	position++;
-	classFileOffset++;
+	try {
+		position++;
+		bCodeStream[classFileOffset++] = 0;
+	} catch (IndexOutOfBoundsException e) {
+		resizeByteArray((byte)0);
+	}
 	if (((id = methodBinding.returnType.id) == T_double) || (id == T_long))
 		stackDepth += (2 - argCount);
 	else
@@ -3035,19 +3012,6 @@ public void invokeNoClassDefFoundErrorStringConstructor() {
 	writeUnsignedShort(constantPool.literalIndexForJavaLangNoClassDefFoundErrorStringConstructor());
 	stackDepth -= 2;
 }
-public void invokeObjectNewInstance() {
-	// invokevirtual: java.lang.reflect.Constructor.newInstance(java.lang.Object[])Ljava.lang.Object;
-	countLabels = 0;
-	stackDepth--;
-	try {
-		position++;
-		bCodeStream[classFileOffset++] = OPC_invokevirtual;
-	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray(OPC_invokevirtual);
-	}
-	writeUnsignedShort(constantPool.literalIndexForJavaLangReflectConstructorNewInstance());
-}
-
 public void invokeObjectGetClass() {
 	// invokevirtual: java.lang.Object.getClass()Ljava.lang.Class;
 	countLabels = 0;
@@ -3336,20 +3300,20 @@ public boolean isDefinitelyAssigned(Scope scope, int initStateIndex, LocalVariab
 	if (local.isArgument) {
 		return true;
 	}
-	int position = local.id + maxFieldCount;
+	int localPosition = local.id + maxFieldCount;
 	MethodScope methodScope = scope.methodScope();
 	// id is zero-based
-	if (position < UnconditionalFlowInfo.BitCacheSize) {
-		return (methodScope.definiteInits[initStateIndex] & (1L << position)) != 0; // use bits
+	if (localPosition < UnconditionalFlowInfo.BitCacheSize) {
+		return (methodScope.definiteInits[initStateIndex] & (1L << localPosition)) != 0; // use bits
 	}
 	// use extra vector
 	long[] extraInits = methodScope.extraDefiniteInits[initStateIndex];
 	if (extraInits == null)
 		return false; // if vector not yet allocated, then not initialized
 	int vectorIndex;
-	if ((vectorIndex = (position / UnconditionalFlowInfo.BitCacheSize) - 1) >= extraInits.length)
+	if ((vectorIndex = (localPosition / UnconditionalFlowInfo.BitCacheSize) - 1) >= extraInits.length)
 		return false; // if not enough room in vector, then not initialized 
-	return ((extraInits[vectorIndex]) & (1L << (position % UnconditionalFlowInfo.BitCacheSize))) != 0;
+	return ((extraInits[vectorIndex]) & (1L << (localPosition % UnconditionalFlowInfo.BitCacheSize))) != 0;
 }
 final public void ishl() {
 	countLabels = 0;
@@ -3489,6 +3453,10 @@ final public void ixor() {
 	}
 }
 final public void jsr(Label lbl) {
+	if (this.wideMode) {
+		this.jsr_w(lbl);
+		return;
+	}
 	countLabels = 0;
 	try {
 		position++;
@@ -4003,6 +3971,9 @@ public final void load(LocalVariableBinding localBinding) {
 			case 3 :
 				this.iload_3();
 				break;
+			//case -1 :
+			// internal failure: trying to load variable not supposed to be generated
+			//	break;
 			default :
 				this.iload(resolvedPosition);
 		}
@@ -4281,8 +4252,12 @@ final public void lookupswitch(CaseLabel defaultLabel, int[] keys, int[] sortedI
 		resizeByteArray(OPC_lookupswitch);
 	}
 	for (int i = (3 - (pos % 4)); i > 0; i--) {
-		position++; // Padding
-		classFileOffset++;
+		try {
+			position++;
+			bCodeStream[classFileOffset++] = 0;
+		} catch (IndexOutOfBoundsException e) {
+			resizeByteArray((byte)0);
+		}
 	}
 	defaultLabel.branch();
 	writeSignedWord(length);
@@ -4490,8 +4465,6 @@ final public void multianewarray(TypeBinding typeBinding, int dimensions) {
 	}
 	writeUnsignedShort(constantPool.literalIndex(typeBinding));
 	writeUnsignedByte(dimensions);
-}
-public static void needImplementation() {
 }
 /**
  * We didn't call it new, because there is a conflit with the new keyword
@@ -4859,18 +4832,18 @@ public final void removeNotDefinitelyAssignedVariables(Scope scope, int initStat
  * @param methodDeclaration org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration
  * @param classFile org.eclipse.jdt.internal.compiler.codegen.ClassFile
  */
-public void reset(AbstractMethodDeclaration methodDeclaration, ClassFile classFile) {
-	init(classFile);
-	this.methodDeclaration = methodDeclaration;
-	preserveUnusedLocals = methodDeclaration.scope.problemReporter().options.preserveAllLocalVariables;
-	initializeMaxLocals(methodDeclaration.binding);
+public void reset(AbstractMethodDeclaration referenceMethod, ClassFile targetClassFile) {
+	init(targetClassFile);
+	this.methodDeclaration = referenceMethod;
+	preserveUnusedLocals = referenceMethod.scope.problemReporter().options.preserveAllLocalVariables;
+	initializeMaxLocals(referenceMethod.binding);
 }
 /**
  * @param methodDeclaration org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration
  * @param classFile org.eclipse.jdt.internal.compiler.codegen.ClassFile
  */
-public void resetForProblemClinit(ClassFile classFile) {
-	init(classFile);
+public void resetForProblemClinit(ClassFile targetClassFile) {
+	init(targetClassFile);
 	maxLocals = 0;
 }
 protected final void resizeByteArray() {
@@ -5126,14 +5099,124 @@ public static final void sort(int[] tab, int lo0, int hi0, int[] result) {
 			sort(tab, lo, hi0, result);
 	}
 }
+
 public final void store(LocalVariableBinding localBinding, boolean valueRequired) {
-	TypeBinding type = localBinding.type;
-	int position = localBinding.resolvedPosition;
+	int localPosition = localBinding.resolvedPosition;
+	// Using dedicated int bytecode
+	switch(localBinding.type.id) {
+		case TypeIds.T_int :
+		case TypeIds.T_char :
+		case TypeIds.T_byte :
+		case TypeIds.T_short :
+		case TypeIds.T_boolean :
+			if (valueRequired)
+				this.dup();
+			switch (localPosition) {
+				case 0 :
+					this.istore_0();
+					break;
+				case 1 :
+					this.istore_1();
+					break;
+				case 2 :
+					this.istore_2();
+					break;
+				case 3 :
+					this.istore_3();
+					break;
+				//case -1 :
+				// internal failure: trying to store into variable not supposed to be generated
+				//	break;
+				default :
+					this.istore(localPosition);
+			}
+			break;
+		case TypeIds.T_float :
+			if (valueRequired)
+				this.dup();
+			switch (localPosition) {
+				case 0 :
+					this.fstore_0();
+					break;
+				case 1 :
+					this.fstore_1();
+					break;
+				case 2 :
+					this.fstore_2();
+					break;
+				case 3 :
+					this.fstore_3();
+					break;
+				default :
+					this.fstore(localPosition);
+			}
+			break;
+		case TypeIds.T_double :
+			if (valueRequired)
+				this.dup2();
+			switch (localPosition) {
+				case 0 :
+					this.dstore_0();
+					break;
+				case 1 :
+					this.dstore_1();
+					break;
+				case 2 :
+					this.dstore_2();
+					break;
+				case 3 :
+					this.dstore_3();
+					break;
+				default :
+					this.dstore(localPosition);
+			}
+			break;
+		case TypeIds.T_long :
+			if (valueRequired)
+				this.dup2();
+			switch (localPosition) {
+				case 0 :
+					this.lstore_0();
+					break;
+				case 1 :
+					this.lstore_1();
+					break;
+				case 2 :
+					this.lstore_2();
+					break;
+				case 3 :
+					this.lstore_3();
+					break;
+				default :
+					this.lstore(localPosition);
+			}
+			break;
+		default:
+			// Reference object
+			if (valueRequired)
+				this.dup();
+			switch (localPosition) {
+				case 0 :
+					this.astore_0();
+					break;
+				case 1 :
+					this.astore_1();
+					break;
+				case 2 :
+					this.astore_2();
+					break;
+				case 3 :
+					this.astore_3();
+					break;
+				default :
+					this.astore(localPosition);
+			}
+	}
+}
+public final void store(TypeBinding type, int localPosition) {
 	// Using dedicated int bytecode
 	if ((type == IntBinding) || (type == CharBinding) || (type == ByteBinding) || (type == ShortBinding) || (type == BooleanBinding)) {
-		if (valueRequired)
-			this.dup();
-		switch (position) {
+		switch (localPosition) {
 			case 0 :
 				this.istore_0();
 				break;
@@ -5147,15 +5230,13 @@ public final void store(LocalVariableBinding localBinding, boolean valueRequired
 				this.istore_3();
 				break;
 			default :
-				this.istore(position);
+				this.istore(localPosition);
 		}
 		return;
 	}
 	// Using dedicated float bytecode
 	if (type == FloatBinding) {
-		if (valueRequired)
-			this.dup();
-		switch (position) {
+		switch (localPosition) {
 			case 0 :
 				this.fstore_0();
 				break;
@@ -5169,15 +5250,13 @@ public final void store(LocalVariableBinding localBinding, boolean valueRequired
 				this.fstore_3();
 				break;
 			default :
-				this.fstore(position);
+				this.fstore(localPosition);
 		}
 		return;
 	}
 	// Using dedicated long bytecode
 	if (type == LongBinding) {
-		if (valueRequired)
-			this.dup2();
-		switch (position) {
+		switch (localPosition) {
 			case 0 :
 				this.lstore_0();
 				break;
@@ -5191,15 +5270,13 @@ public final void store(LocalVariableBinding localBinding, boolean valueRequired
 				this.lstore_3();
 				break;
 			default :
-				this.lstore(position);
+				this.lstore(localPosition);
 		}
 		return;
 	}
 	// Using dedicated double bytecode
 	if (type == DoubleBinding) {
-		if (valueRequired)
-			this.dup2();
-		switch (position) {
+		switch (localPosition) {
 			case 0 :
 				this.dstore_0();
 				break;
@@ -5213,14 +5290,12 @@ public final void store(LocalVariableBinding localBinding, boolean valueRequired
 				this.dstore_3();
 				break;
 			default :
-				this.dstore(position);
+				this.dstore(localPosition);
 		}
 		return;
 	}
 	// Reference object
-	if (valueRequired)
-		this.dup();
-	switch (position) {
+	switch (localPosition) {
 		case 0 :
 			this.astore_0();
 			break;
@@ -5234,110 +5309,11 @@ public final void store(LocalVariableBinding localBinding, boolean valueRequired
 			this.astore_3();
 			break;
 		default :
-			this.astore(position);
+			this.astore(localPosition);
 	}
 }
-public final void store(TypeBinding type, int position) {
-	// Using dedicated int bytecode
-	if ((type == IntBinding) || (type == CharBinding) || (type == ByteBinding) || (type == ShortBinding) || (type == BooleanBinding)) {
-		switch (position) {
-			case 0 :
-				this.istore_0();
-				break;
-			case 1 :
-				this.istore_1();
-				break;
-			case 2 :
-				this.istore_2();
-				break;
-			case 3 :
-				this.istore_3();
-				break;
-			default :
-				this.istore(position);
-		}
-		return;
-	}
-	// Using dedicated float bytecode
-	if (type == FloatBinding) {
-		switch (position) {
-			case 0 :
-				this.fstore_0();
-				break;
-			case 1 :
-				this.fstore_1();
-				break;
-			case 2 :
-				this.fstore_2();
-				break;
-			case 3 :
-				this.fstore_3();
-				break;
-			default :
-				this.fstore(position);
-		}
-		return;
-	}
-	// Using dedicated long bytecode
-	if (type == LongBinding) {
-		switch (position) {
-			case 0 :
-				this.lstore_0();
-				break;
-			case 1 :
-				this.lstore_1();
-				break;
-			case 2 :
-				this.lstore_2();
-				break;
-			case 3 :
-				this.lstore_3();
-				break;
-			default :
-				this.lstore(position);
-		}
-		return;
-	}
-	// Using dedicated double bytecode
-	if (type == DoubleBinding) {
-		switch (position) {
-			case 0 :
-				this.dstore_0();
-				break;
-			case 1 :
-				this.dstore_1();
-				break;
-			case 2 :
-				this.dstore_2();
-				break;
-			case 3 :
-				this.dstore_3();
-				break;
-			default :
-				this.dstore(position);
-		}
-		return;
-	}
-	// Reference object
-	switch (position) {
-		case 0 :
-			this.astore_0();
-			break;
-		case 1 :
-			this.astore_1();
-			break;
-		case 2 :
-			this.astore_2();
-			break;
-		case 3 :
-			this.astore_3();
-			break;
-		default :
-			this.astore(position);
-	}
-}
-public final void storeInt(int position) {
-	switch (position) {
+public final void storeInt(int localPosition) {
+	switch (localPosition) {
 		case 0 :
 			this.istore_0();
 			break;
@@ -5351,11 +5327,11 @@ public final void storeInt(int position) {
 			this.istore_3();
 			break;
 		default :
-			this.istore(position);
+			this.istore(localPosition);
 	}
 }
-public final void storeObject(int position) {
-	switch (position) {
+public final void storeObject(int localPosition) {
+	switch (localPosition) {
 		case 0 :
 			this.astore_0();
 			break;
@@ -5369,7 +5345,7 @@ public final void storeObject(int position) {
 			this.astore_3();
 			break;
 		default :
-			this.astore(position);
+			this.astore(localPosition);
 	}
 }
 final public void swap() {
@@ -5405,8 +5381,12 @@ final public void tableswitch(CaseLabel defaultLabel, int low, int high, int[] k
 		resizeByteArray(OPC_tableswitch);
 	}
 	for (int i = (3 - (pos % 4)); i > 0; i--) {
-		position++; // Padding
-		classFileOffset++;
+		try {
+			position++;
+			bCodeStream[classFileOffset++] = 0;
+		} catch (IndexOutOfBoundsException e) {
+			resizeByteArray((byte)0);
+		}
 	}
 	defaultLabel.branch();
 	writeSignedWord(low);
@@ -5454,6 +5434,7 @@ public void updateLastRecordedEndPC(int pos) {
 
 	if (!generateLineNumberAttributes)
 		return;
+	this.lastEntryPC = pos;
 	// need to update the initialization endPC in case of generation of local variable attributes.
 	updateLocalVariablesAttribute(pos);
 }
@@ -5479,65 +5460,65 @@ final public void wide() {
 		resizeByteArray(OPC_wide);
 	}
 }
-public final void writeByte(byte b) {
+public final void writeByte(byte value) {
 	try {
 		position++;
-		bCodeStream[classFileOffset++] = b;
+		bCodeStream[classFileOffset++] = value;
 	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray(b);
+		resizeByteArray(value);
 	}
 }
-public final void writeByteAtPos(int pos, byte b) {
+public final void writeByteAtPos(int pos, byte value) {
 	try {
-		bCodeStream[pos] = b;
+		bCodeStream[pos] = value;
 	} catch (IndexOutOfBoundsException ex) {
 		resizeByteArray();
-		bCodeStream[pos] = b;
+		bCodeStream[pos] = value;
 	}
 }
 /**
  * Write a unsigned 8 bits value into the byte array
  * @param b the signed byte
  */
-public final void writeSignedByte(int b) {
+public final void writeSignedByte(int value) {
 	try {
 		position++;
-		bCodeStream[classFileOffset++] = (byte) b;
+		bCodeStream[classFileOffset++] = (byte) value;
 	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray((byte) b);
+		resizeByteArray((byte) value);
 	}
 }
 /**
  * Write a signed 16 bits value into the byte array
- * @param b the signed short
+ * @param value the signed short
  */
-public final void writeSignedShort(int b) {
+public final void writeSignedShort(int value) {
 	try {
 		position++;
-		bCodeStream[classFileOffset++] = (byte) (b >> 8);
+		bCodeStream[classFileOffset++] = (byte) (value >> 8);
 	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray((byte) (b >> 8));
+		resizeByteArray((byte) (value >> 8));
 	}
 	try {
 		position++;
-		bCodeStream[classFileOffset++] = (byte) b;
+		bCodeStream[classFileOffset++] = (byte) value;
 	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray((byte) b);
+		resizeByteArray((byte) value);
 	}
 }
-public final void writeSignedShort(int pos, int b) {
+public final void writeSignedShort(int pos, int value) {
 	int currentOffset = startingClassFileOffset + pos;
 	try {
-		bCodeStream[currentOffset] = (byte) (b >> 8);
+		bCodeStream[currentOffset] = (byte) (value >> 8);
 	} catch (IndexOutOfBoundsException e) {
 		resizeByteArray();
-		bCodeStream[currentOffset] = (byte) (b >> 8);
+		bCodeStream[currentOffset] = (byte) (value >> 8);
 	}
 	try {
-		bCodeStream[currentOffset + 1] = (byte) b;
+		bCodeStream[currentOffset + 1] = (byte) value;
 	} catch (IndexOutOfBoundsException e) {
 		resizeByteArray();
-		bCodeStream[currentOffset + 1] = (byte) b;
+		bCodeStream[currentOffset + 1] = (byte) value;
 	}
 }
 public final void writeSignedWord(int value) {
@@ -5597,30 +5578,30 @@ public final void writeSignedWord(int pos, int value) {
  * Write a unsigned 8 bits value into the byte array
  * @param b the unsigned byte
  */
-public final void writeUnsignedByte(int b) {
+public final void writeUnsignedByte(int value) {
 	try {
 		position++;
-		bCodeStream[classFileOffset++] = (byte) b;
+		bCodeStream[classFileOffset++] = (byte) value;
 	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray((byte) b);
+		resizeByteArray((byte) value);
 	}
 }
 /**
  * Write a unsigned 16 bits value into the byte array
  * @param b the unsigned short
  */
-public final void writeUnsignedShort(int b) {
+public final void writeUnsignedShort(int value) {
 	try {
 		position++;
-		bCodeStream[classFileOffset++] = (byte) (b >>> 8);
+		bCodeStream[classFileOffset++] = (byte) (value >>> 8);
 	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray((byte) (b >>> 8));
+		resizeByteArray((byte) (value >>> 8));
 	}
 	try {
 		position++;
-		bCodeStream[classFileOffset++] = (byte) b;
+		bCodeStream[classFileOffset++] = (byte) value;
 	} catch (IndexOutOfBoundsException e) {
-		resizeByteArray((byte) b);
+		resizeByteArray((byte) value);
 	}
 }
 /**
@@ -5654,29 +5635,25 @@ public final void writeUnsignedWord(int value) {
 	}
 }
 
-public void generateWideConditionalBranch(byte opcode, Label lbl) {
-		/* we handle the goto_w problem inside an if.... with some macro expansion
-		 * at the bytecode level
-		 * instead of:
-		 * if_...... lbl
-		 * we have:
-		 *    ifne <l1>
-		 *    goto <l2>
-		 * l1 gotow <l3> // l3 is a wide target
-		 * l2 ....
-		 */
-		Label l1 = new Label(this);
+
+/*
+ * Wide conditional branch compare, improved by swapping comparison opcode
+ *   ifeq WideTarget
+ * becomes
+ *    ifne Intermediate
+ *    gotow WideTarget
+ *    Intermediate:
+ */
+public void generateWideRevertedConditionalBranch(byte revertedOpcode, Label wideTarget) {
+		Label intermediate = new Label(this);
 		try {
 			position++;
-			bCodeStream[classFileOffset++] = opcode;
+			bCodeStream[classFileOffset++] = revertedOpcode;
 		} catch (IndexOutOfBoundsException e) {
-			resizeByteArray(opcode);
+			resizeByteArray(revertedOpcode);
 		}
-		l1.branch();
-		Label l2 = new Label(this);
-		this.internal_goto_(l2);
-		l1.place();
-		this.goto_w(lbl);
-		l2.place();
+		intermediate.branch();
+		this.goto_w(wideTarget);
+		intermediate.place();
 }
 }

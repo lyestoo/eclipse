@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -34,18 +34,24 @@ public final int bindingType() {
 }
 /* Answer true if the receiver can be instantiated
  */
-
 public boolean canBeInstantiated() {
 	return !isBaseType();
 }
-/* Answer the receiver's constant pool name.
- *
- * NOTE: This method should only be used during/after code gen.
+/**
+ *  Answer the receiver's constant pool name.
+ *  NOTE: This method should only be used during/after code gen.
+ *  e.g. 'java/lang/Object' 
  */
+public abstract char[] constantPoolName();
 
-public abstract char[] constantPoolName(); /* java/lang/Object */
 String debugName() {
 	return new String(readableName());
+}
+/*
+ * Answer the receiver's dimensions - 0 for non-array types
+ */
+public int dimensions(){
+	return 0;
 }
 public abstract PackageBinding getPackage();
 /* Answer true if the receiver is an array
@@ -66,7 +72,7 @@ public boolean isClass() {
 /* Answer true if the receiver type can be assigned to the argument type (right)
 */
 	
-abstract boolean isCompatibleWith(TypeBinding right);
+public abstract boolean isCompatibleWith(TypeBinding right);
 /* Answer true if the receiver's hierarchy has problems (always false for arrays & base types)
 */
 
@@ -103,7 +109,10 @@ public TypeBinding leafComponentType(){
  */
 
 public char[] qualifiedPackageName() {
-	return getPackage() == null ? CharOperation.NO_CHAR : getPackage().readableName();
+	PackageBinding packageBinding = getPackage();
+	return packageBinding == null  || packageBinding.compoundName == CharOperation.NO_CHAR_CHAR
+		? CharOperation.NO_CHAR
+		: packageBinding.readableName();
 }
 /**
 * Answer the source name for the type.
@@ -123,4 +132,34 @@ public char[] signature() {
 	return constantPoolName();
 }
 public abstract char[] sourceName();
+
+/**
+ * Match a well-known type id to its binding
+ */
+public static final TypeBinding wellKnownType(Scope scope, int id) {
+		switch (id) { 
+			case T_boolean :
+				return BooleanBinding;
+			case T_byte :
+				return ByteBinding;
+			case T_char :
+				return CharBinding;
+			case T_short :
+				return ShortBinding;
+			case T_double :
+				return DoubleBinding;
+			case T_float :
+				return FloatBinding;
+			case T_int :
+				return IntBinding;
+			case T_long :
+				return LongBinding;
+			case T_Object :
+				return scope.getJavaLangObject();
+			case T_String :
+				return scope.getJavaLangString();
+			default : 
+				return null;
+		}
+	}
 }

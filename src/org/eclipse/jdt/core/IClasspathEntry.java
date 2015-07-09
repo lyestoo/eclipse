@@ -1,15 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *     IBM Corporation - added exclusion patterns to source entries
- *     IBM Corporation - added specific output location to source entries, and cleaning flag
- * *****************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.core.runtime.IPath;
@@ -212,43 +210,43 @@ public interface IClasspathEntry {
 	 * '?' matches 1 character within a segment. So <code>?.java</code> 
 	 * matches <code>a.java</code>, <code>A.java</code>, 
 	 * but not <code>.java</code> or <code>xyz.java</code> (neither have
-	 * just one character before <code>.java<code>).
+	 * just one character before <code>.java</code>).
 	 * </p>
 	 * <p>
 	 * Combinations of *'s and ?'s are allowed.
 	 * </p>
 	 * <p>
 	 * The special pattern '**' matches zero or more segments. A path 
-	 * like <code>tests/<code> that ends in a trailing separator is interpreted
-	 * as <code>tests/&#42;&#42;<code>, and would match all files under the 
-	 * the folder named <code>tests<code>.
+	 * like <code>tests/</code> that ends in a trailing separator is interpreted
+	 * as <code>tests/&#42;&#42;</code>, and would match all files under the 
+	 * the folder named <code>tests</code>.
 	 * </p>
 	 * <p>
 	 * Examples:
 	 * <ul>
 	 * <li>
-	 * <code>tests/&#42;&#42;<code> (or simply <code>tests/<code>) 
+	 * <code>tests/&#42;&#42;</code> (or simply <code>tests/</code>) 
 	 * matches all files under a root folder
-	 * named <code>tests<code>. This includes <code>tests/Foo.java<code>
-	 * and <code>tests/com/example/Foo.java<code>, but not 
-	 * <code>com/example/tests/Foo.java<code> (not under a root folder named
-	 * <code>tests<code>).
+	 * named <code>tests</code>. This includes <code>tests/Foo.java</code>
+	 * and <code>tests/com/example/Foo.java</code>, but not 
+	 * <code>com/example/tests/Foo.java</code> (not under a root folder named
+	 * <code>tests</code>).
 	 * </li>
 	 * <li>
-	 * <code>tests/&#42;<code> matches all files directly below a root 
-	 * folder named <code>tests<code>. This includes <code>tests/Foo.java<code>
-	 * and <code>tests/FooHelp.java<code>
-	 * but not <code>tests/com/example/Foo.java<code> (not directly under
-	 * a folder named <code>tests<code>) or 
-	 * <code>com/Foo.java<code> (not under a folder named <code>tests<code>).
+	 * <code>tests/&#42;</code> matches all files directly below a root 
+	 * folder named <code>tests</code>. This includes <code>tests/Foo.java</code>
+	 * and <code>tests/FooHelp.java</code>
+	 * but not <code>tests/com/example/Foo.java</code> (not directly under
+	 * a folder named <code>tests</code>) or 
+	 * <code>com/Foo.java</code> (not under a folder named <code>tests</code>).
 	 * </li>
 	 * <li>
-	 * <code>&#42;&#42;/tests/&#42;&#42;<code> matches all files under any
-	 * folder named <code>tests<code>. This includes <code>tests/Foo.java<code>,
-	 * <code>com/examples/tests/Foo.java<code>, and 
-	 * <code>com/examples/tests/unit/Foo.java<code>, but not 
-	 * <code>com/example/Foo.java<code> (not under a folder named
-	 * <code>tests<code>).
+	 * <code>&#42;&#42;/tests/&#42;&#42;</code> matches all files under any
+	 * folder named <code>tests</code>. This includes <code>tests/Foo.java</code>,
+	 * <code>com/examples/tests/Foo.java</code>, and 
+	 * <code>com/examples/tests/unit/Foo.java</code>, but not 
+	 * <code>com/example/Foo.java</code> (not under a folder named
+	 * <code>tests</code>).
 	 * </li>
 	 * </ul>
 	 * </p>
@@ -256,7 +254,8 @@ public interface IClasspathEntry {
 	 * @return the possibly empty list of resource exclusion patterns 
 	 *   associated with this source entry, and <code>null</code> for other
 	 *   kinds of classpath entries
-	 * @since 2.1	 */
+	 * @since 2.1
+	 */
 	IPath[] getExclusionPatterns();
 	
 	/**
@@ -267,12 +266,15 @@ public interface IClasspathEntry {
 	 * Source entries can optionally be associated with a specific output location.
 	 * If none is provided, the source entry will be implicitly associated with its project
 	 * default output location (see <code>IJavaProject#getOutputLocation</code>).
+	 * </p><p>
+	 * NOTE: A specific output location cannot coincidate with another source/library entry.
 	 * </p>
 	 * 
 	 * @return the full path to the specific location where the builder writes 
 	 * <code>.class</code> files for this source entry, or <code>null</code>
 	 * if using default output folder
-	 * @since 2.1	 */
+	 * @since 2.1
+	 */
 	IPath getOutputLocation();
 	
 	/**
@@ -305,29 +307,30 @@ public interface IClasspathEntry {
 	IPath getPath();
 
 	/**
-	 * Returns the path to the source archive associated with this
+	 * Returns the path to the source archive or folder associated with this
 	 * classpath entry, or <code>null</code> if this classpath entry has no
 	 * source attachment.
 	 * <p>
 	 * Only library and variable classpath entries may have source attachments.
 	 * For library classpath entries, the result path (if present) locates a source
-	 * archive. For variable classpath entries, the result path (if present) has
-	 * an analogous form and meaning as the variable path, namely the first segment 
-	 * is the name of a classpath variable.
+	 * archive or folder. This archive or folder can be located in a project of the 
+	 * workspace or outside thr workspace. For variable classpath entries, the 
+	 * result path (if present) has an analogous form and meaning as the 
+	 * variable path, namely the first segment is the name of a classpath variable.
 	 * </p>
 	 *
-	 * @return the path to the source archive, or <code>null</code> if none
+	 * @return the path to the source archive or folder, or <code>null</code> if none
 	 */
 	IPath getSourceAttachmentPath();
 
 	/**
-	 * Returns the path within the source archive where package fragments
+	 * Returns the path within the source archive or folder where package fragments
 	 * are located. An empty path indicates that packages are located at
-	 * the root of the source archive. Returns a non-<code>null</code> value
+	 * the root of the source archive or folder. Returns a non-<code>null</code> value
 	 * if and only if <code>getSourceAttachmentPath</code> returns 
 	 * a non-<code>null</code> value.
 	 *
-	 * @return the path within the source archive, or <code>null</code> if
+	 * @return the path within the source archive or folder, or <code>null</code> if
 	 *    not applicable
 	 */
 	IPath getSourceAttachmentRootPath();

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -21,7 +21,6 @@ public class Block extends Statement {
 	public int explicitDeclarations;
 	// the number of explicit declaration , used to create scope
 	public BlockScope scope;
-	public static final Block None = new Block(0);
 	
 	public Block(int explicitDeclarations) {
 		this.explicitDeclarations = explicitDeclarations;
@@ -33,26 +32,18 @@ public class Block extends Statement {
 		FlowInfo flowInfo) {
 
 		// empty block
-		if (statements == null)
-			return flowInfo;
+		if (statements == null)	return flowInfo;
+		boolean didAlreadyComplain = false;
 		for (int i = 0, max = statements.length; i < max; i++) {
-			Statement stat;
-			if (!flowInfo.complainIfUnreachable((stat = statements[i]), scope)) {
+			Statement stat = statements[i];
+			if (!stat.complainIfUnreachable(flowInfo, scope, didAlreadyComplain)) {
 				flowInfo = stat.analyseCode(scope, flowContext, flowInfo);
+			} else {
+				didAlreadyComplain = true;
 			}
 		}
 		return flowInfo;
 	}
-
-	public static final Block EmptyWith(int sourceStart, int sourceEnd) {
-
-		//return an empty block which position is s and e
-		Block bk = new Block(0);
-		bk.sourceStart = sourceStart;
-		bk.sourceEnd = sourceEnd;
-		return bk;
-	}
-
 	/**
 	 * Code generation for a block
 	 */
@@ -78,60 +69,52 @@ public class Block extends Statement {
 		return statements == null;
 	}
 
+	public StringBuffer printBody(int indent, StringBuffer output) {
+
+		if (this.statements == null) return output;
+		for (int i = 0; i < statements.length; i++) {
+			statements[i].printStatement(indent + 1, output);
+			output.append('\n'); 
+		}
+		return output;
+	}
+
+	public StringBuffer printStatement(int indent, StringBuffer output) {
+
+		printIndent(indent, output);
+		output.append("{\n"); //$NON-NLS-1$
+		printBody(indent, output);
+		return printIndent(indent, output).append('}');
+	}
+
 	public void resolve(BlockScope upperScope) {
 
+		if ((this.bits & UndocumentedEmptyBlockMASK) != 0) {
+			upperScope.problemReporter().undocumentedEmptyBlock(this.sourceStart, this.sourceEnd);
+		}
 		if (statements != null) {
 			scope =
 				explicitDeclarations == 0
 					? upperScope
 					: new BlockScope(upperScope, explicitDeclarations);
-			int i = 0, length = statements.length;
-			while (i < length)
-				statements[i++].resolve(scope);
+			for (int i = 0, length = statements.length; i < length; i++) {
+				statements[i].resolve(scope);
+			}
 		}
 	}
 
 	public void resolveUsing(BlockScope givenScope) {
 
+		if ((this.bits & UndocumentedEmptyBlockMASK) != 0) {
+			givenScope.problemReporter().undocumentedEmptyBlock(this.sourceStart, this.sourceEnd);
+		}
 		// this optimized resolve(...) is sent only on none empty blocks
 		scope = givenScope;
 		if (statements != null) {
-			int i = 0, length = statements.length;
-			while (i < length)
-				statements[i++].resolve(scope);
-		}
-	}
-
-	public String toString(int tab) {
-
-		String s = tabString(tab);
-		if (this.statements == null) {
-			s += "{\n"; //$NON-NLS-1$
-			s += tabString(tab);
-			s += "}"; //$NON-NLS-1$
-			return s;
-		}
-		s += "{\n"; //$NON-NLS-1$
-		s += this.toStringStatements(tab);
-		s += tabString(tab);
-		s += "}"; //$NON-NLS-1$
-		return s;
-	}
-
-	public String toStringStatements(int tab) {
-
-		if (this.statements == null)
-			return ""; //$NON-NLS-1$
-		StringBuffer buffer = new StringBuffer();
-		for (int i = 0; i < statements.length; i++) {
-			buffer.append(statements[i].toString(tab + 1));
-			if (statements[i] instanceof Block) {
-				buffer.append("\n"); //$NON-NLS-1$
-			} else {
-				buffer.append(";\n"); //$NON-NLS-1$
+			for (int i = 0, length = statements.length; i < length; i++) {
+				statements[i].resolve(scope);
 			}
-		};
-		return buffer.toString();
+		}
 	}
 
 	public void traverse(
@@ -140,8 +123,7 @@ public class Block extends Statement {
 
 		if (visitor.visit(this, blockScope)) {
 			if (statements != null) {
-				int statementLength = statements.length;
-				for (int i = 0; i < statementLength; i++)
+				for (int i = 0, length = statements.length; i < length; i++)
 					statements[i].traverse(visitor, scope);
 			}
 		}

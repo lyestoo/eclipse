@@ -1,17 +1,16 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
 import org.eclipse.jdt.internal.compiler.ast.AstNode;
-import org.eclipse.jdt.internal.compiler.ast.NameReference;
 import org.eclipse.jdt.internal.compiler.ast.Reference;
 import org.eclipse.jdt.internal.compiler.codegen.Label;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
@@ -25,12 +24,14 @@ import org.eclipse.jdt.internal.compiler.lookup.VariableBinding;
  *	try statements, exception handlers, etc...
  */
 public class LoopingFlowContext extends SwitchFlowContext {
+	
 	public Label continueLabel;
-	public UnconditionalFlowInfo initsOnContinue = FlowInfo.DeadEnd;
+	public UnconditionalFlowInfo initsOnContinue = FlowInfo.DEAD_END;
 	Reference finalAssignments[];
 	VariableBinding finalVariables[];
 	int assignCount = 0;
 	Scope associatedScope;
+	
 	public LoopingFlowContext(
 		FlowContext parent,
 		AstNode associatedNode,
@@ -46,31 +47,31 @@ public class LoopingFlowContext extends SwitchFlowContext {
 		BlockScope scope,
 		FlowInfo flowInfo) {
 		for (int i = 0; i < assignCount; i++) {
-			VariableBinding variable;
-			if ((variable = finalVariables[i]) != null) {
-				boolean complained; // remember if have complained on this final assignment
-				if (variable instanceof FieldBinding) {
-					if (complained = flowInfo.isPotentiallyAssigned((FieldBinding) variable)) {
-						scope.problemReporter().duplicateInitializationOfBlankFinalField(
-							(FieldBinding) variable,
-							(NameReference) finalAssignments[i]);
-					}
-				} else {
-					if (complained =
-						flowInfo.isPotentiallyAssigned((LocalVariableBinding) variable)) {
-						scope.problemReporter().duplicateInitializationOfFinalLocal(
-							(LocalVariableBinding) variable,
-							(NameReference) finalAssignments[i]);
-					}
+			VariableBinding variable = finalVariables[i];
+			if (variable == null) continue;
+			boolean complained = false; // remember if have complained on this final assignment
+			if (variable instanceof FieldBinding) {
+				if (flowInfo.isPotentiallyAssigned((FieldBinding) variable)) {
+					complained = true;
+					scope.problemReporter().duplicateInitializationOfBlankFinalField(
+						(FieldBinding) variable,
+						finalAssignments[i]);
 				}
-				// any reference reported at this level is removed from the parent context where it 
-				// could also be reported again
-				if (complained) {
-					FlowContext context = parent;
-					while (context != null) {
-						context.removeFinalAssignmentIfAny(finalAssignments[i]);
-						context = context.parent;
-					}
+			} else {
+				if (flowInfo.isPotentiallyAssigned((LocalVariableBinding) variable)) {
+					complained = true;
+					scope.problemReporter().duplicateInitializationOfFinalLocal(
+						(LocalVariableBinding) variable,
+						finalAssignments[i]);
+				}
+			}
+			// any reference reported at this level is removed from the parent context where it 
+			// could also be reported again
+			if (complained) {
+				FlowContext context = parent;
+				while (context != null) {
+					context.removeFinalAssignmentIfAny(finalAssignments[i]);
+					context = context.parent;
 				}
 			}
 		}
@@ -81,7 +82,10 @@ public class LoopingFlowContext extends SwitchFlowContext {
 	}
 
 	public String individualToString() {
-		return "Looping flow context"; //$NON-NLS-1$
+		StringBuffer buffer = new StringBuffer("Looping flow context"); //$NON-NLS-1$
+		buffer.append("[initsOnBreak -").append(initsOnBreak.toString()).append(']'); //$NON-NLS-1$
+		buffer.append("[initsOnContinue -").append(initsOnContinue.toString()).append(']'); //$NON-NLS-1$
+		return buffer.toString();
 	}
 
 	public boolean isContinuable() {
@@ -89,18 +93,17 @@ public class LoopingFlowContext extends SwitchFlowContext {
 	}
 
 	public boolean isContinuedTo() {
-		return initsOnContinue != FlowInfo.DeadEnd;
+		return initsOnContinue != FlowInfo.DEAD_END;
 	}
 
 	public void recordContinueFrom(FlowInfo flowInfo) {
-		if (initsOnContinue == FlowInfo.DeadEnd) {
+
+		if (!flowInfo.isReachable()) return;
+		if (initsOnContinue == FlowInfo.DEAD_END) {
 			initsOnContinue = flowInfo.copy().unconditionalInits();
 		} else {
-			// ignore if not really reachable (1FKEKRP)
-			if (flowInfo.isFakeReachable())
-				return;
-			initsOnContinue.mergedWith(flowInfo.unconditionalInits());
-		};
+			initsOnContinue = initsOnContinue.mergedWith(flowInfo.unconditionalInits());
+		}
 	}
 
 	boolean recordFinalAssignment(
@@ -131,7 +134,7 @@ public class LoopingFlowContext extends SwitchFlowContext {
 				(finalVariables = new VariableBinding[assignCount * 2]),
 				0,
 				assignCount);
-		};
+		}
 		finalAssignments[assignCount] = finalAssignment;
 		finalVariables[assignCount++] = binding;
 		return true;

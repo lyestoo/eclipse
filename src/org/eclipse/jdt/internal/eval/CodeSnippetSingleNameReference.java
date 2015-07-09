@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.internal.compiler.ast.Assignment;
@@ -17,6 +17,7 @@ import org.eclipse.jdt.internal.compiler.ast.Expression;
 import org.eclipse.jdt.internal.compiler.ast.FieldReference;
 import org.eclipse.jdt.internal.compiler.ast.IntLiteral;
 import org.eclipse.jdt.internal.compiler.ast.SingleNameReference;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.flow.FlowContext;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
@@ -37,7 +38,7 @@ import org.eclipse.jdt.internal.compiler.lookup.VariableBinding;
 
 /**
  * A single name reference inside a code snippet can denote a field of a remote
- * receiver object (i.e.&nbsp;the one of the context in the stack frame).
+ * receiver object (that is, the receiver of the context in the stack frame).
  */
 public class CodeSnippetSingleNameReference extends SingleNameReference implements EvaluationConstants, InvocationSite, ProblemReasons {
 
@@ -79,8 +80,9 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
  */
 public TypeBinding checkFieldAccess(BlockScope scope) {
 
-	if (delegateThis == null) return super.checkFieldAccess(scope);
-	
+	if (delegateThis == null) {
+		return super.checkFieldAccess(scope);
+	}
 	FieldBinding fieldBinding = (FieldBinding) binding;
 	bits &= ~RestrictiveFlagMASK; // clear bits
 	bits |= FIELD;
@@ -95,9 +97,10 @@ public TypeBinding checkFieldAccess(BlockScope scope) {
 		}
 	}
 	constant = FieldReference.getConstantFor(fieldBinding, this, true, scope);
-	if (isFieldUseDeprecated(fieldBinding, scope))
-		scope.problemReporter().deprecatedField(fieldBinding, this);
 
+	if (isFieldUseDeprecated(fieldBinding, scope, (this.bits & IsStrictlyAssignedMASK) !=0)) {
+		scope.problemReporter().deprecatedField(fieldBinding, this);
+	}
 	return fieldBinding.type;
 
 }
@@ -526,13 +529,17 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 }
 public void generateReceiver(CodeStream codeStream) {
 	codeStream.aload_0();
-	if (delegateThis != null) codeStream.getfield(delegateThis); // delegated field access
+	if (delegateThis != null) {
+		codeStream.getfield(delegateThis); // delegated field access
+	}
 }
 /**
  * Check and/or redirect the field access to the delegate receiver if any
  */
 public TypeBinding getReceiverType(BlockScope currentScope) {
-	if (receiverType != null) return receiverType;
+	if (receiverType != null) {
+		return receiverType;
+	}
 	Scope scope = currentScope.parent;
 	while (true) {
 			switch (scope.kind) {
@@ -541,6 +548,87 @@ public TypeBinding getReceiverType(BlockScope currentScope) {
 				default:
 					scope = scope.parent;
 			}
+	}
+}
+public void manageSyntheticReadAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
+
+	if (this.delegateThis == null) {
+		super.manageSyntheticReadAccessIfNecessary(currentScope, flowInfo);
+		return;
+	}
+	
+	if (!flowInfo.isReachable()) return;
+	//If inlinable field, forget the access emulation, the code gen will directly target it
+	if (constant != NotAConstant)
+		return;
+	if ((bits & FIELD) != 0) {
+		FieldBinding fieldBinding = (FieldBinding) binding;
+//			if (((bits & DepthMASK) != 0)
+//				&& (fieldBinding.isPrivate() // private access
+//					|| (fieldBinding.isProtected() // implicit protected access
+//							&& fieldBinding.declaringClass.getPackage() 
+//								!= this.delegateThis.type.getPackage()))) {
+//				if (syntheticAccessors == null)
+//					syntheticAccessors = new MethodBinding[2];
+//				syntheticAccessors[READ] = 
+//					((SourceTypeBinding)currentScope.enclosingSourceType().
+//						enclosingTypeAt((bits & DepthMASK) >> DepthSHIFT)).
+//							addSyntheticMethod(fieldBinding, true);
+//				currentScope.problemReporter().needToEmulateFieldReadAccess(fieldBinding, this);
+//				return;
+//			}
+		// if the binding declaring class is not visible, need special action
+		// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
+		// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
+		// and not from Object or implicit static field access.	
+		if (fieldBinding.declaringClass != this.delegateThis.type
+			&& fieldBinding.declaringClass != null
+			&& fieldBinding.constant == NotAConstant
+			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2 
+					&& !fieldBinding.isStatic()
+					&& fieldBinding.declaringClass.id != T_Object) // no change for Object fields (if there was any)
+				|| !fieldBinding.declaringClass.canBeSeenBy(currentScope))){
+			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(fieldBinding, (ReferenceBinding)this.delegateThis.type);
+		}
+	}
+}
+public void manageSyntheticWriteAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
+
+	if (this.delegateThis == null) {
+		super.manageSyntheticWriteAccessIfNecessary(currentScope, flowInfo);
+		return;
+	}
+
+	if (!flowInfo.isReachable()) return;
+	if ((bits & FIELD) != 0) {
+		FieldBinding fieldBinding = (FieldBinding) binding;
+//		if (((bits & DepthMASK) != 0) 
+//			&& (fieldBinding.isPrivate() // private access
+//				|| (fieldBinding.isProtected() // implicit protected access
+//						&& fieldBinding.declaringClass.getPackage() 
+//							!= currentScope.enclosingSourceType().getPackage()))) {
+//			if (syntheticAccessors == null)
+//				syntheticAccessors = new MethodBinding[2];
+//			syntheticAccessors[WRITE] = 
+//				((SourceTypeBinding)currentScope.enclosingSourceType().
+//					enclosingTypeAt((bits & DepthMASK) >> DepthSHIFT)).
+//						addSyntheticMethod(fieldBinding, false);
+//			currentScope.problemReporter().needToEmulateFieldWriteAccess(fieldBinding, this);
+//			return;
+//		}
+		// if the binding declaring class is not visible, need special action
+		// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
+		// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
+		// and not from Object or implicit static field access.	
+		if (fieldBinding.declaringClass != this.delegateThis.type
+			&& fieldBinding.declaringClass != null
+			&& fieldBinding.constant == NotAConstant
+			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2 
+					&& !fieldBinding.isStatic()
+					&& fieldBinding.declaringClass.id != T_Object) // no change for Object fields (if there was any)
+				|| !fieldBinding.declaringClass.canBeSeenBy(currentScope))){
+			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(fieldBinding, (ReferenceBinding)this.delegateThis.type);
+		}
 	}
 }
 /**
@@ -552,10 +640,12 @@ public TypeBinding reportError(BlockScope scope) {
 	if (binding instanceof ProblemFieldBinding && ((ProblemFieldBinding) binding).problemId() == NotFound){
 		if (this.evaluationContext.declaringTypeName != null) {
 			delegateThis = scope.getField(scope.enclosingSourceType(), DELEGATE_THIS, this);
-			if (delegateThis != null){ ; // if not found then internal error, field should have been found
+			if (delegateThis != null){  // if not found then internal error, field should have been found
 				// will not support innerclass emulation inside delegate
 				this.codegenBinding = binding = scope.getField(delegateThis.type, this.token, this);
-				if (!binding.isValidBinding()) return super.reportError(scope);
+				if (!binding.isValidBinding()) {
+					return super.reportError(scope);
+				}
 				return checkFieldAccess(scope);
 			}
 		}
@@ -563,7 +653,7 @@ public TypeBinding reportError(BlockScope scope) {
 	if (binding instanceof ProblemBinding && ((ProblemBinding) binding).problemId() == NotFound){
 		if (this.evaluationContext.declaringTypeName != null) {
 			delegateThis = scope.getField(scope.enclosingSourceType(), DELEGATE_THIS, this);
-			if (delegateThis != null){ ; // if not found then internal error, field should have been found
+			if (delegateThis != null){  // if not found then internal error, field should have been found
 				// will not support innerclass emulation inside delegate
 				FieldBinding fieldBinding = scope.getField(delegateThis.type, this.token, this);
 				if (!fieldBinding.isValidBinding()) {

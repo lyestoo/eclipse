@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -438,7 +438,7 @@ public ReferenceBinding getType(char[][] compoundName) {
 	if (referenceBinding instanceof UnresolvedReferenceBinding)
 		referenceBinding = ((UnresolvedReferenceBinding) referenceBinding).resolve(this);
 
-	// compoundName refers to a nested type incorrectly (i.e. package1.A$B)
+	// compoundName refers to a nested type incorrectly (for example, package1.A$B)
 	if (referenceBinding.isNestedType())
 		return new ProblemReferenceBinding(compoundName, InternalNameProvided);
 	else
@@ -455,7 +455,7 @@ public ReferenceBinding getType(char[][] compoundName) {
 
 ReferenceBinding getTypeFromConstantPoolName(char[] signature, int start, int end) {
 	if (end == -1)
-		end = signature.length - 1;
+		end = signature.length;
 
 	char[][] compoundName = CharOperation.splitOn('/', signature, start, end);
 	ReferenceBinding binding = getCachedType(compoundName);
@@ -522,7 +522,7 @@ TypeBinding getTypeFromSignature(char[] signature, int start, int end) {
 				throw new Error(Util.bind("error.undefinedBaseType",String.valueOf(signature[start]))); //$NON-NLS-1$
 		}
 	} else {
-		binding = getTypeFromConstantPoolName(signature, start + 1, end - 1);
+		binding = getTypeFromConstantPoolName(signature, start + 1, end);
 	}
 
 	if (dimension == 0)

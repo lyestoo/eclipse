@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import java.util.Map;
 
-import org.eclipse.jdt.core.ICompletionRequestor;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.core.compiler.IProblem;
@@ -26,11 +25,13 @@ import org.eclipse.jdt.internal.compiler.env.IBinaryType;
 import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
 import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
+import org.eclipse.jdt.internal.core.CompletionRequestorWrapper;
 
 /**
  * @see org.eclipse.jdt.core.eval.IEvaluationContext
  */
-public class EvaluationContext implements EvaluationConstants {
+public class EvaluationContext implements EvaluationConstants, SuffixConstants {
 	/**
 	 * Whether timing information should be output to the stdout
 	 */
@@ -42,11 +43,11 @@ public class EvaluationContext implements EvaluationConstants {
 	static int VAR_CLASS_COUNTER = 0;
 	static int CODE_SNIPPET_COUNTER = 0;
 
-	GlobalVariable[] variables = new GlobalVariable[5];
-	int variableCount = 0;
-	char[][] imports = CharOperation.NO_CHAR_CHAR;
-	char[] packageName = CharOperation.NO_CHAR;
-	boolean varsChanged = true;
+	GlobalVariable[] variables;
+	int variableCount;
+	char[][] imports;
+	char[] packageName;
+	boolean varsChanged;
 	VariablesInfo installedVars;
 	IBinaryType codeSnippetBinary;
 
@@ -57,12 +58,19 @@ public class EvaluationContext implements EvaluationConstants {
 	char[][] localVariableNames;
 	
 	/* can 'this' be used in this context */
-	boolean isStatic = true;
-	boolean isConstructorCall = false;
+	boolean isStatic;
+	boolean isConstructorCall;
 /**
  * Creates a new evaluation context.
  */
 public EvaluationContext() {
+	this.variables = new GlobalVariable[5];
+	this.variableCount = 0;
+	this.imports = CharOperation.NO_CHAR_CHAR;
+	this.packageName = CharOperation.NO_CHAR;
+	this.varsChanged = true;
+	this.isStatic = true;
+	this.isConstructorCall = false;
 }
 /**
  * Returns the global variables of this evaluation context in the order they were created in.
@@ -87,7 +95,7 @@ public GlobalVariable[] allVariables() {
  *  @param options
  *		set of options used to configure the code assist engine.
  */
-public void complete(char[] codeSnippet, int completionPosition, ISearchableNameEnvironment environment, ICompletionRequestor requestor, Map options, IJavaProject project) {
+public void complete(char[] codeSnippet, int completionPosition, ISearchableNameEnvironment environment, CompletionRequestorWrapper requestor, Map options, IJavaProject project) {
 	final char[] className = "CodeSnippetCompletion".toCharArray(); //$NON-NLS-1$
 	final CodeSnippetToCuMapper mapper = new CodeSnippetToCuMapper(
 		codeSnippet, 
@@ -102,7 +110,7 @@ public void complete(char[] codeSnippet, int completionPosition, ISearchableName
 	);
 	ICompilationUnit sourceUnit = new ICompilationUnit() {
 		public char[] getFileName() {
-			return CharOperation.concat(className, "java".toCharArray(), '.'); //$NON-NLS-1$
+			return CharOperation.concat(className, SUFFIX_java);
 		}
 		public char[] getContents() {
 			return mapper.getCUSource();
@@ -115,6 +123,7 @@ public void complete(char[] codeSnippet, int completionPosition, ISearchableName
 		}
 	};
 	CompletionEngine engine = new CompletionEngine(environment, mapper.getCompletionRequestor(requestor), options, project);
+	requestor.completionEngine = engine;
 	engine.complete(sourceUnit, mapper.startPosOffset + completionPosition, 0);
 }
 /**
@@ -164,24 +173,24 @@ private void deployCodeSnippetClassIfNeeded(IRequestor requestor) {
  */
 public void evaluate(
 	char[] codeSnippet, 
-	char[][] localVariableTypeNames,
-	char[][] localVariableNames, 
-	int[] localVariableModifiers,
-	char[] declaringTypeName,
-	boolean isStatic,
-	boolean isConstructorCall,
+	char[][] contextLocalVariableTypeNames,
+	char[][] contextLocalVariableNames, 
+	int[] contextLocalVariableModifiers,
+	char[] contextDeclaringTypeName,
+	boolean contextIsStatic,
+	boolean contextIsConstructorCall,
 	INameEnvironment environment, 
 	Map options, 
 	final IRequestor requestor, 
 	IProblemFactory problemFactory) throws InstallException {
 
 	// Initialialize context
-	this.localVariableTypeNames = localVariableTypeNames;
-	this.localVariableNames = localVariableNames;
-	this.localVariableModifiers = localVariableModifiers;
-	this.declaringTypeName = declaringTypeName;
-	this.isStatic = isStatic;
-	this.isConstructorCall = isConstructorCall;
+	this.localVariableTypeNames = contextLocalVariableTypeNames;
+	this.localVariableNames = contextLocalVariableNames;
+	this.localVariableModifiers = contextLocalVariableModifiers;
+	this.declaringTypeName = contextDeclaringTypeName;
+	this.isStatic = contextIsStatic;
+	this.isConstructorCall = contextIsConstructorCall;
 
 	this.deployCodeSnippetClassIfNeeded(requestor);
 
@@ -198,7 +207,7 @@ public void evaluate(
 					hasErrors = true;
 				}
 			}
-		};
+		}
 		ForwardingRequestor forwardingRequestor = new ForwardingRequestor();
 		if (this.varsChanged) {
 			evaluateVariables(environment, options, forwardingRequestor, problemFactory);
@@ -225,11 +234,11 @@ public void evaluate(
 			// Send code snippet on target
 			if (classes != null && classes.length > 0) {
 				char[] simpleClassName = evaluator.getClassName();
-				char[] packageName = this.getPackageName();
+				char[] pkgName = this.getPackageName();
 				char[] qualifiedClassName =
-					packageName.length == 0 ?
+					pkgName.length == 0 ?
 						simpleClassName :
-						CharOperation.concat(packageName, simpleClassName, '.');
+						CharOperation.concat(pkgName, simpleClassName, '.');
 				CODE_SNIPPET_COUNTER++;
 				requestor.acceptClassFiles(classes, qualifiedClassName);
 			}
@@ -272,8 +281,8 @@ public void evaluateImports(INameEnvironment environment, IRequestor requestor, 
 		char[][] splitDeclaration = CharOperation.splitOn('.', importDeclaration);
 		int splitLength = splitDeclaration.length;
 		if (splitLength > 0) {
-			char[] packageName = splitDeclaration[splitLength - 1];
-			if (packageName.length == 1 && packageName[0] == '*') {
+			char[] pkgName = splitDeclaration[splitLength - 1];
+			if (pkgName.length == 1 && pkgName[0] == '*') {
 				char[][] parentName;
 				switch (splitLength) {
 					case 1:
@@ -281,13 +290,13 @@ public void evaluateImports(INameEnvironment environment, IRequestor requestor, 
 						break;
 					case 2:
 						parentName = null;
-						packageName = splitDeclaration[splitLength - 2];
+						pkgName = splitDeclaration[splitLength - 2];
 						break;
 					default:
 						parentName = CharOperation.subarray(splitDeclaration, 0, splitLength - 2);
-						packageName = splitDeclaration[splitLength - 2];
+						pkgName = splitDeclaration[splitLength - 2];
 				}
-				if (!environment.isPackage(parentName, packageName)) {
+				if (!environment.isPackage(parentName, pkgName)) {
 					String[] arguments = new String[] {new String(importDeclaration)};
 					problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, arguments, arguments, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
 				}
@@ -330,10 +339,10 @@ public void evaluateVariables(INameEnvironment environment, Map options, IReques
 			}
 
 			// Remember that the variables have been installed
-			int variableCount = this.variableCount;
-			GlobalVariable[] variablesCopy = new GlobalVariable[variableCount];
-			System.arraycopy(this.variables, 0, variablesCopy, 0, variableCount); 
-			this.installedVars = new VariablesInfo(evaluator.getPackageName(), evaluator.getClassName(), classes, variablesCopy, variableCount);
+			int count = this.variableCount;
+			GlobalVariable[] variablesCopy = new GlobalVariable[count];
+			System.arraycopy(this.variables, 0, variablesCopy, 0, count); 
+			this.installedVars = new VariablesInfo(evaluator.getPackageName(), evaluator.getClassName(), classes, variablesCopy, count);
 			VAR_CLASS_COUNTER++;
 		}
 		this.varsChanged = false;
@@ -417,9 +426,9 @@ public static String getCodeSnippetSource() {
 		"/**\n" + //$NON-NLS-1$
 		" * Stores the result type and value of the code snippet evaluation.\n" + //$NON-NLS-1$
 		" */\n" + //$NON-NLS-1$
-		"public void setResult(Object resultValue, Class resultType) {\n" + //$NON-NLS-1$
-		"	this.resultValue = resultValue;\n" + //$NON-NLS-1$
-		"	this.resultType = resultType;\n" + //$NON-NLS-1$
+		"public void setResult(Object someResultValue, Class someResultType) {\n" + //$NON-NLS-1$
+		"	this.resultValue = someResultValue;\n" + //$NON-NLS-1$
+		"	this.resultType = someResultType;\n" + //$NON-NLS-1$
 		"}\n" + //$NON-NLS-1$
 		"}\n"; //$NON-NLS-1$
 }
@@ -513,7 +522,7 @@ public void select(
 	);
 	ICompilationUnit sourceUnit = new ICompilationUnit() {
 		public char[] getFileName() {
-			return CharOperation.concat(className, "java".toCharArray(), '.'); //$NON-NLS-1$
+			return CharOperation.concat(className, SUFFIX_java);
 		}
 		public char[] getContents() {
 			return mapper.getCUSource();

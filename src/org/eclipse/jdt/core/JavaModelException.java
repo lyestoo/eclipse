@@ -1,14 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core;
+
+import java.io.PrintStream;
+import java.io.PrintWriter;
 
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IStatus;
@@ -106,6 +109,26 @@ public IJavaModelStatus getJavaModelStatus() {
 public boolean isDoesNotExist() {
 	IJavaModelStatus javaModelStatus = getJavaModelStatus();
 	return javaModelStatus != null && javaModelStatus.isDoesNotExist();
+}
+public void printStackTrace(PrintStream output) {
+	synchronized(output) {
+		super.printStackTrace(output);
+		Throwable throwable = getException();
+		if (throwable != null) {
+			output.print("Caused by: "); //$NON-NLS-1$
+			throwable.printStackTrace(output);
+		}
+	}
+}
+public void printStackTrace(PrintWriter output) {
+	synchronized(output) {
+		super.printStackTrace(output);
+		Throwable throwable = getException();
+		if (throwable != null) {
+			output.print("Caused by: "); //$NON-NLS-1$
+			throwable.printStackTrace(output);
+		}
+	}
 }
 /**
  * Returns a printable representation of this exception suitable for debugging

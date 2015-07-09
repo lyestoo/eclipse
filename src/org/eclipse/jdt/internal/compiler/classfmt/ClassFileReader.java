@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.classfmt;
 
 import java.io.File;
@@ -18,13 +18,13 @@ import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.codegen.AttributeNamesConstants;
 import org.eclipse.jdt.internal.compiler.env.*;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
-import org.eclipse.jdt.internal.compiler.impl.NullConstant;
 import org.eclipse.jdt.internal.compiler.lookup.TypeIds;
 import org.eclipse.jdt.internal.compiler.util.Util;
 
 public class ClassFileReader extends ClassFileStruct implements AttributeNamesConstants, IBinaryType {
 	private int constantPoolCount;
 	private int[] constantPoolOffsets;
+	private long version;
 	private int accessFlags;
 	private char[] className;
 	private char[] superclassName;
@@ -61,6 +61,7 @@ public ClassFileReader(byte[] classFileBytes, char[] fileName, boolean fullyInit
 	this.classFileName = fileName;
 	int readOffset = 10;
 	try {
+		this.version = ((long)this.u2At(6) << 16) + this.u2At(4); // major<<16 + minor
 		constantPoolCount = this.u2At(8);
 		// Pass #1 - Fill in all primitive constants
 		this.constantPoolOffsets = new int[constantPoolCount];
@@ -375,7 +376,11 @@ public IBinaryMethod[] getMethods() {
  */
 public int getModifiers() {
 	if (this.innerInfo != null) {
-		return this.innerInfo.getModifiers();
+		if ((this.accessFlags & AccDeprecated) != 0) {
+			return this.innerInfo.getModifiers() | AccDeprecated;
+		} else {
+			return this.innerInfo.getModifiers();
+		}
 	}
 	return this.accessFlags;
 }
@@ -399,6 +404,14 @@ public char[] getName() {
  */
 public char[] getSuperclassName() {
 	return this.superclassName;
+}
+/**
+ * Answer the major/minor version defined in this class file according to the VM spec.
+ * as a long: (major<<16)+minor
+ * @return the major/minor version found
+ */
+public long getVersion() {
+	return this.version;
 }
 /**
  * Answer true if the receiver is an anonymous type, false otherwise
@@ -575,8 +588,8 @@ public boolean hasStructuralChanges(byte[] newBytes, boolean orderRequired, bool
 		}
 
 		// member types
-		IBinaryNestedType[] currentMemberTypes = (IBinaryNestedType[]) this.getMemberTypes();
-		IBinaryNestedType[] otherMemberTypes = (IBinaryNestedType[]) newClassFile.getMemberTypes();
+		IBinaryNestedType[] currentMemberTypes = this.getMemberTypes();
+		IBinaryNestedType[] otherMemberTypes = newClassFile.getMemberTypes();
 		if (currentMemberTypes != otherMemberTypes) { // TypeConstants.NoMemberTypes
 			int currentMemberTypeLength = currentMemberTypes == null ? 0 : currentMemberTypes.length;
 			int otherMemberTypeLength = otherMemberTypes == null ? 0 : otherMemberTypes.length;
@@ -703,6 +716,8 @@ private boolean hasStructuralFieldChanges(FieldInfo currentFieldInfo, FieldInfo 
 				return currentConstant.shortValue() != otherConstant.shortValue();
 			case TypeIds.T_char :
 				return currentConstant.charValue() != otherConstant.charValue();
+			case TypeIds.T_long :
+				return currentConstant.longValue() != otherConstant.longValue();
 			case TypeIds.T_float :
 				return currentConstant.floatValue() != otherConstant.floatValue();
 			case TypeIds.T_double :
@@ -711,8 +726,6 @@ private boolean hasStructuralFieldChanges(FieldInfo currentFieldInfo, FieldInfo 
 				return currentConstant.booleanValue() != otherConstant.booleanValue();
 			case TypeIds.T_String :
 				return !currentConstant.stringValue().equals(otherConstant.stringValue());
-			case TypeIds.T_null :
-				return otherConstant != NullConstant.Default;
 		}
 	}
 	return false;

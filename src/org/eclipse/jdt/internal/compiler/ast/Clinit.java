@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -45,11 +45,10 @@ public class Clinit extends AbstractMethodDeclaration {
 					this,
 					NoExceptions,
 					scope,
-					FlowInfo.DeadEnd);
+					FlowInfo.DEAD_END);
 
 			// check for missing returning path
-			needFreeReturn =
-				!((flowInfo == FlowInfo.DeadEnd) || flowInfo.isFakeReachable());
+			this.needFreeReturn = flowInfo.isReachable();
 
 			// check missing blank final field initializations
 			flowInfo = flowInfo.mergedWith(staticInitializerFlowContext.initsOnReturn);
@@ -147,10 +146,8 @@ public class Clinit extends AbstractMethodDeclaration {
 		TypeDeclaration declaringType = classScope.referenceContext;
 
 		// initialize local positions - including initializer scope.
-		scope.computeLocalVariablePositions(0, codeStream); // should not be necessary
 		MethodScope staticInitializerScope = declaringType.staticInitializerScope;
 		staticInitializerScope.computeLocalVariablePositions(0, codeStream);
-		// offset by the argument size
 
 		// 1.4 feature
 		// This has to be done before any other initialization
@@ -188,7 +185,7 @@ public class Clinit extends AbstractMethodDeclaration {
 			// reset the constant pool to its state before the clinit
 			constantPool.resetForClinit(constantPoolIndex, constantPoolOffset);
 		} else {
-			if (needFreeReturn) {
+			if (this.needFreeReturn) {
 				int oldPosition = codeStream.position;
 				codeStream.return_();
 				codeStream.updateLocalVariablesAttribute(oldPosition);
@@ -218,18 +215,16 @@ public class Clinit extends AbstractMethodDeclaration {
 		//the clinit is filled by hand .... 
 	}
 
-	public void resolve(ClassScope scope) {
+	public StringBuffer print(int tab, StringBuffer output) {
 
-		this.scope = new MethodScope(scope, scope.referenceContext, true);
+		printIndent(tab, output).append("<clinit>()"); //$NON-NLS-1$
+		printBody(tab + 1, output);
+		return output;
 	}
 
-	public String toString(int tab) {
+	public void resolve(ClassScope classScope) {
 
-		String s = ""; //$NON-NLS-1$
-		s = s + tabString(tab);
-		s = s + "<clinit>()"; //$NON-NLS-1$
-		s = s + toStringStatements(tab + 1);
-		return s;
+		this.scope = new MethodScope(classScope, classScope.referenceContext, true);
 	}
 
 	public void traverse(
@@ -241,7 +236,7 @@ public class Clinit extends AbstractMethodDeclaration {
 	}
 
 	// 1.4 feature
-	public void addSupportForAssertion(FieldBinding assertionSyntheticFieldBinding) {
+	public void setAssertionSupport(FieldBinding assertionSyntheticFieldBinding) {
 
 		this.assertionSyntheticFieldBinding = assertionSyntheticFieldBinding;
 

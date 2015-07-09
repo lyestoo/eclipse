@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import java.util.Map;
@@ -140,13 +140,13 @@ protected void addEvaluationResultForCompilationProblem(Map resultsByIDs, IProbl
  * @see org.eclipse.jdt.internal.eval.Evaluator
  */
 protected char[] getClassName() {
-	return CharOperation.concat(EvaluationContext.GLOBAL_VARS_CLASS_NAME_PREFIX, Integer.toString(EvaluationContext.VAR_CLASS_COUNTER + 1).toCharArray());
+	return CharOperation.concat(EvaluationConstants.GLOBAL_VARS_CLASS_NAME_PREFIX, Integer.toString(EvaluationContext.VAR_CLASS_COUNTER + 1).toCharArray());
 }
 /**
  * Creates and returns a compiler for this evaluator.
  */
-Compiler getCompiler(ICompilerRequestor requestor) {
-	Compiler compiler = super.getCompiler(requestor);
+Compiler getCompiler(ICompilerRequestor compilerRequestor) {
+	Compiler compiler = super.getCompiler(compilerRequestor);
 	
 	// Initialize the compiler's lookup environment with the already compiled super class
 	IBinaryType binaryType = this.context.getRootCodeSnippetBinary();

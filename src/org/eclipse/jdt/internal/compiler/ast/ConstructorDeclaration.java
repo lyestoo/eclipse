@@ -1,22 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import java.util.ArrayList;
 
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.*;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
-import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
@@ -26,9 +26,6 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 	public ExplicitConstructorCall constructorCall;
 	public final static char[] ConstantPoolName = "<init>".toCharArray(); //$NON-NLS-1$
 	public boolean isDefaultConstructor = false;
-
-	public int referenceCount = 0;
-	// count how many times this constructor is referenced from other local constructors
 
 	public ConstructorDeclaration(CompilationResult compilationResult){
 		super(compilationResult);
@@ -41,6 +38,18 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 
 		if (ignoreFurtherInvestigation)
 			return;
+
+		if (this.binding != null && this.binding.isPrivate() && !this.binding.isPrivateUsed()) {
+			if (!classScope.referenceCompilationUnit().compilationResult.hasSyntaxError()) {
+				scope.problemReporter().unusedPrivateConstructor(this);
+			}
+		}
+			
+		// check constructor recursion, once all constructor got resolved
+		if (isRecursive(null /*lazy initialized visited list*/)) {				
+			this.scope.problemReporter().recursiveConstructorInvocation(this.constructorCall);
+		}
+			
 		try {
 			ExceptionHandlingFlowContext constructorContext =
 				new ExceptionHandlingFlowContext(
@@ -48,7 +57,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 					this,
 					binding.thrownExceptions,
 					scope,
-					FlowInfo.DeadEnd);
+					FlowInfo.DEAD_END);
 			initializerFlowContext.checkInitializerExceptions(
 				scope,
 				constructorContext,
@@ -84,21 +93,23 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 			}
 			// propagate to statements
 			if (statements != null) {
+				boolean didAlreadyComplain = false;
 				for (int i = 0, count = statements.length; i < count; i++) {
-					Statement stat;
-					if (!flowInfo.complainIfUnreachable((stat = statements[i]), scope)) {
+					Statement stat = statements[i];
+					if (!stat.complainIfUnreachable(flowInfo, scope, didAlreadyComplain)) {
 						flowInfo = stat.analyseCode(scope, constructorContext, flowInfo);
+					} else {
+						didAlreadyComplain = true;
 					}
 				}
 			}
 			// check for missing returning path
-			needFreeReturn =
-				!((flowInfo == FlowInfo.DeadEnd) || flowInfo.isFakeReachable());
+			this.needFreeReturn = flowInfo.isReachable();
 
 			// check missing blank final field initializations
 			if ((constructorCall != null)
 				&& (constructorCall.accessMode != ExplicitConstructorCall.This)) {
-				flowInfo = flowInfo.mergedWith(initializerFlowContext.initsOnReturn);
+				flowInfo = flowInfo.mergedWith(constructorContext.initsOnReturn);
 				FieldBinding[] fields = binding.declaringClass.fields();
 				for (int i = 0, count = fields.length; i < count; i++) {
 					FieldBinding field;
@@ -111,6 +122,8 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 					}
 				}
 			}
+			// check unreachable catch blocks
+			constructorContext.complainIfUnusedExceptionHandlers(this);
 		} catch (AbortMethod e) {
 			this.ignoreFurtherInvestigation = true;
 		}
@@ -123,6 +136,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 	 * @param classFile org.eclipse.jdt.internal.compiler.codegen.ClassFile
 	 */
 	public void generateCode(ClassScope classScope, ClassFile classFile) {
+		
 		int problemResetPC = 0;
 		if (ignoreFurtherInvestigation) {
 			if (this.binding == null)
@@ -153,7 +167,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 				} catch (AbortMethod e2) {
 					int problemsLength;
 					IProblem[] problems =
-						scope.referenceCompilationUnit().compilationResult.getProblems();
+						scope.referenceCompilationUnit().compilationResult.getAllProblems();
 					IProblem[] problemsCopy = new IProblem[problemsLength = problems.length];
 					System.arraycopy(problems, 0, problemsCopy, 0, problemsLength);
 					classFile.addProblemConstructor(this, binding, problemsCopy, problemResetPC);
@@ -161,7 +175,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 			} else {
 				int problemsLength;
 				IProblem[] problems =
-					scope.referenceCompilationUnit().compilationResult.getProblems();
+					scope.referenceCompilationUnit().compilationResult.getAllProblems();
 				IProblem[] problemsCopy = new IProblem[problemsLength = problems.length];
 				System.arraycopy(problems, 0, problemsCopy, 0, problemsLength);
 				classFile.addProblemConstructor(this, binding, problemsCopy, problemResetPC);
@@ -170,15 +184,13 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 	}
 
 	public void generateSyntheticFieldInitializationsIfNecessary(
-		MethodScope scope,
+		MethodScope methodScope,
 		CodeStream codeStream,
-		ReferenceBinding declaringClass,
-		boolean addNullCheckForEnclosingInstance) {
+		ReferenceBinding declaringClass) {
 			
 		if (!declaringClass.isNestedType()) return;
 		
 		NestedTypeBinding nestedType = (NestedTypeBinding) declaringClass;
-		SourceTypeBinding enclosingType = nestedType.enclosingType;
 
 		SyntheticArgumentBinding[] syntheticArgs = nestedType.syntheticEnclosingInstances();
 		for (int i = 0, max = syntheticArgs == null ? 0 : syntheticArgs.length; i < max; i++) {
@@ -186,11 +198,6 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 			if ((syntheticArg = syntheticArgs[i]).matchingField != null) {
 				codeStream.aload_0();
 				codeStream.load(syntheticArg);
-				if (enclosingType == syntheticArg.type && addNullCheckForEnclosingInstance) {
-					codeStream.dup();
-					codeStream.invokeObjectGetClass(); // causes null check
-					codeStream.pop();
-				}
 				codeStream.putfield(syntheticArg.matchingField);
 			}
 		}
@@ -221,13 +228,20 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 			// initialize local positions - including initializer scope.
 			ReferenceBinding declaringClass = binding.declaringClass;
 
-			int argSize = 0;
-			scope.computeLocalVariablePositions(// consider synthetic arguments if any
-			argSize =
-				declaringClass.isNestedType()
-					? ((NestedTypeBinding) declaringClass).syntheticArgumentsOffset
-					: 1,
-				codeStream);
+			int argSlotSize = 1; // this==aload0
+			
+			if (declaringClass.isNestedType()){
+				NestedTypeBinding nestedType = (NestedTypeBinding) declaringClass;
+				this.scope.extraSyntheticArguments = nestedType.syntheticOuterLocalVariables();
+				scope.computeLocalVariablePositions(// consider synthetic arguments if any
+					nestedType.enclosingInstancesSlotSize + 1,
+					codeStream);
+				argSlotSize += nestedType.enclosingInstancesSlotSize;
+				argSlotSize += nestedType.outerLocalVariablesSlotSize;
+			} else {
+				scope.computeLocalVariablePositions(1,  codeStream);
+			}
+				
 			if (arguments != null) {
 				for (int i = 0, max = arguments.length; i < max; i++) {
 					// arguments initialization for local variable debug attributes
@@ -236,22 +250,23 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 					argBinding.recordInitializationStartPC(0);
 					TypeBinding argType;
 					if ((argType = argBinding.type) == LongBinding || (argType == DoubleBinding)) {
-						argSize += 2;
+						argSlotSize += 2;
 					} else {
-						argSize++;
+						argSlotSize++;
 					}
 				}
 			}
+			
 			MethodScope initializerScope = declaringType.initializerScope;
-			initializerScope.computeLocalVariablePositions(argSize, codeStream); // offset by the argument size (since not linked to method scope)
+			initializerScope.computeLocalVariablePositions(argSlotSize, codeStream); // offset by the argument size (since not linked to method scope)
 
-			boolean needFieldInitializations = constructorCall != null && constructorCall.accessMode != ExplicitConstructorCall.This;
+			boolean needFieldInitializations = constructorCall == null || constructorCall.accessMode != ExplicitConstructorCall.This;
 
 			// post 1.4 source level, synthetic initializations occur prior to explicit constructor call
-			boolean preInitSyntheticFields = scope.environment().options.targetJDK >= CompilerOptions.JDK1_4;
+			boolean preInitSyntheticFields = scope.environment().options.targetJDK >= ClassFileConstants.JDK1_4;
 
 			if (needFieldInitializations && preInitSyntheticFields){
-				generateSyntheticFieldInitializationsIfNecessary(scope, codeStream, declaringClass, true);
+				generateSyntheticFieldInitializationsIfNecessary(scope, codeStream, declaringClass);
 			}			
 			// generate constructor call
 			if (constructorCall != null) {
@@ -260,7 +275,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 			// generate field initialization - only if not invoking another constructor call of the same class
 			if (needFieldInitializations) {
 				if (!preInitSyntheticFields){
-					generateSyntheticFieldInitializationsIfNecessary(scope, codeStream, declaringClass, false);
+					generateSyntheticFieldInitializationsIfNecessary(scope, codeStream, declaringClass);
 				}
 				// generate user field initialization
 				if (declaringType.fields != null) {
@@ -278,7 +293,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 					statements[i].generateCode(scope, codeStream);
 				}
 			}
-			if (needFreeReturn) {
+			if (this.needFreeReturn) {
 				codeStream.return_();
 			}
 			// local variable attributes
@@ -310,14 +325,43 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 		return true;
 	}
 
+	/**
+	 * Returns true if the constructor is directly involved in a cycle.
+	 * Given most constructors aren't, we only allocate the visited list
+	 * lazily.
+	 */
+	public boolean isRecursive(ArrayList visited) {
+
+		if (this.binding == null
+				|| this.constructorCall == null
+				|| this.constructorCall.binding == null
+				|| this.constructorCall.isSuperAccess()
+				|| !this.constructorCall.binding.isValidBinding()) {
+			return false;
+		}
+		
+		ConstructorDeclaration targetConstructor = 
+			((ConstructorDeclaration)this.scope.referenceType().declarationOf(constructorCall.binding));
+		if (this == targetConstructor) return true; // direct case
+
+		if (visited == null) { // lazy allocation
+			visited = new ArrayList(1);
+		} else {
+			int index = visited.indexOf(this);
+			if (index >= 0) return index == 0; // only blame if directly part of the cycle
+		}
+		visited.add(this);
+
+		return targetConstructor.isRecursive(visited);
+	}
+	
 	public void parseStatements(Parser parser, CompilationUnitDeclaration unit) {
 
 		//fill up the constructor body with its statements
 		if (ignoreFurtherInvestigation)
 			return;
 		if (isDefaultConstructor){
-			constructorCall =
-				new ExplicitConstructorCall(ExplicitConstructorCall.ImplicitSuper);
+			constructorCall = SuperReference.implicitSuperConstructorCall();
 			constructorCall.sourceStart = sourceStart;
 			constructorCall.sourceEnd = sourceEnd; 
 			return;
@@ -326,68 +370,50 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 
 	}
 
+	public StringBuffer printBody(int indent, StringBuffer output) {
+
+		output.append(" {"); //$NON-NLS-1$
+		if (constructorCall != null) {
+			output.append('\n');
+			constructorCall.printStatement(indent, output); //$NON-NLS-1$ //$NON-NLS-2$
+		}
+		if (statements != null) {
+			for (int i = 0; i < statements.length; i++) {
+				output.append('\n');
+				statements[i].printStatement(indent, output); //$NON-NLS-1$
+			}
+		}
+		output.append('\n');
+		printIndent(indent == 0 ? 0 : indent - 1, output).append('}');
+		return output;
+	}
+	
 	/*
 	 * Type checking for constructor, just another method, except for special check
 	 * for recursive constructor invocations.
 	 */
-	public void resolveStatements(ClassScope upperScope) {
-/*
-		// checking for recursive constructor call (protection)
-		if (!ignoreFurtherInvestigation && constructorCall == null){
-			constructorCall = new ExplicitConstructorCall(ExplicitConstructorCall.ImplicitSuper);
-			constructorCall.sourceStart = sourceStart;
-			constructorCall.sourceEnd = sourceEnd;
-		}
-*/
+	public void resolveStatements() {
+
 		if (!CharOperation.equals(scope.enclosingSourceType().sourceName, selector)){
 			scope.problemReporter().missingReturnType(this);
 		}
 
 		// if null ==> an error has occurs at parsing time ....
-		if (constructorCall != null) {
+		if (this.constructorCall != null) {
 			// e.g. using super() in java.lang.Object
-			if (binding != null
-				&& binding.declaringClass.id == T_Object
-				&& constructorCall.accessMode != ExplicitConstructorCall.This) {
-					if (constructorCall.accessMode == ExplicitConstructorCall.Super) {
-						scope.problemReporter().cannotUseSuperInJavaLangObject(constructorCall);
+			if (this.binding != null
+				&& this.binding.declaringClass.id == T_Object
+				&& this.constructorCall.accessMode != ExplicitConstructorCall.This) {
+					if (this.constructorCall.accessMode == ExplicitConstructorCall.Super) {
+						scope.problemReporter().cannotUseSuperInJavaLangObject(this.constructorCall);
 					}
-					constructorCall = null;
+					this.constructorCall = null;
 			} else {
-				constructorCall.resolve(scope);
+				this.constructorCall.resolve(this.scope);
 			}
 		}
 		
-		super.resolveStatements(upperScope);
-
-		// indirect reference: increment target constructor reference count
-		if (constructorCall != null){
-			if (constructorCall.binding != null
-				&& !constructorCall.isSuperAccess()
-				&& constructorCall.binding.isValidBinding()) {
-				((ConstructorDeclaration)
-						(upperScope.referenceContext.declarationOf(constructorCall.binding))).referenceCount++;
-			}
-		}
-	}
-
-	public String toStringStatements(int tab) {
-
-		String s = " {"; //$NON-NLS-1$
-		if (constructorCall != null) {
-			s = s + "\n" + constructorCall.toString(tab) + ";"; //$NON-NLS-1$ //$NON-NLS-2$
-		}
-		if (statements != null) {
-			for (int i = 0; i < statements.length; i++) {
-				s = s + "\n" + statements[i].toString(tab); //$NON-NLS-1$
-				if (!(statements[i] instanceof Block)) {
-					s += ";"; //$NON-NLS-1$
-				}
-			}
-		}
-		s += "\n" + tabString(tab == 0 ? 0 : tab - 1) + "}"; //$NON-NLS-1$ //$NON-NLS-2$
-		//$NON-NLS-2$ //$NON-NLS-1$
-		return s;
+		super.resolveStatements();
 	}
 
 	public void traverse(

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -31,11 +31,12 @@ public class CodeSnippetParser extends Parser implements EvaluationConstants {
 /**
  * Creates a new code snippet parser.
  */
-public CodeSnippetParser(ProblemReporter problemReporter, EvaluationContext evaluationContext, boolean optimizeStringLiterals, boolean assertMode, int codeSnippetStart, int codeSnippetEnd) {
-	super(problemReporter, optimizeStringLiterals, assertMode);
+public CodeSnippetParser(ProblemReporter problemReporter, EvaluationContext evaluationContext, boolean optimizeStringLiterals, int codeSnippetStart, int codeSnippetEnd) {
+	super(problemReporter, optimizeStringLiterals);
 	this.codeSnippetStart = codeSnippetStart;
 	this.codeSnippetEnd = codeSnippetEnd;
 	this.evaluationContext = evaluationContext;
+	this.reportOnlyOneSyntaxError = true;
 }
 protected void classInstanceCreation(boolean alwaysQualified) {
 	// ClassInstanceCreationExpression ::= 'new' ClassType '(' ArgumentListopt ')' ClassBodyopt
@@ -238,8 +239,7 @@ protected void consumeMethodDeclaration(boolean isNotAbstract) {
 			methodDecl.statements[last] = new CodeSnippetReturnStatement(
 											lastExpression, 
 											lastExpression.sourceStart, 
-											lastExpression.sourceEnd,
-											evaluationContext);
+											lastExpression.sourceEnd);
 		}
 	}
 	
@@ -255,10 +255,13 @@ protected void consumeMethodDeclaration(boolean isNotAbstract) {
 		for (int i = 0; i < varCount; i++){
 			char[] trimmedTypeName = this.evaluationContext.localVariableTypeNames[i];
 			int nameEnd = CharOperation.indexOf('[', trimmedTypeName);
-			if (nameEnd >= 0) trimmedTypeName = CharOperation.subarray(trimmedTypeName, 0, nameEnd);
+			if (nameEnd >= 0) {
+				trimmedTypeName = CharOperation.subarray(trimmedTypeName, 0, nameEnd);
+			}
 			nameEnd = CharOperation.indexOf(' ', trimmedTypeName);
-			if (nameEnd >= 0) trimmedTypeName = CharOperation.subarray(trimmedTypeName, 0, nameEnd);
-			
+			if (nameEnd >= 0) {
+				trimmedTypeName = CharOperation.subarray(trimmedTypeName, 0, nameEnd);
+			}
 			TypeReference typeReference = new QualifiedTypeReference(
 				CharOperation.splitOn('.', trimmedTypeName),
 				positions);
@@ -418,8 +421,7 @@ protected void consumeStatementReturn() {
 			new CodeSnippetReturnStatement(
 				expression, 
 				expression.sourceStart, 
-				expression.sourceEnd,
-				evaluationContext));
+				expression.sourceEnd));
 	} else {
 		super.consumeStatementReturn();
 	}
@@ -536,25 +538,27 @@ protected NameReference getUnspecifiedReference() {
 		&& scanner.startPosition <= codeSnippetEnd+1+Util.LINE_SEPARATOR_CHARS.length /*14838*/){
 		int length;
 		NameReference ref;
-		if ((length = identifierLengthStack[identifierLengthPtr--]) == 1)
+		if ((length = identifierLengthStack[identifierLengthPtr--]) == 1) {
 			// single variable reference
 			ref = 
 				new CodeSnippetSingleNameReference(
 					identifierStack[identifierPtr], 
 					identifierPositionStack[identifierPtr--],
 					this.evaluationContext); 
-		else
+		} else {
 			//Qualified variable reference
-			{
 			char[][] tokens = new char[length][];
 			identifierPtr -= length;
 			System.arraycopy(identifierStack, identifierPtr + 1, tokens, 0, length);
+			long[] positions = new long[length];
+			System.arraycopy(identifierPositionStack, identifierPtr + 1, positions, 0, length);
 			ref = 
-				new CodeSnippetQualifiedNameReference(tokens, 
+				new CodeSnippetQualifiedNameReference(tokens,
+					positions, 
 					(int) (identifierPositionStack[identifierPtr + 1] >> 32), // sourceStart
 					(int) identifierPositionStack[identifierPtr + length],
 					evaluationContext); // sourceEnd
-		};
+		}
 		return ref;
 	} else {
 		return super.getUnspecifiedReference();
@@ -593,8 +597,11 @@ protected NameReference getUnspecifiedReferenceOptimized() {
 		char[][] tokens = new char[length][];
 		identifierPtr -= length;
 		System.arraycopy(identifierStack, identifierPtr + 1, tokens, 0, length);
+		long[] positions = new long[length];
+		System.arraycopy(identifierPositionStack, identifierPtr + 1, positions, 0, length);
 		ref = new CodeSnippetQualifiedNameReference(
-				tokens, 
+				tokens,
+				positions, 
 				(int) (identifierPositionStack[identifierPtr + 1] >> 32), // sourceStart
 				(int) identifierPositionStack[identifierPtr + length],
 				evaluationContext); // sourceEnd
@@ -630,7 +637,7 @@ protected MessageSend newMessageSend() {
 			m.arguments = new Expression[length], 
 			0, 
 			length); 
-	};
+	}
 	return m;
 }
 /**
@@ -641,13 +648,23 @@ private void recordLastStatementIfNeeded() {
 		this.lastStatement = this.scanner.startPosition;
 	}
 }
-protected void reportSyntaxError(int act, int currentKind, int stateStackTop) {
+protected void reportSyntaxError(int act, int currentKind, int state) {
 	if (!this.diet) {
 		this.scanner.initialPosition = this.codeSnippetStart; // for correct bracket match diagnosis
 		this.scanner.eofPosition = this.codeSnippetEnd + 1; // stop after expression 
 	}
-	super.reportSyntaxError(act, currentKind, stateStackTop);
+	super.reportSyntaxError(act, currentKind, state);
 }
+
+protected void reportSyntaxErrors(boolean isDietParse, int oldFirstToken) {
+	if (!isDietParse) {
+		this.scanner.initialPosition = this.lastStatement;
+		this.scanner.eofPosition = this.codeSnippetEnd + 1; // stop after expression 
+		oldFirstToken = TokenNameTWIDDLE;//TokenNameREMAINDER; // first token of th expression parse
+	}
+	super.reportSyntaxErrors(isDietParse, oldFirstToken);
+}
+
 /*
  * A syntax error was detected. If a method is being parsed, records the number of errors and
  * attempts to restart from the last statement by going for an expression.
@@ -680,6 +697,7 @@ protected boolean resumeOnSyntaxError() {
 	goForExpression();
 	this.hasRecoveredOnExpression = true;
 	this.hasReportedError = false;
+	this.hasError = false;
 	return true;
 }
 }

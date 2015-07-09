@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -92,7 +92,7 @@ public class SyntheticAccessMethodBinding extends MethodBinding {
 				}
 			}
 			if (needRename) { // retry with a selector postfixed by a growing methodId
-				this.selector(CharOperation.concat(AccessMethodPrefix, String.valueOf(++methodId).toCharArray()));
+				this.setSelector(CharOperation.concat(AccessMethodPrefix, String.valueOf(++methodId).toCharArray()));
 			}
 		} while (needRename);
 	
@@ -139,29 +139,28 @@ public class SyntheticAccessMethodBinding extends MethodBinding {
 	 * An constructor accessor is a constructor with an extra argument (declaringClass), in case of
 	 * collision with an existing constructor, then add again an extra argument (declaringClass again).
 	 */
-	 public void initializeConstructorAccessor(MethodBinding targetConstructor) {
+	 public void initializeConstructorAccessor(MethodBinding accessedConstructor) {
 	
-		this.targetMethod = targetConstructor;
+		this.targetMethod = accessedConstructor;
 		this.modifiers = AccDefault | AccSynthetic;
-		SourceTypeBinding sourceType = 
-			(SourceTypeBinding) targetConstructor.declaringClass; 
+		SourceTypeBinding sourceType = (SourceTypeBinding) accessedConstructor.declaringClass; 
 		SyntheticAccessMethodBinding[] knownAccessMethods = 
 			sourceType.syntheticAccessMethods(); 
 		this.index = knownAccessMethods == null ? 0 : knownAccessMethods.length;
 	
-		this.selector = targetConstructor.selector;
-		this.returnType = targetConstructor.returnType;
+		this.selector = accessedConstructor.selector;
+		this.returnType = accessedConstructor.returnType;
 		this.accessType = ConstructorAccess;
-		this.parameters = new TypeBinding[targetConstructor.parameters.length + 1];
+		this.parameters = new TypeBinding[accessedConstructor.parameters.length + 1];
 		System.arraycopy(
-			targetConstructor.parameters, 
+			accessedConstructor.parameters, 
 			0, 
 			this.parameters, 
 			0, 
-			targetConstructor.parameters.length); 
-		parameters[targetConstructor.parameters.length] = 
-			targetConstructor.declaringClass; 
-		this.thrownExceptions = targetConstructor.thrownExceptions;
+			accessedConstructor.parameters.length); 
+		parameters[accessedConstructor.parameters.length] = 
+			accessedConstructor.declaringClass; 
+		this.thrownExceptions = accessedConstructor.thrownExceptions;
 		this.declaringClass = sourceType;
 	
 		// check for method collision
@@ -208,7 +207,7 @@ public class SyntheticAccessMethodBinding extends MethodBinding {
 			sourceType.scope.referenceContext.methods; 
 		if (methodDecls != null) {
 			for (int i = 0, length = methodDecls.length; i < length; i++) {
-				if (methodDecls[i].binding == targetConstructor) {
+				if (methodDecls[i].binding == accessedConstructor) {
 					this.sourceStart = methodDecls[i].sourceStart;
 					return;
 				}
@@ -219,27 +218,27 @@ public class SyntheticAccessMethodBinding extends MethodBinding {
 	/**
 	 * An method accessor is a method with an access$N selector, where N is incremented in case of collisions.
 	 */
-	public void initializeMethodAccessor(MethodBinding targetMethod, boolean isSuperAccess, ReferenceBinding declaringClass) {
+	public void initializeMethodAccessor(MethodBinding accessedMethod, boolean isSuperAccess, ReferenceBinding receiverType) {
 		
-		this.targetMethod = targetMethod;
+		this.targetMethod = accessedMethod;
 		this.modifiers = AccDefault | AccStatic | AccSynthetic;
-		SourceTypeBinding declaringSourceType = (SourceTypeBinding) declaringClass;
+		SourceTypeBinding declaringSourceType = (SourceTypeBinding) receiverType;
 		SyntheticAccessMethodBinding[] knownAccessMethods = declaringSourceType.syntheticAccessMethods();
 		int methodId = knownAccessMethods == null ? 0 : knownAccessMethods.length;
 		this.index = methodId;
 	
 		this.selector = CharOperation.concat(AccessMethodPrefix, String.valueOf(methodId).toCharArray());
-		this.returnType = targetMethod.returnType;
+		this.returnType = accessedMethod.returnType;
 		this.accessType = isSuperAccess ? SuperMethodAccess : MethodAccess;
 		
-		if (targetMethod.isStatic()) {
-			this.parameters = targetMethod.parameters;
+		if (accessedMethod.isStatic()) {
+			this.parameters = accessedMethod.parameters;
 		} else {
-			this.parameters = new TypeBinding[targetMethod.parameters.length + 1];
+			this.parameters = new TypeBinding[accessedMethod.parameters.length + 1];
 			this.parameters[0] = declaringSourceType;
-			System.arraycopy(targetMethod.parameters, 0, this.parameters, 1, targetMethod.parameters.length);
+			System.arraycopy(accessedMethod.parameters, 0, this.parameters, 1, accessedMethod.parameters.length);
 		}
-		this.thrownExceptions = targetMethod.thrownExceptions;
+		this.thrownExceptions = accessedMethod.thrownExceptions;
 		this.declaringClass = declaringSourceType;
 	
 		// check for method collision
@@ -267,7 +266,7 @@ public class SyntheticAccessMethodBinding extends MethodBinding {
 				}
 			}
 			if (needRename) { // retry with a selector & a growing methodId
-				this.selector(CharOperation.concat(AccessMethodPrefix, String.valueOf(++methodId).toCharArray()));
+				this.setSelector(CharOperation.concat(AccessMethodPrefix, String.valueOf(++methodId).toCharArray()));
 			}
 		} while (needRename);
 	
@@ -275,7 +274,7 @@ public class SyntheticAccessMethodBinding extends MethodBinding {
 		AbstractMethodDeclaration[] methodDecls = declaringSourceType.scope.referenceContext.methods;
 		if (methodDecls != null) {
 			for (int i = 0, length = methodDecls.length; i < length; i++) {
-				if (methodDecls[i].binding == targetMethod) {
+				if (methodDecls[i].binding == accessedMethod) {
 					this.sourceStart = methodDecls[i].sourceStart;
 					return;
 				}

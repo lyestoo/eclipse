@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.complete;
 
 /*
@@ -35,25 +35,27 @@ import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public class CompletionOnClassLiteralAccess extends ClassLiteralAccess {
+	
 	public char[] completionIdentifier;
 	public int classStart;
 	
-public CompletionOnClassLiteralAccess(long pos, TypeReference t) {
-	super((int)pos, t);
-	this.classStart = (int) (pos >>> 32);
-}
-public TypeBinding resolveType(BlockScope scope) {
-	if (super.resolveType(scope) == null)
-		throw new CompletionNodeFound();
-	else
-		throw new CompletionNodeFound(this, targetType, scope);
-}
-public String toStringExpression() {
-	StringBuffer result = new StringBuffer("<CompleteOnClassLiteralAccess:"); //$NON-NLS-1$
-	result.append(type.toString());
-	result.append("."); //$NON-NLS-1$
-	result.append(completionIdentifier);
-	result.append(">"); //$NON-NLS-1$
-	return result.toString();
-}
+	public CompletionOnClassLiteralAccess(long pos, TypeReference t) {
+		
+		super((int)pos, t);
+		this.classStart = (int) (pos >>> 32);
+	}
+	
+	public StringBuffer printExpression(int indent, StringBuffer output) {
+		
+		output.append("<CompleteOnClassLiteralAccess:"); //$NON-NLS-1$
+		return type.print(0, output).append('.').append(completionIdentifier).append('>');
+	}
+	
+	public TypeBinding resolveType(BlockScope scope) {
+		
+		if (super.resolveType(scope) == null)
+			throw new CompletionNodeFound();
+		else
+			throw new CompletionNodeFound(this, targetType, scope);
+	}
 }

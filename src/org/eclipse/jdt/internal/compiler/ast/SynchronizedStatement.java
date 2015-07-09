@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -15,12 +15,11 @@ import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
-public class SynchronizedStatement extends Statement {
+public class SynchronizedStatement extends SubRoutineStatement {
 
 	public Expression expression;
 	public Block block;
 	public BlockScope scope;
-
 	boolean blockExit;
 	public LocalVariableBinding synchroVariable;
 	static final char[] SecretLocalDeclarationName = " syncValue".toCharArray(); //$NON-NLS-1$
@@ -53,12 +52,16 @@ public class SynchronizedStatement extends Statement {
 				expression.analyseCode(scope, flowContext, flowInfo));
 
 		// optimizing code gen
-		if ((flowInfo == FlowInfo.DeadEnd) || flowInfo.isFakeReachable()) {
-			blockExit = true;
-		}
+		this.blockExit = !flowInfo.isReachable();
+
 		return flowInfo;
 	}
 
+	public boolean isSubRoutineEscaping() {
+
+		return false;
+	}
+	
 	/**
 	 * Synchronized statement code generation
 	 *
@@ -90,8 +93,7 @@ public class SynchronizedStatement extends Statement {
 			codeStream.monitorenter();
 
 			// generate  the body of the synchronized block
-			ExceptionLabel anyExceptionHandler = new ExceptionLabel(codeStream, null);
-			//'null' denotes any kind of exception
+			this.enterAnyExceptionHandler(codeStream);
 			block.generateCode(scope, codeStream);
 			Label endLabel = new Label(codeStream);
 			if (!blockExit) {
@@ -100,8 +102,8 @@ public class SynchronizedStatement extends Statement {
 				codeStream.goto_(endLabel);
 			}
 			// generate the body of the exception handler
-			anyExceptionHandler.placeEnd();
-			anyExceptionHandler.place();
+			this.exitAnyExceptionHandler();
+			this.placeAllAnyExceptionHandlers();
 			codeStream.incrStackSize(1);
 			codeStream.load(synchroVariable);
 			codeStream.monitorexit();
@@ -114,6 +116,17 @@ public class SynchronizedStatement extends Statement {
 			codeStream.exitUserScope(scope);
 		}
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
+	}
+
+	/* (non-Javadoc)
+	 * @see org.eclipse.jdt.internal.compiler.ast.SubRoutineStatement#generateSubRoutineInvocation(org.eclipse.jdt.internal.compiler.lookup.BlockScope, org.eclipse.jdt.internal.compiler.codegen.CodeStream)
+	 */
+	public void generateSubRoutineInvocation(
+			BlockScope currentScope,
+			CodeStream codeStream) {
+
+		codeStream.load(this.synchroVariable);
+		codeStream.monitorexit();
 	}
 
 	public void resolve(BlockScope upperScope) {
@@ -149,12 +162,13 @@ public class SynchronizedStatement extends Statement {
 		block.resolveUsing(scope);
 	}
 
-	public String toString(int tab) {
+	public StringBuffer printStatement(int indent, StringBuffer output) {
 
-		String s = tabString(tab);
-		s = s + "synchronized (" + expression.toStringExpression() + ")";  //$NON-NLS-1$ //$NON-NLS-2$
-		s = s + "\n" + block.toString(tab + 1); //$NON-NLS-1$
-		return s;
+		printIndent(indent, output);
+		output.append("synchronized ("); //$NON-NLS-1$
+		expression.printExpression(0, output).append(')');
+		output.append('\n');
+		return block.printStatement(indent + 1, output); 
 	}
 
 	public void traverse(

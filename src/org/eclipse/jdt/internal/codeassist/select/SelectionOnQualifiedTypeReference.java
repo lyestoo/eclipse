@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.select;
 
 /*
@@ -52,16 +52,13 @@ public TypeBinding getTypeBinding(Scope scope) {
 
 	throw new SelectionNodeFound(binding);
 }
-public String toStringExpression(int tab) {
+public StringBuffer printExpression(int indent, StringBuffer output) {
 
-	StringBuffer buffer = new StringBuffer();
-	buffer.append("<SelectOnType:"); //$NON-NLS-1$
+	output.append("<SelectOnType:"); //$NON-NLS-1$
 	for (int i = 0, length = tokens.length; i < length; i++) {
-		buffer.append(tokens[i]);
-		if (i != length - 1)
-			buffer.append("."); //$NON-NLS-1$
+		if (i > 0) output.append('.');
+		output.append(tokens[i]);
 	}
-	buffer.append(">"); //$NON-NLS-1$
-	return buffer.toString();
+	return output.append('>'); 
 }
 }

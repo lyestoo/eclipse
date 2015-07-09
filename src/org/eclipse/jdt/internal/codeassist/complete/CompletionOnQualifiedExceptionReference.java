@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.complete;
 
 /*
@@ -41,15 +41,14 @@ public class CompletionOnQualifiedExceptionReference extends CompletionOnQualifi
 public CompletionOnQualifiedExceptionReference(char[][] previousIdentifiers, char[] completionIdentifier, long[] positions) {
 	super(previousIdentifiers, completionIdentifier, positions);
 }
-public String toStringExpression(int tab) {
+public StringBuffer printExpression(int indent, StringBuffer output) {
 
-	StringBuffer buffer = new StringBuffer();
-	buffer. append("<CompleteOnException:"); //$NON-NLS-1$
+	output.append("<CompleteOnException:"); //$NON-NLS-1$
 	for (int i = 0; i < tokens.length; i++) {
-		buffer.append(tokens[i]);
-		buffer.append("."); //$NON-NLS-1$
+		output.append(tokens[i]);
+		output.append('.'); 
 	}
-	buffer.append(completionIdentifier).append(">"); //$NON-NLS-1$
-	return buffer.toString();
+	output.append(completionIdentifier).append('>');
+	return output;
 }
 }

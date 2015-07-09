@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.internal.compiler.ast.Expression;
@@ -29,7 +29,7 @@ import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
  */
 public class CodeSnippetReturnStatement extends ReturnStatement implements InvocationSite, EvaluationConstants {
 	MethodBinding setResultMethod;
-public CodeSnippetReturnStatement(Expression expr, int s, int e, EvaluationContext evaluationContext) {
+public CodeSnippetReturnStatement(Expression expr, int s, int e) {
 	super(expr, s, e);
 }
 
@@ -45,12 +45,12 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
  * Dump the suitable return bytecode for a return statement
  *
  */
-public void generateReturnBytecode(BlockScope currentScope, CodeStream codeStream) {
+public void generateReturnBytecode(CodeStream codeStream) {
 	
 	// output the return bytecode
 	codeStream.return_();
 }
-public void generateStoreSaveValueIfNecessary(BlockScope currentScope, CodeStream codeStream){
+public void generateStoreSaveValueIfNecessary(CodeStream codeStream){
 
 	// push receiver
 	codeStream.aload_0();

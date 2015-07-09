@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.codegen;
 
 import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
@@ -24,6 +24,7 @@ public class Label {
 	public int forwardReferenceCount = 0;
 	private boolean isWide = false;
 public Label() {
+	// for creating labels ahead of code generation
 }
 /**
  * @param codeStream org.eclipse.jdt.internal.compiler.codegen.CodeStream
@@ -64,8 +65,15 @@ void branch() {
 		// Leave two bytes free to generate the jump afterwards
 		codeStream.position += 2;
 		codeStream.classFileOffset += 2;
-	} else { //Position is set. Write it!
-		codeStream.writeSignedShort((short) (position - codeStream.position + 1));
+	} else {
+		/*
+		 * Position is set. Write it if it is not a wide branch.
+		 */
+		int offset = position - codeStream.position + 1;
+		if (Math.abs(offset) > 0x7FFF && !this.codeStream.wideMode) {
+			throw new AbortMethod(CodeStream.RESTART_IN_WIDE_MODE);
+		}
+		codeStream.writeSignedShort(offset);
 	}
 }
 /*
@@ -131,10 +139,11 @@ public void place() { // Currently lacking wide support.
 		position = codeStream.position;
 		codeStream.addLabel(this);
 		int oldPosition = position;
-		boolean optimizedBranch = false;
+		boolean isOptimizedBranch = false;
 		// TURNED OFF since fail on 1F4IRD9
 		if (forwardReferenceCount != 0) {
-			if (optimizedBranch = (forwardReferences[forwardReferenceCount - 1] + 2 == position) && (codeStream.bCodeStream[codeStream.classFileOffset - 3] == CodeStream.OPC_goto)) {
+			isOptimizedBranch = (forwardReferences[forwardReferenceCount - 1] + 2 == position) && (codeStream.bCodeStream[codeStream.classFileOffset - 3] == Opcodes.OPC_goto);
+			if (isOptimizedBranch) {
 				codeStream.position = (position -= 3);
 				codeStream.classFileOffset -= 3;
 				forwardReferenceCount--;
@@ -174,23 +183,23 @@ public void place() { // Currently lacking wide support.
 		}
 		for (int i = 0; i < forwardReferenceCount; i++) {
 			int offset = position - forwardReferences[i] + 1;
-			if (offset > 0x7FFF && !this.codeStream.wideMode) {
+			if (Math.abs(offset) > 0x7FFF && !this.codeStream.wideMode) {
 				throw new AbortMethod(CodeStream.RESTART_IN_WIDE_MODE);
 			}
 			if (this.codeStream.wideMode) {
 				if (this.isWide) {
 					codeStream.writeSignedWord(forwardReferences[i], offset);
 				} else {
-					codeStream.writeSignedShort(forwardReferences[i], (short) offset);
+					codeStream.writeSignedShort(forwardReferences[i], offset);
 				}
 			} else {
-				codeStream.writeSignedShort(forwardReferences[i], (short) offset);
+				codeStream.writeSignedShort(forwardReferences[i], offset);
 			}
 		}
 		// For all labels placed at that position we check if we need to rewrite the jump
 		// offset. It is the case each time a label had a forward reference to the current position.
 		// Like we change the current position, we have to change the jump offset. See 1F4IRD9 for more details.
-		if (optimizedBranch) {
+		if (isOptimizedBranch) {
 			for (int i = 0; i < codeStream.countLabels; i++) {
 				Label label = codeStream.labels[i];
 				if (oldPosition == label.position) {
@@ -205,17 +214,17 @@ public void place() { // Currently lacking wide support.
 						for (int j = 0; j < label.forwardReferenceCount; j++) {
 							int forwardPosition = label.forwardReferences[j];
 							int offset = position - forwardPosition + 1;
-							if (offset > 0x7FFF && !this.codeStream.wideMode) {
+							if (Math.abs(offset) > 0x7FFF && !this.codeStream.wideMode) {
 								throw new AbortMethod(CodeStream.RESTART_IN_WIDE_MODE);
 							}
 							if (this.codeStream.wideMode) {
 								if (this.isWide) {
 									codeStream.writeSignedWord(forwardPosition, offset);
 								} else {
-									codeStream.writeSignedShort(forwardPosition, (short) offset);
+									codeStream.writeSignedShort(forwardPosition, offset);
 								}
 							} else {
-								codeStream.writeSignedShort(forwardPosition, (short) offset);
+								codeStream.writeSignedShort(forwardPosition, offset);
 							}
 						}
 					}

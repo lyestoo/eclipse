@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler;
 
 import org.eclipse.jdt.core.compiler.IProblem;
@@ -50,12 +50,14 @@ void acceptFieldReference(char[] fieldName, int sourcePosition);
  * @param name This is the name of the import like specified in the source including the dots. The '.*'
  *             is never included in the name.
  * @param onDemand set to true if the import is an import on demand (e.g. import java.io.*). False otherwise.
+ * @param modifiers can be set to static from 1.5 on.
  */
 void acceptImport(
 	int declarationStart,
 	int declarationEnd,
 	char[] name,
-	boolean onDemand);
+	boolean onDemand,
+	int modifiers);
 /*
  * Table of line separator position. This table is passed once at the end
  * of the parse action, so as to allow computation of normalized ranges.
@@ -126,7 +128,7 @@ void exitConstructor(int declarationEnd);
  * initializationStart denotes the source start of the expression used for initializing
  * the field if any (-1 if no initialization).
  */
-void exitField(int initializationStart, int declarationEnd);
+void exitField(int initializationStart, int declarationEnd, int declarationSourceEnd);
 void exitInitializer(int declarationEnd);
 void exitInterface(int declarationEnd);
 void exitMethod(int declarationEnd);

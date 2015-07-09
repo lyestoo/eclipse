@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler;
 
 import java.io.*;
@@ -21,8 +21,7 @@ import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
 import org.eclipse.jdt.internal.compiler.impl.StringConstant;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
-import org.eclipse.jdt.internal.compiler.util.HashtableOfType;
+import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 import org.eclipse.jdt.internal.compiler.util.Util;
 
 /**
@@ -66,7 +65,6 @@ public class ClassFile
 	public static final int INITIAL_HEADER_SIZE = 1000;
 	public static final int INCREMENT_SIZE = 1000;
 	public static final int INNER_CLASSES_SIZE = 5;
-	protected HashtableOfType nameUsage;
 	public CodeStream codeStream;
 	protected int problemLine;	// used to create line number attributes for problem methods
 
@@ -75,6 +73,7 @@ public class ClassFile
 	 * This methods creates a new instance of the receiver.
 	 */
 	public ClassFile() {
+		// default constructor for subclasses
 	}
 
 	/**
@@ -96,35 +95,13 @@ public class ClassFile
 		header[headerOffset++] = (byte) (0xCAFEBABEL >> 16);
 		header[headerOffset++] = (byte) (0xCAFEBABEL >> 8);
 		header[headerOffset++] = (byte) (0xCAFEBABEL >> 0);
-		switch(((SourceTypeBinding) referenceBinding).scope.environment().options.targetJDK) {
-			case CompilerOptions.JDK1_4 :
-				// Compatible with JDK 1.4
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 48;
-				break;
-			case CompilerOptions.JDK1_3 :
-				// Compatible with JDK 1.3
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 47;
-				break;
-			case CompilerOptions.JDK1_2 :
-				// Compatible with JDK 1.2
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 46;
-				break;
-			case CompilerOptions.JDK1_1 :
-				// Compatible with JDK 1.1
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 3;
-				header[headerOffset++] = 0;
-				header[headerOffset++] = 45;
-		}
+		
+		long targetJDK = referenceBinding.scope.environment().options.targetJDK;
+		header[headerOffset++] = (byte) (targetJDK >> 8); // minor high
+		header[headerOffset++] = (byte) (targetJDK >> 0); // minor low
+		header[headerOffset++] = (byte) (targetJDK >> 24); // major high
+		header[headerOffset++] = (byte) (targetJDK >> 16); // major low
+
 		constantPoolOffset = headerOffset;
 		headerOffset += 2;
 		constantPool = new ConstantPool(this);
@@ -152,15 +129,7 @@ public class ClassFile
 		
 		this.enclosingClassFile = enclosingClassFile;
 		// innerclasses get their names computed at code gen time
-		if (aType.isLocalType()) {
-			((LocalTypeBinding) aType).constantPoolName(
-				computeConstantPoolName((LocalTypeBinding) aType));
-			ReferenceBinding[] memberTypes = aType.memberTypes();
-			for (int i = 0, max = memberTypes.length; i < max; i++) {
-				((LocalTypeBinding) memberTypes[i]).constantPoolName(
-					computeConstantPoolName((LocalTypeBinding) memberTypes[i]));
-			}
-		}
+
 		contents = new byte[INITIAL_CONTENTS_SIZE];
 		// now we continue to generate the bytes inside the contents array
 		contents[contentsOffset++] = (byte) (accessFlags >> 8);
@@ -188,12 +157,7 @@ public class ClassFile
 				contents[contentsOffset++] = (byte) interfaceIndex;
 			}
 		}
-		produceDebugAttributes =
-			((SourceTypeBinding) referenceBinding)
-				.scope
-				.environment()
-				.options
-				.produceDebugAttributes;
+		produceDebugAttributes = referenceBinding.scope.environment().options.produceDebugAttributes;
 		innerClassesBindings = new ReferenceBinding[INNER_CLASSES_SIZE];
 		this.creatingProblemType = creatingProblemType;
 		codeStream = new CodeStream(this);
@@ -446,8 +410,7 @@ public class ClassFile
 		int fieldAttributeOffset = contentsOffset;
 		contentsOffset += 2;
 		// 4.7.2 only static constant fields get a ConstantAttribute
-		if (fieldBinding.constant != Constant.NotAConstant
-			&& fieldBinding.constant.typeID() != T_null) {
+		if (fieldBinding.constant != Constant.NotAConstant){
 			// Now we generate the constant attribute corresponding to the fieldBinding
 			int constantValueNameIndex =
 				constantPool.literalIndex(AttributeNamesConstants.ConstantValueName);
@@ -565,6 +528,9 @@ public class ClassFile
 				+ (syntheticFields == null ? 0 : syntheticFields.length);
 
 		// write the number of fields
+		if (fieldCount > 0xFFFF) {
+			referenceBinding.scope.problemReporter().tooManyFields(referenceBinding.scope.referenceType());
+		}
 		contents[contentsOffset++] = (byte) (fieldCount >> 8);
 		contents[contentsOffset++] = (byte) fieldCount;
 
@@ -585,10 +551,10 @@ public class ClassFile
 	 * have to be generated for the inner classes attributes.
 	 * @param referenceBinding org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding 
 	 */
-	public void addInnerClasses(ReferenceBinding referenceBinding) {
+	public void addInnerClasses(ReferenceBinding refBinding) {
 		// check first if that reference binding is there
 		for (int i = 0; i < numberOfInnerClasses; i++) {
-			if (innerClassesBindings[i] == referenceBinding)
+			if (innerClassesBindings[i] == refBinding)
 				return;
 		}
 		int length = innerClassesBindings.length;
@@ -600,7 +566,7 @@ public class ClassFile
 				0,
 				length);
 		}
-		innerClassesBindings[numberOfInnerClasses++] = referenceBinding;
+		innerClassesBindings[numberOfInnerClasses++] = refBinding;
 	}
 
 	/**
@@ -645,18 +611,10 @@ public class ClassFile
 		}
 
 		// return codeStream.generateCodeAttributeForProblemMethod(comp.options.runtimeExceptionNameForCompileError, "")
-		int[] exceptionHandler =
-			codeStream.generateCodeAttributeForProblemMethod(
-				referenceBinding
-					.scope
-					.environment()
-					.options
-					.runtimeExceptionNameForCompileError,
-				problemString);
+		codeStream.generateCodeAttributeForProblemMethod(problemString);
 		attributeNumber++; // code attribute
 		completeCodeAttributeForClinit(
 			codeAttributeOffset,
-			exceptionHandler,
 			referenceBinding
 				.scope
 				.referenceCompilationUnit()
@@ -690,7 +648,6 @@ public class ClassFile
 		attributeNumber++;
 		int codeAttributeOffset = contentsOffset;
 		generateCodeAttributeHeader();
-		final ProblemReporter problemReporter = method.scope.problemReporter();
 		codeStream.reset(method, this);
 		String problemString = "" ; //$NON-NLS-1$
 		if (problems != null) {
@@ -716,15 +673,11 @@ public class ClassFile
 		}
 
 		// return codeStream.generateCodeAttributeForProblemMethod(comp.options.runtimeExceptionNameForCompileError, "")
-		int[] exceptionHandler =
-			codeStream.generateCodeAttributeForProblemMethod(
-				problemReporter.options.runtimeExceptionNameForCompileError,
-				problemString);
+		codeStream.generateCodeAttributeForProblemMethod(problemString);
 		completeCodeAttributeForProblemMethod(
 			method,
 			methodBinding,
 			codeAttributeOffset,
-			exceptionHandler,
 			((SourceTypeBinding) methodBinding.declaringClass)
 				.scope
 				.referenceCompilationUnit()
@@ -767,7 +720,7 @@ public class ClassFile
 		MethodBinding methodBinding,
 		IProblem[] problems) {
 		if (methodBinding.isAbstract() && methodBinding.declaringClass.isInterface()) {
-			method.abort(AbstractMethodDeclaration.AbortType);
+			method.abort(ProblemSeverities.AbortType);
 		}
 		// always clear the strictfp/native/abstract bit for a problem method
 		methodBinding.modifiers &= ~(AccStrictfp | AccNative | AccAbstract);
@@ -781,7 +734,6 @@ public class ClassFile
 		
 		int codeAttributeOffset = contentsOffset;
 		generateCodeAttributeHeader();
-		final ProblemReporter problemReporter = method.scope.problemReporter();
 		codeStream.reset(method, this);
 		String problemString = "" ; //$NON-NLS-1$
 		if (problems != null) {
@@ -811,15 +763,11 @@ public class ClassFile
 		}
 
 		// return codeStream.generateCodeAttributeForProblemMethod(comp.options.runtimeExceptionNameForCompileError, "")
-		int[] exceptionHandler =
-			codeStream.generateCodeAttributeForProblemMethod(
-				problemReporter.options.runtimeExceptionNameForCompileError,
-				problemString);
+		codeStream.generateCodeAttributeForProblemMethod(problemString);
 		completeCodeAttributeForProblemMethod(
 			method,
 			methodBinding,
 			codeAttributeOffset,
-			exceptionHandler,
 			((SourceTypeBinding) methodBinding.declaringClass)
 				.scope
 				.referenceCompilationUnit()
@@ -946,21 +894,16 @@ public class ClassFile
 		String problemString = buffer.toString();
 		this.problemLine = problem.getSourceLineNumber();
 		
-		final ProblemReporter problemReporter = methodDeclaration.scope.problemReporter();
 		codeStream.init(this);
 		codeStream.preserveUnusedLocals = true;
 		codeStream.initializeMaxLocals(methodBinding);
 
 		// return codeStream.generateCodeAttributeForProblemMethod(comp.options.runtimeExceptionNameForCompileError, "")
-		int[] exceptionHandler =
-			codeStream.generateCodeAttributeForProblemMethod(
-				problemReporter.options.runtimeExceptionNameForCompileError,
-				problemString);
+		codeStream.generateCodeAttributeForProblemMethod(problemString);
 				
 		completeCodeAttributeForMissingAbstractProblemMethod(
 			methodBinding,
 			codeAttributeOffset,
-			exceptionHandler,
 			compilationResult.lineSeparatorPositions);
 			
 		completeMethodInfo(methodAttributeOffset, attributeNumber);
@@ -972,7 +915,6 @@ public class ClassFile
 	public void completeCodeAttributeForMissingAbstractProblemMethod(
 		MethodBinding binding,
 		int codeAttributeOffset,
-		int[] exceptionHandler,
 		int[] startLineIndexes) {
 		// reinitialize the localContents with the byte modified by the code stream
 		byte[] localContents = contents = codeStream.bCodeStream;
@@ -999,20 +941,10 @@ public class ClassFile
 				0,
 				contentsLength);
 		}
+
 		localContents[localContentsOffset++] = 0;
-		localContents[localContentsOffset++] = 1;
-		int start = exceptionHandler[0];
-		localContents[localContentsOffset++] = (byte) (start >> 8);
-		localContents[localContentsOffset++] = (byte) start;
-		int end = exceptionHandler[1];
-		localContents[localContentsOffset++] = (byte) (end >> 8);
-		localContents[localContentsOffset++] = (byte) end;
-		int handlerPC = exceptionHandler[2];
-		localContents[localContentsOffset++] = (byte) (handlerPC >> 8);
-		localContents[localContentsOffset++] = (byte) handlerPC;
-		int nameIndex = constantPool.literalIndexForJavaLangException();
-		localContents[localContentsOffset++] = (byte) (nameIndex >> 8);
-		localContents[localContentsOffset++] = (byte) nameIndex; // debug attributes
+		localContents[localContentsOffset++] = 0;
+		// debug attributes
 		int codeAttributeAttributeOffset = localContentsOffset;
 		int attributeNumber = 0; // leave two bytes for the attribute_length
 		localContentsOffset += 2; // first we handle the linenumber attribute
@@ -1361,7 +1293,7 @@ public class ClassFile
 				localContents[localContentsOffset++] = 0;
 			} else {
 				int nameIndex;
-				if (exceptionHandler.exceptionType == TypeBinding.NullBinding) {
+				if (exceptionHandler.exceptionType == BaseTypes.NullBinding) {
 					/* represents ClassNotFoundException, see class literal access*/
 					nameIndex = constantPool.literalIndexForJavaLangClassNotFoundException();
 				} else {
@@ -1632,7 +1564,7 @@ public class ClassFile
 				localContents[localContentsOffset++] = 0;
 			} else {
 				int nameIndex;
-				if (exceptionHandler.exceptionType == TypeBinding.NullBinding) {
+				if (exceptionHandler.exceptionType == BaseTypes.NullBinding) {
 					/* represents denote ClassNotFoundException, see class literal access*/
 					nameIndex = constantPool.literalIndexForJavaLangClassNotFoundException();
 				} else {
@@ -1816,7 +1748,6 @@ public class ClassFile
 	 */
 	public void completeCodeAttributeForClinit(
 		int codeAttributeOffset,
-		int[] exceptionHandler,
 		int[] startLineIndexes) {
 		// reinitialize the contents with the byte modified by the code stream
 		byte[] localContents = contents = codeStream.bCodeStream;
@@ -1852,19 +1783,7 @@ public class ClassFile
 
 		// write the exception table
 		localContents[localContentsOffset++] = 0;
-		localContents[localContentsOffset++] = 1;
-		int start = exceptionHandler[0];
-		localContents[localContentsOffset++] = (byte) (start >> 8);
-		localContents[localContentsOffset++] = (byte) start;
-		int end = exceptionHandler[1];
-		localContents[localContentsOffset++] = (byte) (end >> 8);
-		localContents[localContentsOffset++] = (byte) end;
-		int handlerPC = exceptionHandler[2];
-		localContents[localContentsOffset++] = (byte) (handlerPC >> 8);
-		localContents[localContentsOffset++] = (byte) handlerPC;
-		int nameIndex = constantPool.literalIndexForJavaLangException();
-		localContents[localContentsOffset++] = (byte) (nameIndex >> 8);
-		localContents[localContentsOffset++] = (byte) nameIndex;
+		localContents[localContentsOffset++] = 0;
 
 		// debug attributes
 		int codeAttributeAttributeOffset = localContentsOffset;
@@ -1873,6 +1792,14 @@ public class ClassFile
 
 		// first we handle the linenumber attribute
 		if (codeStream.generateLineNumberAttributes) {
+			if (localContentsOffset + 20 >= (contentsLength = localContents.length)) {
+				System.arraycopy(
+					contents,
+					0,
+					(localContents = contents = new byte[contentsLength + INCREMENT_SIZE]),
+					0,
+					contentsLength);
+			}			
 			/* Create and add the line number attribute (used for debugging) 
 			    * Build the pairs of:
 			    * (bytecodePC lineNumber)
@@ -1959,7 +1886,6 @@ public class ClassFile
 		AbstractMethodDeclaration method,
 		MethodBinding binding,
 		int codeAttributeOffset,
-		int[] exceptionHandler,
 		int[] startLineIndexes) {
 		// reinitialize the localContents with the byte modified by the code stream
 		byte[] localContents = contents = codeStream.bCodeStream;
@@ -1986,25 +1912,24 @@ public class ClassFile
 				0,
 				contentsLength);
 		}
+
+		// write the exception table
 		localContents[localContentsOffset++] = 0;
-		localContents[localContentsOffset++] = 1;
-		int start = exceptionHandler[0];
-		localContents[localContentsOffset++] = (byte) (start >> 8);
-		localContents[localContentsOffset++] = (byte) start;
-		int end = exceptionHandler[1];
-		localContents[localContentsOffset++] = (byte) (end >> 8);
-		localContents[localContentsOffset++] = (byte) end;
-		int handlerPC = exceptionHandler[2];
-		localContents[localContentsOffset++] = (byte) (handlerPC >> 8);
-		localContents[localContentsOffset++] = (byte) handlerPC;
-		int nameIndex = constantPool.literalIndexForJavaLangException();
-		localContents[localContentsOffset++] = (byte) (nameIndex >> 8);
-		localContents[localContentsOffset++] = (byte) nameIndex; // debug attributes
+		localContents[localContentsOffset++] = 0;
+		// debug attributes
 		int codeAttributeAttributeOffset = localContentsOffset;
 		int attributeNumber = 0; // leave two bytes for the attribute_length
 		localContentsOffset += 2; // first we handle the linenumber attribute
 
 		if (codeStream.generateLineNumberAttributes) {
+			if (localContentsOffset + 20 >= (contentsLength = localContents.length)) {
+				System.arraycopy(
+					contents,
+					0,
+					(localContents = contents = new byte[contentsLength + INCREMENT_SIZE]),
+					0,
+					contentsLength);
+			}			
 			/* Create and add the line number attribute (used for debugging) 
 			    * Build the pairs of:
 			    * (bytecodePC lineNumber)
@@ -2068,7 +1993,7 @@ public class ClassFile
 				localContents[localContentsOffset++] = 0;
 				localContents[localContentsOffset++] = (byte) (code_length >> 8);
 				localContents[localContentsOffset++] = (byte) code_length;
-				nameIndex = constantPool.literalIndex(QualifiedNamesConstants.This);
+				int nameIndex = constantPool.literalIndex(QualifiedNamesConstants.This);
 				localContents[localContentsOffset++] = (byte) (nameIndex >> 8);
 				localContents[localContentsOffset++] = (byte) nameIndex;
 				descriptorIndex =
@@ -2084,7 +2009,7 @@ public class ClassFile
 				ReferenceBinding declaringClass = binding.declaringClass;
 				if (declaringClass.isNestedType()) {
 					NestedTypeBinding methodDeclaringClass = (NestedTypeBinding) declaringClass;
-					argSize = methodDeclaringClass.syntheticArgumentsOffset;
+					argSize = methodDeclaringClass.enclosingInstancesSlotSize;
 					SyntheticArgumentBinding[] syntheticArguments;
 					if ((syntheticArguments = methodDeclaringClass.syntheticEnclosingInstances())
 						!= null) {
@@ -2104,7 +2029,7 @@ public class ClassFile
 							localContents[localContentsOffset++] = 0;
 							localContents[localContentsOffset++] = (byte) (code_length >> 8);
 							localContents[localContentsOffset++] = (byte) code_length;
-							nameIndex = constantPool.literalIndex(localVariable.name);
+							int nameIndex = constantPool.literalIndex(localVariable.name);
 							localContents[localContentsOffset++] = (byte) (nameIndex >> 8);
 							localContents[localContentsOffset++] = (byte) nameIndex;
 							descriptorIndex = constantPool.literalIndex(localVariable.type.signature());
@@ -2141,15 +2066,15 @@ public class ClassFile
 						localContents[localContentsOffset++] = 0;
 						localContents[localContentsOffset++] = (byte) (code_length >> 8);
 						localContents[localContentsOffset++] = (byte) code_length;
-						nameIndex = constantPool.literalIndex(arguments[i].name);
+						int nameIndex = constantPool.literalIndex(arguments[i].name);
 						localContents[localContentsOffset++] = (byte) (nameIndex >> 8);
 						localContents[localContentsOffset++] = (byte) nameIndex;
 						descriptorIndex = constantPool.literalIndex(argumentBinding.signature());
 						localContents[localContentsOffset++] = (byte) (descriptorIndex >> 8);
 						localContents[localContentsOffset++] = (byte) descriptorIndex;
 						int resolvedPosition = argSize;
-						if ((argumentBinding == TypeBinding.LongBinding)
-							|| (argumentBinding == TypeBinding.DoubleBinding))
+						if ((argumentBinding == BaseTypes.LongBinding)
+							|| (argumentBinding == BaseTypes.DoubleBinding))
 							argSize += 2;
 						else
 							argSize++;
@@ -2374,67 +2299,6 @@ public class ClassFile
 		contents[methodAttributeOffset] = (byte) attributeNumber;
 	}
 
-	/*
-	 * INTERNAL USE-ONLY
-	 * Innerclasses get their name computed as they are generated, since some may not
-	 * be actually outputed if sitting inside unreachable code.
-	 *
-	 * @param localType org.eclipse.jdt.internal.compiler.lookup.LocalTypeBinding
-	 */
-	public char[] computeConstantPoolName(LocalTypeBinding localType) {
-		if (localType.constantPoolName() != null) {
-			return localType.constantPoolName();
-		}
-		// delegates to the outermost enclosing classfile, since it is the only one with a global vision of its innertypes.
-		if (enclosingClassFile != null) {
-			return this.outerMostEnclosingClassFile().computeConstantPoolName(localType);
-		}
-		if (nameUsage == null)
-			nameUsage = new HashtableOfType();
-
-		// ensure there is not already such a local type name defined by the user
-		int index = 0;
-		char[] candidateName;
-		while(true) {
-			if (localType.isMemberType()){
-				if (index == 0){
-					candidateName = CharOperation.concat(
-						localType.enclosingType().constantPoolName(),
-						localType.sourceName,
-						'$');
-				} else {
-					// in case of collision, then member name gets extra $1 inserted
-					// e.g. class X { { class L{} new X(){ class L{} } } }
-					candidateName = CharOperation.concat(
-						localType.enclosingType().constantPoolName(),
-						'$',
-						String.valueOf(index).toCharArray(),
-						'$',
-						localType.sourceName);
-				}
-			} else if (localType.isAnonymousType()){
-					candidateName = CharOperation.concat(
-						referenceBinding.constantPoolName(),
-						String.valueOf(index+1).toCharArray(),
-						'$');
-			} else {
-					candidateName = CharOperation.concat(
-						referenceBinding.constantPoolName(),
-						'$',
-						String.valueOf(index+1).toCharArray(),
-						'$',
-						localType.sourceName);
-			}						
-			if (nameUsage.get(candidateName) != null) {
-				index ++;
-			} else {
-				nameUsage.put(candidateName, localType);
-				break;
-			}
-		}
-		return candidateName;
-	}
-
 	/**
 	 * INTERNAL USE-ONLY
 	 * Request the creation of a ClassFile compatible representation of a problematic type
@@ -2448,6 +2312,8 @@ public class ClassFile
 		SourceTypeBinding typeBinding = typeDeclaration.binding;
 		ClassFile classFile = new ClassFile(typeBinding, null, true);
 
+		// TODO: (olivier) handle cases where a field cannot be generated (name too long)
+		// TODO: (olivier) handle too many methods
 		// inner attributes
 		if (typeBinding.isMemberType())
 			classFile.recordEnclosingTypeAttributes(typeBinding);
@@ -2457,7 +2323,7 @@ public class ClassFile
 		if ((fields != null) && (fields != NoFields)) {
 			for (int i = 0, max = fields.length; i < max; i++) {
 				if (fields[i].constant == null) {
-					FieldReference.getConstantFor(fields[i], false, null, null, 0);
+					FieldReference.getConstantFor(fields[i], null, false, null);
 				}
 			}
 			classFile.addFieldInfos();
@@ -2549,7 +2415,7 @@ public class ClassFile
 	/**
 	 * INTERNAL USE-ONLY
 	 * That method generates the header of a code attribute.
-	 * - the index inside the constant pool for the attribute name (i.e.&nbsp;Code)
+	 * - the index inside the constant pool for the attribute name ("Code")
 	 * - leave some space for attribute_length(4), max_stack(2), max_locals(2), code_length(4).
 	 */
 	public void generateCodeAttributeHeader() {

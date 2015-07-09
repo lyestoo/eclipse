@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -19,7 +19,7 @@ import org.eclipse.jdt.internal.compiler.lookup.*;
 public class LocalDeclaration extends AbstractVariableDeclaration {
 
 	public LocalVariableBinding binding;
-
+	
 	public LocalDeclaration(
 		Expression expr,
 		char[] name,
@@ -32,10 +32,10 @@ public class LocalDeclaration extends AbstractVariableDeclaration {
 		this.sourceEnd = sourceEnd;
 		if (initialization != null) {
 			this.declarationSourceEnd = initialization.sourceEnd;
+			this.declarationEnd = initialization.sourceEnd;
 		} else {
-			this.declarationSourceEnd = sourceEnd;
+			this.declarationEnd = sourceEnd;
 		}
-		this.declarationEnd = this.declarationSourceEnd;
 	}
 
 	public FlowInfo analyseCode(
@@ -44,30 +44,36 @@ public class LocalDeclaration extends AbstractVariableDeclaration {
 		FlowInfo flowInfo) {
 
 		// record variable initialization if any
-		if (!flowInfo.isDeadEnd() && !flowInfo.isFakeReachable()) {
+		if (flowInfo.isReachable()) {
 			bits |= IsLocalDeclarationReachableMASK; // only set if actually reached
 		}
-		if (initialization == null)
+		if (initialization == null) 
 			return flowInfo;
+			
 		flowInfo =
 			initialization
 				.analyseCode(currentScope, flowContext, flowInfo)
 				.unconditionalInits();
+
+		// final int i = (i = 0);
+		// no need to complain since (i = 0) part will get the blame
+		//if (binding.isFinal() && flowInfo.isPotentiallyAssigned(binding)) {
+		//	currentScope.problemReporter().duplicateInitializationOfFinalLocal(binding, this);
+		//}
+				
 		flowInfo.markAsDefinitelyAssigned(binding);
 		return flowInfo;
 	}
 
 	public void checkModifiers() {
-		//only potential valid modifier is <<final>>
 
-		if (((modifiers & AccJustFlag) | AccFinal) != AccFinal)
+		//only potential valid modifier is <<final>>
+		if (((modifiers & AccJustFlag) & ~AccFinal) != 0)
 			//AccModifierProblem -> other (non-visibility problem)
 			//AccAlternateModifierProblem -> duplicate modifier
 			//AccModifierProblem | AccAlternateModifierProblem -> visibility problem"
-			// -x-1 returns the bitInvert 
 
-			modifiers =
-				(modifiers & (-AccAlternateModifierProblem - 1)) | AccModifierProblem;
+			modifiers = (modifiers & ~AccAlternateModifierProblem) | AccModifierProblem;
 	}
 
 	/**
@@ -76,15 +82,17 @@ public class LocalDeclaration extends AbstractVariableDeclaration {
 	 */
 	public void generateCode(BlockScope currentScope, CodeStream codeStream) {
 
+		// even if not reachable, variable must be added to visible if allocated (28298)
+		if (binding.resolvedPosition != -1) {
+			codeStream.addVisibleLocalVariable(binding);
+		}
 		if ((bits & IsReachableMASK) == 0) {
 			return;
 		}
 		int pc = codeStream.position;
 		Constant inlinedValue;
+
 		// something to initialize?
-		if (binding.resolvedPosition != -1) {
-			codeStream.addVisibleLocalVariable(binding);
-		}
 		if (initialization != null) {
 			// initialize to constant value?
 			if ((inlinedValue = initialization.constant) != NotAConstant) {
@@ -102,6 +110,13 @@ public class LocalDeclaration extends AbstractVariableDeclaration {
 				initialization.generateCode(currentScope, codeStream, true);
 				// if binding unused generate then discard the value
 				if (binding.resolvedPosition != -1) {
+					// 26903, need extra cast to store null in array local var	
+					if (binding.type.isArrayType() 
+						&& (initialization.resolvedType == NullBinding	// arrayLoc = null
+							|| ((initialization instanceof CastExpression)	// arrayLoc = (type[])null
+								&& (((CastExpression)initialization).innermostCastedExpression().resolvedType == NullBinding)))){
+						codeStream.checkcast(binding.type); 
+					}					
 					codeStream.store(binding, false);
 					if (binding.initializationCount == 0) {
 						/* Variable may have been initialized during the code initializing it
@@ -123,11 +138,6 @@ public class LocalDeclaration extends AbstractVariableDeclaration {
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 
-	public String name() {
-
-		return String.valueOf(name);
-	}
-
 	public void resolve(BlockScope scope) {
 
 		// create a binding and add it to the scope
@@ -145,12 +155,21 @@ public class LocalDeclaration extends AbstractVariableDeclaration {
 				return;
 			}
 		}
-
-		// duplicate checks
-		if ((binding = scope.duplicateName(name)) != null) {
-			// the name already exists... may carry on with the first binding...
-			scope.problemReporter().redefineLocal(this);
-		} else {
+		Binding existingVariable = scope.getBinding(name, BindingIds.VARIABLE, this);
+		boolean shouldInsertInScope = true;
+		if (existingVariable != null && existingVariable.isValidBinding()){
+			if (existingVariable instanceof LocalVariableBinding && this.hiddenVariableDepth == 0) {
+				shouldInsertInScope = false;
+				scope.problemReporter().redefineLocal(this);
+			} else {
+				scope.problemReporter().localVariableHiding(this, existingVariable, false);
+			}
+		}
+				
+		if (shouldInsertInScope) {
+			if ((modifiers & AccFinal)!= 0 && this.initialization == null) {
+				modifiers |= AccBlankFinal;
+			}
 			binding = new LocalVariableBinding(this, tb, modifiers, false);
 			scope.addLocalVariable(binding);
 			binding.constant = NotAConstant;
@@ -177,7 +196,7 @@ public class LocalDeclaration extends AbstractVariableDeclaration {
 				if (initTb != null) {
 					if (initialization.isConstantValueOfTypeAssignableToType(initTb, tb)
 						|| (tb.isBaseType() && BaseTypeBinding.isWidening(tb.id, initTb.id))
-						|| Scope.areTypesCompatible(initTb, tb))
+						|| initTb.isCompatibleWith(tb))
 						initialization.implicitWidening(tb, initTb);
 					else
 						scope.problemReporter().typeMismatchError(initTb, tb, this);
@@ -187,10 +206,12 @@ public class LocalDeclaration extends AbstractVariableDeclaration {
 			// change the constant in the binding when it is final
 			// (the optimization of the constant propagation will be done later on)
 			// cast from constant actual type to variable type
-			binding.constant =
-				binding.isFinal()
-					? initialization.constant.castTo((tb.id << 4) + initialization.constant.typeID())
-					: NotAConstant;
+			if (binding != null) {
+				binding.constant =
+					binding.isFinal()
+						? initialization.constant.castTo((tb.id << 4) + initialization.constant.typeID())
+						: NotAConstant;
+			}
 		}
 	}
 

@@ -1,15 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
- *    IBM Corporation - initial API
- *    IBM Corporation, 2002/03/01- added notion of shared working copy
- *    IBM Corporation, 2002/26/01- added notion of IProblemRequestor
- ******************************************************************************/
+ *     IBM Corporation - initial API and implementation
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.core.resources.IMarker;
@@ -68,13 +66,16 @@ public interface IWorkingCopy {
 	 *	a subsequent change in the resource</li>
 	 * <li> <code>false</code> - in this case a <code>JavaModelException</code> is thrown</li>
 	 * </ul>
-	 *
+	 * <p>
+	 * Since 2.1, a working copy can be created on a not-yet existing compilation
+	 * unit. In particular, such a working copy can then be committed in order to create
+	 * the corresponding compilation unit.
+	 * </p>
 	 * @param force a flag to handle the cases when the contents of the original resource have changed
 	 * since this working copy was created
 	 * @param monitor the given progress monitor
 	 * @exception JavaModelException if this working copy could not commit. Reasons include:
 	 * <ul>
-	 * <li> The original Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
 	 * <li> A <code>CoreException</code> occurred while updating an underlying resource
 	 * <li> This element is not a working copy (INVALID_ELEMENT_TYPES)
 	 * <li> A update conflict (described above) (UPDATE_CONFLICT)
@@ -91,7 +92,10 @@ public interface IWorkingCopy {
 	 * If this working copy is shared, it is destroyed only when the number of calls to
 	 * <code>destroy()</code> is the same as the number of calls to <code>
 	 * getSharedWorkingCopy(IProgressMonitor, IBufferFactory)</code>. 
-	 * A REMOVED IJavaElementDelta is then reported on this working copy.
+	 * </p><p>
+	 * When it is destroyed, a REMOVED IJavaElementDelta is reported on this 
+	 * working copy.
+	 * </p>
 	 */
 	void destroy();
 	
@@ -150,7 +154,7 @@ public interface IWorkingCopy {
 	IJavaElement[] findElements(IJavaElement element);
 	
 	/**
-	 * Finds the primary type of this compilation unit (i.e.&nbsp;the type with the same name as the
+	 * Finds the primary type of this compilation unit (that is, the type with the same name as the
 	 * compilation unit), or <code>null</code> if no such a type exists.
 	 * 
 	 * @return the found primary type of this compilation unit, or <code>null</code> if no such a type exists
@@ -162,7 +166,7 @@ public interface IWorkingCopy {
 	 * Returns a shared working copy on this element using the given factory to create
 	 * the buffer, or this element if this element is already a working copy.
 	 * This API can only answer an already existing working copy if it is based on the same
-	 * original compilation unit AND was using the same buffer factory (i.e. as defined by <code>Object#equals</code>).	 
+	 * original compilation unit AND was using the same buffer factory (that is, as defined by <code>Object.equals</code>).	 
 	 * <p>
 	 * The life time of a shared working copy is as follows:
 	 * <ul>
@@ -174,7 +178,7 @@ public interface IWorkingCopy {
 	 * </ul>
 	 * So users of this method must destroy exactly once the working copy.
 	 * <p>
-	 * Note that the buffer factory will be used for the life time of this working copy, i.e. if the 
+	 * Note that the buffer factory will be used for the life time of this working copy, that is if the 
 	 * working copy is closed then reopened, this factory will be used.
 	 * The buffer will be automatically initialized with the original's compilation unit content
 	 * upon creation.
@@ -190,10 +194,7 @@ public interface IWorkingCopy {
 	 * 	reconciling as they are discovered. The requestor can be set to <code>null</code> indicating
 	 * 	that the client is not interested in problems.
 	 * @exception JavaModelException if the contents of this element can
-	 *   not be determined. Reasons include:
-	 * <ul>
-	 * <li> This Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
-	 * </ul>
+	 *   not be determined. 
 	 * @return a shared working copy on this element using the given factory to create
 	 * the buffer, or this element if this element is already a working copy
 	 * @see IBufferFactory
@@ -209,15 +210,19 @@ public interface IWorkingCopy {
 	/**
 	 * Returns a new working copy of this element if this element is not
 	 * a working copy, or this element if this element is already a working copy.
-	 *
+	 * <p>
 	 * Note: if intending to share a working copy amongst several clients, then 
 	 * <code>#getSharedWorkingCopy</code> should be used instead.
-	 * 
+	 * </p><p>
+	 * When the working copy instance is created, an ADDED IJavaElementDelta is 
+	 * reported on this working copy.
+	 * </p><p>
+	 * Since 2.1, a working copy can be created on a not-yet existing compilation
+	 * unit. In particular, such a working copy can then be committed in order to create
+	 * the corresponding compilation unit.
+	 * </p>
 	 * @exception JavaModelException if the contents of this element can
-	 *   not be determined. Reasons include:
-	 * <ul>
-	 * <li> This Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
-	 * </ul>
+	 *   not be determined. 
 	 * @return a new working copy of this element if this element is not
 	 * a working copy, or this element if this element is already a working copy
 	 */
@@ -226,14 +231,21 @@ public interface IWorkingCopy {
 	/**
 	 * Returns a new working copy of this element using the given factory to create
 	 * the buffer, or this element if this element is already a working copy.
-	 * Note that this factory will be used for the life time of this working copy, i.e. if the 
+	 * Note that this factory will be used for the life time of this working copy, that is if the 
 	 * working copy is closed then reopened, this factory will be reused.
 	 * The buffer will be automatically initialized with the original's compilation unit content
 	 * upon creation.
-	 *
+	 * <p>
 	 * Note: if intending to share a working copy amongst several clients, then 
 	 * <code>#getSharedWorkingCopy</code> should be used instead.
-	 *
+	 * </p><p>
+	 * When the working copy instance is created, an ADDED IJavaElementDelta is 
+	 * reported on this working copy.
+	 * </p><p>
+	 * Since 2.1, a working copy can be created on a not-yet existing compilation
+	 * unit. In particular, such a working copy can then be committed in order to create
+	 * the corresponding compilation unit.
+	 * </p>
 	 * @param monitor a progress monitor used to report progress while opening this compilation unit
 	 *                 or <code>null</code> if no progress should be reported 
 	 * @param factory the factory that creates a buffer that is used to get the content of the working copy
@@ -242,10 +254,7 @@ public interface IWorkingCopy {
 	 * 	reconciling as they are discovered. The requestor can be set to <code>null</code> indicating
 	 * 	that the client is not interested in problems.
 	 * @exception JavaModelException if the contents of this element can
-	 *   not be determined. Reasons include:
-	 * <ul>
-	 * <li> This Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
-	 * </ul>
+	 *   not be determined. 
 	 * @return a new working copy of this element using the given factory to create
 	 * the buffer, or this element if this element is already a working copy
 	 * @since 2.0
@@ -280,16 +289,14 @@ public interface IWorkingCopy {
 	 * this delta.
 	 * <p>
 	 * If the working copy hasn't changed, then no problem will be detected,
-	 * this is equivalent to <code>IWorkingCopy#reconcile(false, null)</code>.
+	 * this is equivalent to <code>IWorkingCopy#reconcile(false, null)</code>.</p>
 	 * <p>
 	 * Compilation problems found in the new contents are notified through the
 	 * <code>IProblemRequestor</code> interface which was passed at
 	 * creation, and no longer as transient markers. Therefore this API will
-	 * return <code>null</code>.
+	 * return <code>null</code>.</p>
 	 * <p>
-	 * Note: It has been assumed that added inner types should
-	 * not generate change deltas.  The implementation has been
-	 * modified to reflect this assumption.
+ 	 * Note: Since 3.0 added/removed/changed inner types generate change deltas.</p>
 	 *
 	 * @exception JavaModelException if the contents of the original element
 	 *		cannot be accessed. Reasons include:
@@ -308,16 +315,14 @@ public interface IWorkingCopy {
 	 * this delta.
 	 * <p>
 	 * The boolean argument allows to force problem detection even if the
-	 * working copy is already consistent.
+	 * working copy is already consistent.</p>
 	 * <p>
 	 * Compilation problems found in the new contents are notified through the
 	 * <code>IProblemRequestor</code> interface which was passed at
 	 * creation, and no longer as transient markers. Therefore this API answers
-	 * nothing.
+	 * nothing.</p>
 	 * <p>
-	 * Note: It has been assumed that added inner types should
-	 * not generate change deltas.  The implementation has been
-	 * modified to reflect this assumption.
+ 	 * Note: Since 3.0 added/removed/changed inner types generate change deltas.</p>
 	 *
 	 * @param forceProblemDetection boolean indicating whether problem should be recomputed
 	 *   even if the source hasn't changed.

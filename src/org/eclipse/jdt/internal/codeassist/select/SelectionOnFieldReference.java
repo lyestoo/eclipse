@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.select;
 
 /*
@@ -35,12 +35,21 @@ import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
 public class SelectionOnFieldReference extends FieldReference {
-public SelectionOnFieldReference(char[] source , long pos) {
-	super(source, pos);
-}
-public TypeBinding resolveType(BlockScope scope) {
-	super.resolveType(scope);
+	
+	public SelectionOnFieldReference(char[] source , long pos) {
 
+		super(source, pos);
+	}
+	
+	public StringBuffer printExpression(int indent, StringBuffer output){
+		
+		output.append("<SelectionOnFieldReference:");  //$NON-NLS-1$
+		return super.printExpression(0, output).append('>');
+	}
+	
+	public TypeBinding resolveType(BlockScope scope) {
+
+		super.resolveType(scope);
 		// tolerate some error cases
 		if (binding == null || 
 				!(binding.isValidBinding() || 
@@ -48,13 +57,8 @@ public TypeBinding resolveType(BlockScope scope) {
 					|| binding.problemId() == ProblemReasons.InheritedNameHidesEnclosingName
 					|| binding.problemId() == ProblemReasons.NonStaticReferenceInConstructorInvocation
 					|| binding.problemId() == ProblemReasons.NonStaticReferenceInStaticContext))
-		throw new SelectionNodeFound();
-	else
-		throw new SelectionNodeFound(binding);
-}
-public String toStringExpression(){
-	return 	"<SelectionOnFieldReference:"  //$NON-NLS-1$
-			+ super.toStringExpression() 
-			+ ">"; //$NON-NLS-1$
-}
+			throw new SelectionNodeFound();
+		else
+			throw new SelectionNodeFound(binding);
+	}
 }

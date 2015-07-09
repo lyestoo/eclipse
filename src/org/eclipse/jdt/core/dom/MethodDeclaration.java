@@ -1,14 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *     IBM Corporation - added getExtraDimensions() and setExtraDimensions(int)
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
@@ -139,7 +138,7 @@ public class MethodDeclaration extends BodyDeclaration {
 		MethodDeclaration result = new MethodDeclaration(target);
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setJavadoc(
-			(Javadoc) ASTNode.copySubtree(target,(ASTNode) getJavadoc()));
+			(Javadoc) ASTNode.copySubtree(target, getJavadoc()));
 		result.setModifiers(getModifiers());
 		result.setConstructor(isConstructor());
 		result.setReturnType(
@@ -339,7 +338,7 @@ public class MethodDeclaration extends BodyDeclaration {
 		if (type == null) {
 			throw new IllegalArgumentException();
 		}
-		replaceChild((ASTNode) this.returnType, (ASTNode) type, false);
+		replaceChild(this.returnType, type, false);
 		this.returnType = type;
 	}
 

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.CompilationResult;
@@ -27,7 +27,7 @@ public class AnonymousLocalTypeDeclaration extends LocalTypeDeclaration {
 	} 
 	
 	// use a default name in order to th name lookup 
-	// to operate juat like a regular type (which has a name)
+	// to operate just like a regular type (which has a name)
 	//without checking systematically if the naem is null .... 
 	public MethodBinding createsInternalConstructorWithBinding(MethodBinding inheritedConstructorBinding) {
 
@@ -52,8 +52,7 @@ public class AnonymousLocalTypeDeclaration extends LocalTypeDeclaration {
 		}
 
 		//the super call inside the constructor
-		cd.constructorCall =
-			new ExplicitConstructorCall(ExplicitConstructorCall.ImplicitSuper);
+		cd.constructorCall = SuperReference.implicitSuperConstructorCall();
 		cd.constructorCall.sourceStart = sourceStart;
 		cd.constructorCall.sourceEnd = sourceEnd;
 
@@ -87,7 +86,7 @@ public class AnonymousLocalTypeDeclaration extends LocalTypeDeclaration {
 				inheritedConstructorBinding.thrownExceptions, //exceptions
 				binding); //declaringClass
 				
-		cd.scope = new MethodScope(scope, this, true);
+		cd.scope = new MethodScope(scope, cd, true);
 		cd.bindArguments();
 		cd.constructorCall.resolve(cd.scope);
 
@@ -109,16 +108,21 @@ public class AnonymousLocalTypeDeclaration extends LocalTypeDeclaration {
 		return cd.binding;
 
 	}
-	public void resolve(BlockScope scope) {
 
+	public StringBuffer print(int indent, StringBuffer output) {
+
+		return printBody(indent, output);
+	}
+
+	public void resolve(BlockScope currentScope) {
+
+		if (binding != null) {
+			// remember local types binding for innerclass emulation propagation
+			currentScope.referenceCompilationUnit().record((LocalTypeBinding)binding);
+		}
 		// scope and binding are provided in updateBindingSuperclass 
 		resolve();
 		updateMaxFieldCount();
-	}
-
-	public String toString(int tab) {
-
-		return toStringBody(tab);
 	}
 
 	/**
@@ -165,6 +169,7 @@ public class AnonymousLocalTypeDeclaration extends LocalTypeDeclaration {
 			}
 			visitor.endVisit(this, blockScope);
 		} catch (AbortType e) {
+			// silent abort
 		}
 	}
 }

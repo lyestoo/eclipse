@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
@@ -206,7 +206,7 @@ class DefaultBindingResolver extends BindingResolver {
 			if (types == null || types.length == 0) {
 				return null;
 			}
-			org.eclipse.jdt.internal.compiler.ast.TypeDeclaration type = (org.eclipse.jdt.internal.compiler.ast.TypeDeclaration) types[0];
+			org.eclipse.jdt.internal.compiler.ast.TypeDeclaration type = types[0];
 			if (type != null) {
 				ITypeBinding typeBinding = this.getTypeBinding(type.binding);
 				if (typeBinding != null) {
@@ -274,7 +274,7 @@ class DefaultBindingResolver extends BindingResolver {
 		} else if (node instanceof SingleTypeReference) {
 			SingleTypeReference singleTypeReference = (SingleTypeReference) node;
 			org.eclipse.jdt.internal.compiler.lookup.TypeBinding binding = singleTypeReference.resolvedType;
-			if (binding != null && binding instanceof org.eclipse.jdt.internal.compiler.lookup.TypeBinding) {
+			if (binding != null) {
 				return this.getTypeBinding(binding.leafComponentType());
 			}
 		} else if (node instanceof org.eclipse.jdt.internal.compiler.ast.FieldDeclaration) {
@@ -325,7 +325,7 @@ class DefaultBindingResolver extends BindingResolver {
 			}
 		} else if (type.isPrimitiveType()) {
 			if (((PrimitiveType) type).getPrimitiveTypeCode() == PrimitiveType.VOID) {
-				return this.getTypeBinding(BaseTypeBinding.VoidBinding);
+				return this.getTypeBinding(BaseTypes.VoidBinding);
 			}
 		}
 		return null;
@@ -361,7 +361,11 @@ class DefaultBindingResolver extends BindingResolver {
 			return this.getTypeBinding(this.scope.getJavaLangError());
 		} else if ("java.lang.Class".equals(name)) {//$NON-NLS-1$ 
 			return this.getTypeBinding(this.scope.getJavaLangClass());
-	    } else {
+	    } else if ("java.lang.Cloneable".equals(name)) {//$NON-NLS-1$ 
+			return this.getTypeBinding(this.scope.getJavaLangCloneable());
+		} else if ("java.io.Serializable".equals(name)) {//$NON-NLS-1$ 
+			return this.getTypeBinding(this.scope.getJavaIoSerializable());
+		} else {
 			return null;
 		}
 	}
@@ -417,16 +421,7 @@ class DefaultBindingResolver extends BindingResolver {
 		if (oldNode instanceof MessageSend) {
 			MessageSend messageSend = (MessageSend) oldNode;
 			if (messageSend != null) {
-				IMethodBinding methodBinding = this.getMethodBinding(messageSend.binding);
-				if (methodBinding == null) {
-					return null;
-				}
-				this.bindingsToAstNodes.put(methodBinding, method);
-				String key = methodBinding.getKey();
-				if (key != null) {
-					this.bindingKeysToAstNodes.put(key, method);				
-				}
-				return methodBinding;
+				return this.getMethodBinding(messageSend.binding);
 			}
 		}
 		return null;
@@ -439,16 +434,7 @@ class DefaultBindingResolver extends BindingResolver {
 		if (oldNode instanceof MessageSend) {
 			MessageSend messageSend = (MessageSend) oldNode;
 			if (messageSend != null) {
-				IMethodBinding methodBinding = this.getMethodBinding(messageSend.binding);
-				if (methodBinding == null) {
-					return null;
-				}
-				this.bindingsToAstNodes.put(methodBinding, method);
-				String key = methodBinding.getKey();
-				if (key != null) {
-					this.bindingKeysToAstNodes.put(key, method);				
-				}
-				return methodBinding;
+				return this.getMethodBinding(messageSend.binding);
 			}
 		}
 		return null;
@@ -643,6 +629,34 @@ class DefaultBindingResolver extends BindingResolver {
 	}
 
 	/*
+	 * @see BindingResolver#resolveField(FieldAccess)
+	 */
+	IVariableBinding resolveField(FieldAccess fieldAccess) {
+		Object oldNode = this.newAstToOldAst.get(fieldAccess);
+		if (oldNode instanceof FieldReference) {
+			FieldReference fieldReference = (FieldReference) oldNode;
+			if (fieldReference != null) {
+				return this.getVariableBinding(fieldReference.binding);
+			}
+		}
+		return null;
+	}
+
+	/*
+	 * @see BindingResolver#resolveField(SuperFieldAccess)
+	 */
+	IVariableBinding resolveField(SuperFieldAccess fieldAccess) {
+		Object oldNode = this.newAstToOldAst.get(fieldAccess);
+		if (oldNode instanceof FieldReference) {
+			FieldReference fieldReference = (FieldReference) oldNode;
+			if (fieldReference != null) {
+				return this.getVariableBinding(fieldReference.binding);
+			}
+		}
+		return null;
+	}
+
+	/*
 	 * @see BindingResolver#resolveImport(ImportDeclaration)
 	 */
 	IBinding resolveImport(ImportDeclaration importDeclaration) {
@@ -652,7 +666,7 @@ class DefaultBindingResolver extends BindingResolver {
 			if (importReference.onDemand) {
 				Binding binding = this.scope.getTypeOrPackage(CharOperation.subarray(importReference.tokens, 0, importReference.tokens.length));
 				if (binding != null) {
-					if (binding.bindingType() == Binding.PACKAGE) {
+					if (binding.bindingType() == BindingIds.PACKAGE) {
 						IPackageBinding packageBinding = this.getPackageBinding((org.eclipse.jdt.internal.compiler.lookup.PackageBinding) binding);
 						if (packageBinding == null) {
 							return null;
@@ -782,7 +796,7 @@ class DefaultBindingResolver extends BindingResolver {
 		if (binding != null) {
 			return binding;
 		}
-		binding = new PackageBinding(this, packageBinding);
+		binding = new PackageBinding(packageBinding);
 		this.compilerBindingsToASTBindings.put(packageBinding, binding);
 		return binding;
 	}
@@ -843,7 +857,8 @@ class DefaultBindingResolver extends BindingResolver {
 				return binding;
 			} else {
 				/*
-				 * http://dev.eclipse.org/bugs/show_bug.cgi?id=23597				 */
+				 * http://dev.eclipse.org/bugs/show_bug.cgi?id=23597
+				 */
 				switch(methodBinding.problemId()) {
 					case ProblemReasons.NotVisible : 
 					case ProblemReasons.NonStaticReferenceInStaticContext :
@@ -937,5 +952,4 @@ class DefaultBindingResolver extends BindingResolver {
 	void recordScope(ASTNode astNode, BlockScope blockScope) {
 		this.astNodesToBlockScope.put(astNode, blockScope);
 	}
-
 }

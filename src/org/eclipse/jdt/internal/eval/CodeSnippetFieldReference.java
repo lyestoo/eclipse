@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
  
 import org.eclipse.jdt.internal.compiler.ast.Assignment;
@@ -15,8 +15,9 @@ import org.eclipse.jdt.internal.compiler.ast.CompoundAssignment;
 import org.eclipse.jdt.internal.compiler.ast.Expression;
 import org.eclipse.jdt.internal.compiler.ast.FieldReference;
 import org.eclipse.jdt.internal.compiler.ast.IntLiteral;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
-import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemFieldBinding;
@@ -279,17 +280,29 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 /*
  * No need to emulate access to protected fields since not implicitly accessed
  */
-public void manageSyntheticReadAccessIfNecessary(BlockScope currentScope){
+public void manageSyntheticReadAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo){
 	// The private access will be managed through the code generation
 
+	if (!flowInfo.isReachable()) return;
+	
 	// if the binding declaring class is not visible, need special action
 	// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
-	// NOTE: from 1.4 on, field's declaring class is touched if any different from receiver type
-	if (binding.declaringClass != this.receiverType
+	// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
+	if (delegateThis != null) {
+		if (binding.declaringClass != this.delegateThis.type
+			&& binding.declaringClass != null
+			&& binding.constant == NotAConstant
+			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2 
+					&& !binding.isStatic()
+					&& binding.declaringClass.id != T_Object) // no change for Object fields (if there was any)
+				|| !binding.declaringClass.canBeSeenBy(currentScope))){
+			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(binding, (ReferenceBinding)this.delegateThis.type);
+		}
+	} else if (binding.declaringClass != this.receiverType
 		&& !this.receiverType.isArrayType()
 		&& binding.declaringClass != null // array.length
 		&& binding.constant == NotAConstant
-		&& ((currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4
+		&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2
 				&& binding.declaringClass.id != T_Object) //no change for Object fields (in case there was)
 			|| !binding.declaringClass.canBeSeenBy(currentScope))){
 			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(binding, (ReferenceBinding) this.receiverType);
@@ -298,17 +311,29 @@ public void manageSyntheticReadAccessIfNecessary(BlockScope currentScope){
 /*
  * No need to emulate access to protected fields since not implicitly accessed
  */
-public void manageSyntheticWriteAccessIfNecessary(BlockScope currentScope){
+public void manageSyntheticWriteAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo){
 	// The private access will be managed through the code generation
 
+	if (!flowInfo.isReachable()) return;
+	
 	// if the binding declaring class is not visible, need special action
 	// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
-	// NOTE: from 1.4 on, field's declaring class is touched if any different from receiver type
-	if (binding.declaringClass != this.receiverType
+	// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
+	if (delegateThis != null) {
+		if (binding.declaringClass != this.delegateThis.type
+			&& binding.declaringClass != null
+			&& binding.constant == NotAConstant
+			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2 
+					&& !binding.isStatic()
+					&& binding.declaringClass.id != T_Object) // no change for Object fields (if there was any)
+				|| !binding.declaringClass.canBeSeenBy(currentScope))){
+			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(binding, (ReferenceBinding)this.delegateThis.type);
+		}
+	} else if (binding.declaringClass != this.receiverType
 		&& !this.receiverType.isArrayType()
 		&& binding.declaringClass != null // array.length
 		&& binding.constant == NotAConstant
-		&& ((currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4
+		&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2
 				&& binding.declaringClass.id != T_Object) //no change for Object fields (in case there was)
 			|| !binding.declaringClass.canBeSeenBy(currentScope))){
 			this.codegenBinding = currentScope.enclosingSourceType().getUpdatedFieldBinding(binding, (ReferenceBinding) this.receiverType);
@@ -335,7 +360,7 @@ public TypeBinding resolveType(BlockScope scope) {
 				isNotVisible = true;
 				if (this.evaluationContext.declaringTypeName != null) {
 					delegateThis = scope.getField(scope.enclosingSourceType(), DELEGATE_THIS, this);
-					if (delegateThis == null){ ; // if not found then internal error, field should have been found
+					if (delegateThis == null){  // if not found then internal error, field should have been found
 						constant = NotAConstant;
 						scope.problemReporter().invalidField(this, receiverType);
 						return null;
@@ -359,14 +384,14 @@ public TypeBinding resolveType(BlockScope scope) {
 		return null;
 	}
 
-	if (isFieldUseDeprecated(binding, scope))
+	if (isFieldUseDeprecated(binding, scope, (this.bits & IsStrictlyAssignedMASK) !=0)) {
 		scope.problemReporter().deprecatedField(binding, this);
-
+	}
 	// check for this.x in static is done in the resolution of the receiver
 	constant = FieldReference.getConstantFor(binding, this, receiver.isImplicitThis(), scope);
-	if (!receiver.isThis())
+	if (!receiver.isThis()) {
 		constant = NotAConstant;
-
+	}
 	return this.resolvedType = binding.type;
 }
 }

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -36,7 +36,7 @@ public LocalTypeBinding(ClassScope scope, SourceTypeBinding enclosingType) {
 * all its dependents so as to update them (see updateInnerEmulationDependents()).
 */
 
-public void addInnerEmulationDependent(BlockScope scope, boolean wasEnclosingInstanceSupplied, boolean useDirectAccess) {
+public void addInnerEmulationDependent(BlockScope dependentScope, boolean wasEnclosingInstanceSupplied) {
 	int index;
 	if (dependents == null) {
 		index = 0;
@@ -44,11 +44,11 @@ public void addInnerEmulationDependent(BlockScope scope, boolean wasEnclosingIns
 	} else {
 		index = dependents.length;
 		for (int i = 0; i < index; i++)
-			if (dependents[i].scope == scope)
+			if (dependents[i].scope == dependentScope)
 				return; // already stored
 		System.arraycopy(dependents, 0, (dependents = new InnerEmulationDependency[index + 1]), 0, index);
 	}
-	dependents[index] = new InnerEmulationDependency(scope, wasEnclosingInstanceSupplied, useDirectAccess);
+	dependents[index] = new InnerEmulationDependency(dependentScope, wasEnclosingInstanceSupplied);
 	//  System.out.println("Adding dependency: "+ new String(scope.enclosingType().readableName()) + " --> " + new String(this.readableName()));
 }
 /* Answer the receiver's constant pool name.
@@ -58,9 +58,6 @@ public void addInnerEmulationDependent(BlockScope scope, boolean wasEnclosingIns
 
 public char[] constantPoolName() /* java/lang/Object */ {
 	return constantPoolName;
-}
-public void constantPoolName(char[] computedConstantPoolName) /* java/lang/Object */ {
-	this.constantPoolName = computedConstantPoolName;
 }
 
 ArrayBinding createArrayType(int dimensionCount) {
@@ -111,6 +108,10 @@ public void setAsMemberType() {
 	tagBits |= MemberTypeMask;
 }
 
+public void setConstantPoolName(char[] computedConstantPoolName) /* java/lang/Object */ {
+	this.constantPoolName = computedConstantPoolName;
+}
+
 public char[] sourceName() {
 	if (isAnonymousType()) {
 		//return readableName();
@@ -138,7 +139,7 @@ public void updateInnerEmulationDependents() {
 		for (int i = 0; i < dependents.length; i++) {
 			InnerEmulationDependency dependency = dependents[i];
 			// System.out.println("Updating " + new String(this.readableName()) + " --> " + new String(dependency.scope.enclosingType().readableName()));
-			dependency.scope.propagateInnerEmulation(this, dependency.wasEnclosingInstanceSupplied, dependency.useDirectAccess);
+			dependency.scope.propagateInnerEmulation(this, dependency.wasEnclosingInstanceSupplied);
 		}
 	}
 }

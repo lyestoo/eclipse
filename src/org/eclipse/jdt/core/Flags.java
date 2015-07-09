@@ -1,13 +1,14 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *     IBM Corporation - added constant AccDefault
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.jdt.internal.compiler.env.IConstants;
@@ -29,6 +30,11 @@ import org.eclipse.jdt.internal.compiler.env.IConstants;
  */
 public final class Flags {
 
+	/**
+	 * Constant representing the absence of any flag
+	 * @since 3.0
+	 */
+	public static final int AccDefault = 0;
 	/**
 	 * Public access flag. See The Java Virtual Machine Specification for more details.
 	 * @since 2.0
@@ -109,6 +115,7 @@ public final class Flags {
 	 * Not instantiable.
 	 */
 	private Flags() {
+		// Not instantiable
 	}
 	/**
 	 * Returns whether the given integer includes the <code>abstract</code> modifier.

@@ -1,14 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *     IBM Corporation - added findDeclaringNode(String) and getProblems()
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
@@ -226,7 +225,7 @@ public class CompilationUnit extends ASTNode {
 	 * <li></li>
 	 * <li>package - a <code>PackageDeclaration</code></li>
 	 * <li>class or interface - a <code>TypeDeclaration</code> or a
-	 *    <code>ClassInstanceCreation</code> (for anonymous classes) </li>
+	 *    <code>AnonymousClassDeclaration</code> (for anonymous classes) </li>
 	 * <li>primitive type - none</li>
 	 * <li>array type - none</li>
 	 * <li>field - a <code>VariableDeclarationFragment</code> in a 
@@ -270,7 +269,7 @@ public class CompilationUnit extends ASTNode {
 	 * <li></li>
 	 * <li>package - a <code>PackageDeclaration</code></li>
 	 * <li>class or interface - a <code>TypeDeclaration</code> or a
-	 *    <code>ClassInstanceCreation</code> (for anonymous classes) </li>
+	 *    <code>AnonymousClassDeclaration</code> (for anonymous classes) </li>
 	 * <li>primitive type - none</li>
 	 * <li>array type - none</li>
 	 * <li>field - a <code>VariableDeclarationFragment</code> in a 
@@ -282,6 +281,11 @@ public class CompilationUnit extends ASTNode {
 	 * <li>method - a <code>MethodDeclaration</code> </li>
 	 * <li>constructor - a <code>MethodDeclaration</code> </li>
 	 * </ul>
+	 * </p>
+	 * <p>
+	 * Note that as explained in {@link IBinding#getkey IBinding.getkey}
+	 * there may be no keys for finding the declaring node for local variables,
+	 * local or anonymous classes, etc.
 	 * </p>
 	 * 
 	 * @param key the binding key, or <code>null</code>

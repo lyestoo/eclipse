@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.batch;
 
 import java.io.File;
@@ -17,8 +17,9 @@ import java.util.zip.ZipFile;
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
 import org.eclipse.jdt.internal.compiler.env.NameEnvironmentAnswer;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
 
-public class FileSystem implements INameEnvironment  {
+public class FileSystem implements INameEnvironment, SuffixConstants {
 	Classpath[] classpaths;
 	String[] knownFileNames;
 
@@ -41,7 +42,7 @@ public FileSystem(String[] classpathNames, String[] initialFileNames, String enc
 }
 public FileSystem(String[] classpathNames, String[] initialFileNames, String encoding, int[] classpathDirectoryModes) {
 	int classpathSize = classpathNames.length;
-	classpaths = new Classpath[classpathSize];
+	this.classpaths = new Classpath[classpathSize];
 	String[] pathNames = new String[classpathSize];
 	int problemsOccured = 0;
 	for (int i = 0; i < classpathSize; i++) {
@@ -50,36 +51,36 @@ public FileSystem(String[] classpathNames, String[] initialFileNames, String enc
 			if (file.isDirectory()) {
 				if (file.exists()) {
 					if (classpathDirectoryModes == null){
-						classpaths[i] = new ClasspathDirectory(file, encoding);
+						this.classpaths[i] = new ClasspathDirectory(file, encoding);
 					} else {
-						classpaths[i] = new ClasspathDirectory(file, encoding, classpathDirectoryModes[i]);
+						this.classpaths[i] = new ClasspathDirectory(file, encoding, classpathDirectoryModes[i]);
 					}
-					pathNames[i] = ((ClasspathDirectory) classpaths[i]).path;
+					pathNames[i] = ((ClasspathDirectory) this.classpaths[i]).path;
 				}
-			} else if (classpathNames[i].endsWith(".jar") | (classpathNames[i].endsWith(".zip"))) { //$NON-NLS-2$ //$NON-NLS-1$
-				classpaths[i] = this.getClasspathJar(file); // will throw an IOException if file does not exist
+			} else if (classpathNames[i].endsWith(SUFFIX_STRING_jar) | (classpathNames[i].endsWith(SUFFIX_STRING_zip))) {
+				this.classpaths[i] = this.getClasspathJar(file); // will throw an IOException if file does not exist
 				pathNames[i] = classpathNames[i].substring(0, classpathNames[i].lastIndexOf('.'));
 			}
 		} catch (IOException e) {
-			classpaths[i] = null;
+			this.classpaths[i] = null;
 		}
-		if (classpaths[i] == null)
+		if (this.classpaths[i] == null)
 			problemsOccured++;
 	}
 	if (problemsOccured > 0) {
 		Classpath[] newPaths = new Classpath[classpathSize - problemsOccured];
 		String[] newNames = new String[classpathSize - problemsOccured];
 		for (int i = 0, current = 0; i < classpathSize; i++)
-			if (classpaths[i] != null) {
-				newPaths[current] = classpaths[i];
+			if (this.classpaths[i] != null) {
+				newPaths[current] = this.classpaths[i];
 				newNames[current++] = pathNames[i];
 			}
 		classpathSize = newPaths.length;
-		classpaths = newPaths;
+		this.classpaths = newPaths;
 		pathNames = newNames;
 	}
 
-	knownFileNames = new String[initialFileNames.length];
+	this.knownFileNames = new String[initialFileNames.length];
 	for (int i = initialFileNames.length; --i >= 0;) {
 		String fileName = initialFileNames[i];
 		String matchingPathName = null;
@@ -91,14 +92,14 @@ public FileSystem(String[] classpathNames, String[] initialFileNames, String enc
 			if (fileName.startsWith(pathNames[j]))
 				matchingPathName = pathNames[j];
 		if (matchingPathName == null)
-			knownFileNames[i] = fileName; // leave as is...
+			this.knownFileNames[i] = fileName; // leave as is...
 		else
-			knownFileNames[i] = fileName.substring(matchingPathName.length());
+			this.knownFileNames[i] = fileName.substring(matchingPathName.length());
 	}
 }
 public void cleanup() {
-	for (int i = 0, max = classpaths.length; i < max; i++)
-		classpaths[i].reset();
+	for (int i = 0, max = this.classpaths.length; i < max; i++)
+		this.classpaths[i].reset();
 }
 private String convertPathSeparators(String path) {
 	return File.separatorChar == '/'
@@ -106,25 +107,25 @@ private String convertPathSeparators(String path) {
 		 : path.replace('/', '\\');
 }
 private NameEnvironmentAnswer findClass(String qualifiedTypeName, char[] typeName){
-	for (int i = 0, length = knownFileNames.length; i < length; i++)
-		if (qualifiedTypeName.equals(knownFileNames[i]))
+	for (int i = 0, length = this.knownFileNames.length; i < length; i++)
+		if (qualifiedTypeName.equals(this.knownFileNames[i]))
 			return null; // looking for a file which we know was provided at the beginning of the compilation
 
-	String qualifiedBinaryFileName = qualifiedTypeName + ".class"; //$NON-NLS-1$
+	String qualifiedBinaryFileName = qualifiedTypeName + SUFFIX_STRING_class;
 	String qualifiedPackageName =
 		qualifiedTypeName.length() == typeName.length
 			? "" //$NON-NLS-1$
 			: qualifiedBinaryFileName.substring(0, qualifiedTypeName.length() - typeName.length - 1);
 	String qp2 = File.separatorChar == '/' ? qualifiedPackageName : qualifiedPackageName.replace('/', File.separatorChar);
 	if (qualifiedPackageName == qp2) {
-		for (int i = 0, length = classpaths.length; i < length; i++) {
-			NameEnvironmentAnswer answer = classpaths[i].findClass(typeName, qualifiedPackageName, qualifiedBinaryFileName);
+		for (int i = 0, length = this.classpaths.length; i < length; i++) {
+			NameEnvironmentAnswer answer = this.classpaths[i].findClass(typeName, qualifiedPackageName, qualifiedBinaryFileName);
 			if (answer != null) return answer;
 		}
 	} else {
 		String qb2 = qualifiedBinaryFileName.replace('/', File.separatorChar);
-		for (int i = 0, length = classpaths.length; i < length; i++) {
-			Classpath p = classpaths[i];
+		for (int i = 0, length = this.classpaths.length; i < length; i++) {
+			Classpath p = this.classpaths[i];
 			NameEnvironmentAnswer answer = (p instanceof ClasspathJar)
 				? p.findClass(typeName, qualifiedPackageName, qualifiedBinaryFileName)
 				: p.findClass(typeName, qp2, qb2);
@@ -154,12 +155,12 @@ public boolean isPackage(char[][] compoundName, char[] packageName) {
 	String qualifiedPackageName = new String(CharOperation.concatWith(compoundName, packageName, '/'));
 	String qp2 = File.separatorChar == '/' ? qualifiedPackageName : qualifiedPackageName.replace('/', File.separatorChar);
 	if (qualifiedPackageName == qp2) {
-		for (int i = 0, length = classpaths.length; i < length; i++)
-			if (classpaths[i].isPackage(qualifiedPackageName))
+		for (int i = 0, length = this.classpaths.length; i < length; i++)
+			if (this.classpaths[i].isPackage(qualifiedPackageName))
 				return true;
 	} else {
-		for (int i = 0, length = classpaths.length; i < length; i++) {
-			Classpath p = classpaths[i];
+		for (int i = 0, length = this.classpaths.length; i < length; i++) {
+			Classpath p = this.classpaths[i];
 			if ((p instanceof ClasspathJar) ? p.isPackage(qualifiedPackageName) : p.isPackage(qp2))
 				return true;
 		}

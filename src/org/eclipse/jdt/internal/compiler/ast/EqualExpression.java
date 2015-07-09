@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -68,32 +68,33 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 			left.analyseCode(currentScope, flowContext, flowInfo).unconditionalInits()).asNegatedCondition().unconditionalInits();
 	}
 }
-public final boolean areTypesCastCompatible(BlockScope scope, TypeBinding castTb, TypeBinding expressionTb) {
-	//see specifications p.68
+public final boolean areTypesCastCompatible(BlockScope scope, TypeBinding castType, TypeBinding expressionType) {
+	//see specifications 5.5
 	//A more complete version of this method is provided on
 	//CastExpression (it deals with constant and need runtime checkcast)
 
+	if (castType == expressionType) return true;
 
 	//========ARRAY===============
-	if (expressionTb.isArrayType()) {
-		if (castTb.isArrayType()) { //------- (castTb.isArray) expressionTb.isArray -----------
-			TypeBinding expressionEltTb = ((ArrayBinding) expressionTb).elementsType(scope);
-			if (expressionEltTb.isBaseType())
+	if (expressionType.isArrayType()) {
+		if (castType.isArrayType()) { //------- (castTb.isArray) expressionTb.isArray -----------
+			TypeBinding expressionEltType = ((ArrayBinding) expressionType).elementsType(scope);
+			if (expressionEltType.isBaseType())
 				// <---stop the recursion------- 
-				return ((ArrayBinding) castTb).elementsType(scope) == expressionEltTb;
+				return ((ArrayBinding) castType).elementsType(scope) == expressionEltType;
 			//recursivly on the elts...
-			return areTypesCastCompatible(scope, ((ArrayBinding) castTb).elementsType(scope), expressionEltTb);
+			return areTypesCastCompatible(scope, ((ArrayBinding) castType).elementsType(scope), expressionEltType);
 		}
-		if (castTb.isBaseType()) {
+		if (castType.isBaseType()) {
 			return false;
 		}
-		if (castTb.isClass()) { //------(castTb.isClass) expressionTb.isArray ---------------	
-			if (scope.isJavaLangObject(castTb))
+		if (castType.isClass()) { //------(castTb.isClass) expressionTb.isArray ---------------	
+			if (scope.isJavaLangObject(castType))
 				return true;
 			return false;
 		}
-		if (castTb.isInterface()) { //------- (castTb.isInterface) expressionTb.isArray -----------
-			if (scope.isJavaLangCloneable(castTb) || scope.isJavaIoSerializable(castTb)) {
+		if (castType.isInterface()) { //------- (castTb.isInterface) expressionTb.isArray -----------
+			if (scope.isJavaLangCloneable(castType) || scope.isJavaIoSerializable(castType)) {
 				return true;
 			}
 			return false;
@@ -103,39 +104,39 @@ public final boolean areTypesCastCompatible(BlockScope scope, TypeBinding castTb
 	}
 
 	//------------(castType) null--------------
-	if (expressionTb == NullBinding) {
-		return !castTb.isBaseType();
+	if (expressionType == NullBinding) {
+		return !castType.isBaseType();
 	}
 
 	//========BASETYPE==============
-	if (expressionTb.isBaseType()) {
+	if (expressionType.isBaseType()) {
 		return false;
 	}
 
 
 	//========REFERENCE TYPE===================
 
-	if (expressionTb.isClass()) {
-		if (castTb.isArrayType()) { // ---- (castTb.isArray) expressionTb.isClass -------
-			if (scope.isJavaLangObject(expressionTb))
+	if (expressionType.isClass()) {
+		if (castType.isArrayType()) { // ---- (castTb.isArray) expressionTb.isClass -------
+			if (scope.isJavaLangObject(expressionType))
 				return true;
 		}
-		if (castTb.isBaseType()) {
+		if (castType.isBaseType()) {
 			return false;
 		}
-		if (castTb.isClass()) { // ----- (castTb.isClass) expressionTb.isClass ------ 
-			if (Scope.areTypesCompatible(expressionTb, castTb))
+		if (castType.isClass()) { // ----- (castTb.isClass) expressionTb.isClass ------ 
+			if (expressionType.isCompatibleWith(castType))
 				return true;
 			else {
-				if (Scope.areTypesCompatible(castTb, expressionTb)) {
+				if (castType.isCompatibleWith(expressionType)) {
 					return true;
 				}
 				return false;
 			}
 		}
-		if (castTb.isInterface()) { // ----- (castTb.isInterface) expressionTb.isClass -------  
-			if (((ReferenceBinding) expressionTb).isFinal()) { //no subclass for expressionTb, thus compile-time check is valid
-				if (Scope.areTypesCompatible(expressionTb, castTb))
+		if (castType.isInterface()) { // ----- (castTb.isInterface) expressionTb.isClass -------  
+			if (((ReferenceBinding) expressionType).isFinal()) { //no subclass for expressionTb, thus compile-time check is valid
+				if (expressionType.isCompatibleWith(castType))
 					return true;
 				return false;
 			} else {
@@ -145,34 +146,34 @@ public final boolean areTypesCastCompatible(BlockScope scope, TypeBinding castTb
 
 		return false;
 	}
-	if (expressionTb.isInterface()) {
-		if (castTb.isArrayType()) { // ----- (castTb.isArray) expressionTb.isInterface ------
-			if (scope.isJavaLangCloneable(expressionTb) || scope.isJavaIoSerializable(expressionTb))
+	if (expressionType.isInterface()) {
+		if (castType.isArrayType()) { // ----- (castTb.isArray) expressionTb.isInterface ------
+			if (scope.isJavaLangCloneable(expressionType) || scope.isJavaIoSerializable(expressionType))
 				//potential runtime error
 				{
 				return true;
 			}
 			return false;
 		}
-		if (castTb.isBaseType()) {
+		if (castType.isBaseType()) {
 			return false;
 		}
-		if (castTb.isClass()) { // ----- (castTb.isClass) expressionTb.isInterface --------
-			if (scope.isJavaLangObject(castTb))
+		if (castType.isClass()) { // ----- (castTb.isClass) expressionTb.isInterface --------
+			if (scope.isJavaLangObject(castType))
 				return true;
-			if (((ReferenceBinding) castTb).isFinal()) { //no subclass for castTb, thus compile-time check is valid
-				if (Scope.areTypesCompatible(castTb, expressionTb)) {
+			if (((ReferenceBinding) castType).isFinal()) { //no subclass for castTb, thus compile-time check is valid
+				if (castType.isCompatibleWith(expressionType)) {
 					return true;
 				}
 				return false;
 			}
 			return true;
 		}
-		if (castTb.isInterface()) { // ----- (castTb.isInterface) expressionTb.isInterface -------
-			if (castTb != expressionTb && (Scope.compareTypes(castTb, expressionTb) == NotRelated)) {
-				MethodBinding[] castTbMethods = ((ReferenceBinding) castTb).methods();
+		if (castType.isInterface()) { // ----- (castTb.isInterface) expressionTb.isInterface -------
+			if (Scope.compareTypes(castType, expressionType) == NotRelated) {
+				MethodBinding[] castTbMethods = ((ReferenceBinding) castType).methods();
 				int castTbMethodsLength = castTbMethods.length;
-				MethodBinding[] expressionTbMethods = ((ReferenceBinding) expressionTb).methods();
+				MethodBinding[] expressionTbMethods = ((ReferenceBinding) expressionType).methods();
 				int expressionTbMethodsLength = expressionTbMethods.length;
 				for (int i = 0; i < castTbMethodsLength; i++) {
 					for (int j = 0; j < expressionTbMethodsLength; j++) {
@@ -194,19 +195,20 @@ public final boolean areTypesCastCompatible(BlockScope scope, TypeBinding castTb
 
 	return false;
 }
-public final void computeConstant(TypeBinding leftTb, TypeBinding rightTb) {
-	if ((left.constant != NotAConstant) && (right.constant != NotAConstant)) {
-		constant =
+public final void computeConstant(TypeBinding leftType, TypeBinding rightType) {
+	if ((this.left.constant != NotAConstant) && (this.right.constant != NotAConstant)) {
+		this.constant =
 			Constant.computeConstantOperationEQUAL_EQUAL(
 				left.constant,
-				leftTb.id,
+				leftType.id,
 				EQUAL_EQUAL,
 				right.constant,
-				rightTb.id);
-		if (((bits & OperatorMASK) >> OperatorSHIFT) == NOT_EQUAL)
+				rightType.id);
+		if (((this.bits & OperatorMASK) >> OperatorSHIFT) == NOT_EQUAL)
 			constant = Constant.fromValue(!constant.booleanValue());
 	} else {
-		constant = NotAConstant;
+		this.constant = NotAConstant;
+		// no optimization for null == null
 	}
 }
 /**
@@ -226,6 +228,7 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 		return;
 	}
 	Label falseLabel;
+	bits |= OnlyValueRequiredMASK;
 	generateOptimizedBoolean(
 		currentScope, 
 		codeStream, 
@@ -253,18 +256,18 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 		} else {
 			falseLabel.place();
 		}	
-	}	
+	}
 }
 /**
  * Boolean operator code generation
  *	Optimized operations are: == and !=
  */
 public void generateOptimizedBoolean(BlockScope currentScope, CodeStream codeStream, Label trueLabel, Label falseLabel, boolean valueRequired) {
-	if ((constant != Constant.NotAConstant) && (constant.typeID() == T_boolean)) {
+
+	if (constant != Constant.NotAConstant) {
 		super.generateOptimizedBoolean(currentScope, codeStream, trueLabel, falseLabel, valueRequired);
 		return;
 	}
-	int pc = codeStream.position;
 	if (((bits & OperatorMASK) >> OperatorSHIFT) == EQUAL_EQUAL) {
 		if ((left.implicitConversion & 0xF) /*compile-time*/ == T_boolean) {
 			generateOptimizedBooleanEqual(currentScope, codeStream, trueLabel, falseLabel, valueRequired);
@@ -278,7 +281,6 @@ public void generateOptimizedBoolean(BlockScope currentScope, CodeStream codeStr
 			generateOptimizedNonBooleanEqual(currentScope, codeStream, falseLabel, trueLabel, valueRequired);
 		}
 	}
-	codeStream.recordPositionsFrom(pc, this.sourceStart);
 }
 /**
  * Boolean generation for == with boolean operands
@@ -286,18 +288,16 @@ public void generateOptimizedBoolean(BlockScope currentScope, CodeStream codeStr
  * Note this code does not optimize conditional constants !!!!
  */
 public void generateOptimizedBooleanEqual(BlockScope currentScope, CodeStream codeStream, Label trueLabel, Label falseLabel, boolean valueRequired) {
-	int pc = codeStream.position;
+
 	// optimized cases: true == x, false == x
 	if (left.constant != NotAConstant) {
 		boolean inline = left.constant.booleanValue();
 		right.generateOptimizedBoolean(currentScope, codeStream, (inline ? trueLabel : falseLabel), (inline ? falseLabel : trueLabel), valueRequired);
-		codeStream.recordPositionsFrom(pc, this.sourceStart);
 		return;
 	} // optimized cases: x == true, x == false
 	if (right.constant != NotAConstant) {
 		boolean inline = right.constant.booleanValue();
 		left.generateOptimizedBoolean(currentScope, codeStream, (inline ? trueLabel : falseLabel), (inline ? falseLabel : trueLabel), valueRequired);
-		codeStream.recordPositionsFrom(pc, this.sourceStart);
 		return;
 	}
 	// default case
@@ -318,37 +318,18 @@ public void generateOptimizedBooleanEqual(BlockScope currentScope, CodeStream co
 			}
 		}
 	}
-	codeStream.recordPositionsFrom(pc, this.sourceStart);
+	// reposition the endPC
+	codeStream.updateLastRecordedEndPC(codeStream.position);					
 }
 /**
  * Boolean generation for == with non-boolean operands
  *
  */
 public void generateOptimizedNonBooleanEqual(BlockScope currentScope, CodeStream codeStream, Label trueLabel, Label falseLabel, boolean valueRequired) {
+
 	int pc = codeStream.position;
 	Constant inline;
 	if ((inline = right.constant) != NotAConstant) {
-		// optimized case: x == null
-		if (right.constant == NullConstant.Default) {
-			left.generateCode(currentScope, codeStream, valueRequired);
-			if (valueRequired) {
-				if (falseLabel == null) {
-					if (trueLabel != null) {
-						// implicit falling through the FALSE case
-						codeStream.ifnull(trueLabel);
-					}
-				} else {
-					// implicit falling through the TRUE case
-					if (trueLabel == null) {
-						codeStream.ifnonnull(falseLabel);
-					} else {
-						// no implicit fall through TRUE/FALSE --> should never occur
-					}
-				}
-			}
-			codeStream.recordPositionsFrom(pc, this.sourceStart);
-			return;
-		}
 		// optimized case: x == 0
 		if (((left.implicitConversion >> 4) == T_int) && (inline.intValue() == 0)) {
 			left.generateCode(currentScope, codeStream, valueRequired);
@@ -372,27 +353,6 @@ public void generateOptimizedNonBooleanEqual(BlockScope currentScope, CodeStream
 		}
 	}
 	if ((inline = left.constant) != NotAConstant) {
-		// optimized case: null == x
-		if (left.constant == NullConstant.Default) {
-			right.generateCode(currentScope, codeStream, valueRequired);
-			if (valueRequired) {
-				if (falseLabel == null) {
-					if (trueLabel != null) {
-						// implicit falling through the FALSE case
-						codeStream.ifnull(trueLabel);
-					}
-				} else {
-					// implicit falling through the TRUE case
-					if (trueLabel == null) {
-						codeStream.ifnonnull(falseLabel);
-					} else {
-						// no implicit fall through TRUE/FALSE --> should never occur
-					}
-				}
-			}
-			codeStream.recordPositionsFrom(pc, this.sourceStart);
-			return;
-		}
 		// optimized case: 0 == x
 		if (((left.implicitConversion >> 4) == T_int)
 			&& (inline.intValue() == 0)) {
@@ -416,6 +376,68 @@ public void generateOptimizedNonBooleanEqual(BlockScope currentScope, CodeStream
 			return;
 		}
 	}
+	// null cases
+	// optimized case: x == null
+	if (right instanceof NullLiteral) {
+		if (left instanceof NullLiteral) {
+			// null == null
+			if (valueRequired) {
+					if ((bits & OnlyValueRequiredMASK) != 0) {
+						if (((bits & OperatorMASK) >> OperatorSHIFT) == EQUAL_EQUAL) {
+							codeStream.iconst_1();
+						} else {
+							codeStream.iconst_0();
+						}
+					} else {
+						if (falseLabel == null) {
+							// implicit falling through the FALSE case
+							if (trueLabel != null) {
+								codeStream.goto_(trueLabel);
+							}
+						}
+				}
+			}
+		} else {
+			left.generateCode(currentScope, codeStream, valueRequired);
+			if (valueRequired) {
+				if (falseLabel == null) {
+					if (trueLabel != null) {
+						// implicit falling through the FALSE case
+						codeStream.ifnull(trueLabel);
+					}
+				} else {
+					// implicit falling through the TRUE case
+					if (trueLabel == null) {
+						codeStream.ifnonnull(falseLabel);
+					} else {
+						// no implicit fall through TRUE/FALSE --> should never occur
+					}
+				}
+			}
+		}
+		codeStream.recordPositionsFrom(pc, this.sourceStart);
+		return;
+	} else if (left instanceof NullLiteral) { // optimized case: null == x
+		right.generateCode(currentScope, codeStream, valueRequired);
+		if (valueRequired) {
+			if (falseLabel == null) {
+				if (trueLabel != null) {
+					// implicit falling through the FALSE case
+					codeStream.ifnull(trueLabel);
+				}
+			} else {
+				// implicit falling through the TRUE case
+				if (trueLabel == null) {
+					codeStream.ifnonnull(falseLabel);
+				} else {
+					// no implicit fall through TRUE/FALSE --> should never occur
+				}
+			}
+		}
+		codeStream.recordPositionsFrom(pc, this.sourceStart);
+		return;
+	}
+
 	// default case
 	left.generateCode(currentScope, codeStream, valueRequired);
 	right.generateCode(currentScope, codeStream, valueRequired);
@@ -476,51 +498,74 @@ public boolean isCompactableOperation() {
 	return false;
 }
 public TypeBinding resolveType(BlockScope scope) {
+
+		boolean leftIsCast, rightIsCast;
+		if ((leftIsCast = left instanceof CastExpression) == true) left.bits |= IgnoreNeedForCastCheckMASK; // will check later on
+		TypeBinding leftType = left.resolveType(scope);
+
+		if ((rightIsCast = right instanceof CastExpression) == true) right.bits |= IgnoreNeedForCastCheckMASK; // will check later on
+		TypeBinding rightType = right.resolveType(scope);
+
 	// always return BooleanBinding
-	TypeBinding leftTb = left.resolveType(scope);
-	TypeBinding rightTb = right.resolveType(scope);
-	if (leftTb == null || rightTb == null){
+	if (leftType == null || rightType == null){
 		constant = NotAConstant;		
 		return null;
 	}
 
 	// both base type
-	if (leftTb.isBaseType() && rightTb.isBaseType()) {
+	if (leftType.isBaseType() && rightType.isBaseType()) {
 		// the code is an int
-		// (cast)  left   == (cast)  rigth --> result
+		// (cast)  left   == (cast)  right --> result
 		//  0000   0000       0000   0000      0000
 		//  <<16   <<12       <<8    <<4       <<0
-		int result = ResolveTypeTables[EQUAL_EQUAL][ (leftTb.id << 4) + rightTb.id];
-		left.implicitConversion = result >>> 12;
-		right.implicitConversion = (result >>> 4) & 0x000FF;
-		bits |= result & 0xF;		
-		if ((result & 0x0000F) == T_undefined) {
+		int operatorSignature = OperatorSignatures[EQUAL_EQUAL][ (leftType.id << 4) + rightType.id];
+		left.implicitConversion = operatorSignature >>> 12;
+		right.implicitConversion = (operatorSignature >>> 4) & 0x000FF;
+		bits |= operatorSignature & 0xF;		
+		if ((operatorSignature & 0x0000F) == T_undefined) {
 			constant = Constant.NotAConstant;
-			scope.problemReporter().invalidOperator(this, leftTb, rightTb);
+			scope.problemReporter().invalidOperator(this, leftType, rightType);
 			return null;
 		}
-		computeConstant(leftTb, rightTb);
-		this.resolvedType = BooleanBinding;
-		return BooleanBinding;
+		// check need for operand cast
+		if (leftIsCast || rightIsCast) {
+			CastExpression.checkNeedForArgumentCasts(scope, EQUAL_EQUAL, operatorSignature, left, leftType.id, leftIsCast, right, rightType.id, rightIsCast);
+		}
+		computeConstant(leftType, rightType);
+		return this.resolvedType = BooleanBinding;
 	}
 
 	// Object references 
 	// spec 15.20.3
-	if (areTypesCastCompatible(scope, rightTb, leftTb) || areTypesCastCompatible(scope, leftTb, rightTb)) {
+	if (areTypesCastCompatible(scope, rightType, leftType) || areTypesCastCompatible(scope, leftType, rightType)) {
 		// (special case for String)
-		if ((rightTb.id == T_String) && (leftTb.id == T_String))
-			computeConstant(leftTb, rightTb);
-		else
+		if ((rightType.id == T_String) && (leftType.id == T_String)) {
+			computeConstant(leftType, rightType);
+		} else {
 			constant = NotAConstant;
-		if (rightTb.id == T_String)
+		}
+		if (rightType.id == T_String) {
 			right.implicitConversion = String2String;
-		if (leftTb.id == T_String)
+		}
+		if (leftType.id == T_String) {
 			left.implicitConversion = String2String;
-		this.resolvedType = BooleanBinding;
-		return BooleanBinding;
+		}
+		// check need for operand cast
+		boolean unnecessaryLeftCast = (left.bits & UnnecessaryCastMask) != 0;
+		boolean unnecessaryRightCast = (right.bits & UnnecessaryCastMask) != 0;
+		if (unnecessaryLeftCast || unnecessaryRightCast) {
+			TypeBinding alternateLeftType = unnecessaryLeftCast ? ((CastExpression)left).expression.resolvedType : leftType;
+			TypeBinding alternateRightType = unnecessaryRightCast ? ((CastExpression)right).expression.resolvedType : rightType;
+			if (areTypesCastCompatible(scope, alternateLeftType, alternateRightType)
+					|| areTypesCastCompatible(scope, alternateRightType, alternateLeftType)) {
+				if (unnecessaryLeftCast) scope.problemReporter().unnecessaryCast((CastExpression)left); 
+				if (unnecessaryRightCast) scope.problemReporter().unnecessaryCast((CastExpression)right);
+			}
+		}
+		return this.resolvedType = BooleanBinding;
 	}
 	constant = NotAConstant;
-	scope.problemReporter().notCompatibleTypesError(this, leftTb, rightTb);
+	scope.problemReporter().notCompatibleTypesError(this, leftType, rightType);
 	return null;
 }
 public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {

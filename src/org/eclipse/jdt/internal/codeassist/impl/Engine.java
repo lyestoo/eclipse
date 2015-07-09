@@ -1,15 +1,16 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.impl;
-import java.util.Map;
+
+import java.util.Map;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.codeassist.ISearchableNameEnvironment;
@@ -22,7 +23,8 @@ import org.eclipse.jdt.internal.compiler.parser.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
 
 public abstract class Engine implements ITypeRequestor {
-	public LookupEnvironment lookupEnvironment;
+
+	public LookupEnvironment lookupEnvironment;
 	
 	protected CompilationUnitScope unitScope;
 	protected ISearchableNameEnvironment nameEnvironment;
@@ -41,7 +43,8 @@ public abstract class Engine implements ITypeRequestor {
 	public void accept(IBinaryType binaryType, PackageBinding packageBinding) {
 		lookupEnvironment.createBinaryTypeFrom(binaryType, packageBinding);
 	}
-	/**
+
+	/**
 	 * Add an additional compilation unit.
 	 */
 	public void accept(ICompilationUnit sourceUnit) {
@@ -52,7 +55,8 @@ public abstract class Engine implements ITypeRequestor {
 		lookupEnvironment.buildTypeBindings(parsedUnit);
 		lookupEnvironment.completeTypeBindings(parsedUnit, true);
 	}
-	/**
+
+	/**
 	 * Add additional source types (the first one is the requested type, the rest is formed by the
 	 * secondary types defined in the same compilation unit).
 	 */
@@ -61,18 +65,20 @@ public abstract class Engine implements ITypeRequestor {
 			new CompilationResult(sourceTypes[0].getFileName(), 1, 1, this.compilerOptions.maxProblemsPerUnit);
 		CompilationUnitDeclaration unit =
 			SourceTypeConverter.buildCompilationUnit(
-				sourceTypes,
+				sourceTypes,//sourceTypes[0] is always toplevel here
 				true, // need field and methods
 				true, // need member types
 				false, // no need for field initialization
 				lookupEnvironment.problemReporter,
 				result);
-		if (unit != null) {
+
+		if (unit != null) {
 			lookupEnvironment.buildTypeBindings(unit);
 			lookupEnvironment.completeTypeBindings(unit, true);
 		}
 	}
-	public abstract AssistParser getParser();
+
+	public abstract AssistParser getParser();
 	
 	protected boolean mustQualifyType(
 		char[] packageName,
@@ -100,7 +106,8 @@ public abstract class Engine implements ITypeRequestor {
 										return true;
 									}
 								} else {
-									if(CharOperation.equals(CharOperation.lastSegment(imports[j].readableName(), '.'), typeName)) {
+									if(CharOperation.equals(CharOperation.lastSegment(imports[j].readableName(), '.'), typeName)
+										&& !CharOperation.equals(imports[j].compoundName, CharOperation.splitOn('.', readableTypeName))) {
 										return true;	
 									}
 								}
@@ -119,65 +126,71 @@ public abstract class Engine implements ITypeRequestor {
 		return true;
 	}
 
-	protected void parseMethod(CompilationUnitDeclaration unit, int position) {
-		for (int i = unit.types.length; --i >= 0;) {
+	protected AstNode parseMethod(CompilationUnitDeclaration unit, int position) {
+		int length = unit.types.length;
+		for (int i = 0; i < length; i++) {
 			TypeDeclaration type = unit.types[i];
 			if (type.declarationSourceStart < position
 				&& type.declarationSourceEnd >= position) {
 				getParser().scanner.setSource(
 					unit.compilationResult.compilationUnit.getContents());
-				parseMethod(type, unit, position);
-				return;
+				return parseMethod(type, unit, position);
 			}
 		}
+		return null;
 	}
-	private void parseMethod(
+
+	private AstNode parseMethod(
 		TypeDeclaration type,
 		CompilationUnitDeclaration unit,
 		int position) {
 		//members
 		TypeDeclaration[] memberTypes = type.memberTypes;
 		if (memberTypes != null) {
-			for (int i = memberTypes.length; --i >= 0;) {
+			int length = memberTypes.length;
+			for (int i = 0; i < length; i++) {
 				TypeDeclaration memberType = memberTypes[i];
 				if (memberType.bodyStart > position)
 					continue;
 				if (memberType.declarationSourceEnd >= position) {
-					parseMethod(memberType, unit, position);
-					return;
+					return parseMethod(memberType, unit, position);
 				}
 			}
 		}
 		//methods
 		AbstractMethodDeclaration[] methods = type.methods;
 		if (methods != null) {
-			for (int i = methods.length; --i >= 0;) {
+			int length = methods.length;
+			for (int i = 0; i < length; i++) {
 				AbstractMethodDeclaration method = methods[i];
 				if (method.bodyStart > position)
 					continue;
 				if (method.declarationSourceEnd >= position) {
 					getParser().parseBlockStatements(method, unit);
-					return;
+					return method;
 				}
 			}
 		}
 		//initializers
 		FieldDeclaration[] fields = type.fields;
 		if (fields != null) {
-			for (int i = fields.length; --i >= 0;) {
+			int length = fields.length;
+			for (int i = 0; i < length; i++) {
 				if (!(fields[i] instanceof Initializer))
 					continue;
 				Initializer initializer = (Initializer) fields[i];
-				if (initializer.bodyStart > position)
+				if (initializer.sourceStart > position)
 					continue;
 				if (initializer.declarationSourceEnd >= position) {
 					getParser().parseBlockStatements(initializer, type, unit);
-					return;
+					return initializer;
 				}
 			}
 		}
+		return null;
 	}
-	protected void reset() {
+
+	protected void reset() {
 		lookupEnvironment.reset();
 	}
 }

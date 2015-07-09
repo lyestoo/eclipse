@@ -1,7 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
@@ -10,11 +10,16 @@
  *     IBM Corporation - specified that a source archive or a source folder can be attached to a binary
  *                               package fragment root.
  *     IBM Corporation - added root manipulation APIs: copy, delete, move
- ******************************************************************************/
+ *     IBM Corporation - added DESTINATION_PROJECT_CLASSPATH
+ *     IBM Corporation - added OTHER_REFERRING_PROJECTS_CLASSPATH
+ *     IBM Corporation - added NO_RESOURCE_MODIFICATION
+ *     IBM Corporation - added REPLACE
+ *     IBM Corporation - added ORIGINATING_PROJECT_CLASSPATH
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.core.runtime.IPath;
-import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IProgressMonitor; 
 
 /**
  * A package fragment root contains a set of package fragments.
@@ -103,17 +108,7 @@ public interface IPackageFragmentRoot
 	 */
 	void attachSource(IPath sourcePath, IPath rootPath, IProgressMonitor monitor)
 		throws JavaModelException;
-	/**
-	 * Computes and returns the source attachment root path for the given source attachment path.
-	 * Returns <code>null</code> if none could be found.
-	 * 
-	 * @param sourceAttachmentPath the given absolute path to the source archive or folder
-	 * @return the computed source attachment root path or <code>null</cde> if none could be found
-	 * @throws JavaModelException
-	 * @since 2.1
-	 */
-	IPath computeSourceAttachmentRootPath(IPath sourceAttachmentPath) 
-		throws JavaModelException;
+
 	/**
 	 * Copies the resource of this package fragment root to the destination path
 	 * as specified by <code>IResource.copy(IPath, int, IProgressMonitor)</code>
@@ -160,7 +155,7 @@ public interface IPackageFragmentRoot
 	 * <li> This root does not exist (ELEMENT_DOES_NOT_EXIST)</li>
 	 * <li> A <code>CoreException</code> occurred while copying the
 	 * resource or updating a classpath</li>
-	 * <li> TODO: (jim) if we want to later remove the following restriction, can we still specify it?
+	 * <li>
 	 * The destination is not inside an existing project and <code>updateModelFlags</code>
 	 * has been specified as <code>DESTINATION_PROJECT_CLASSPATH</code> 
 	 * (INVALID_DESTINATION)</li>
@@ -276,7 +271,10 @@ public interface IPackageFragmentRoot
 	 * (possibly in a folder). Thus when a nested source folder is excluded, it will appear
 	 * in the non-Java resources of the outer folder.
 	 * </p>
-	 * @return an array of non-Java resources contained in this package fragment root
+	 * @return an array of non-Java resources (<code>IFile</code>s, 
+	 *              <code>IFolder</code>s, or <code>IStorage</code>s if the
+	 *              package fragment root is in archive) contained in this package 
+	 *              fragment root
 	 * @see IClasspathEntry#getExclusionPatterns
 	 */
 	Object[] getNonJavaResources() throws JavaModelException;
@@ -408,7 +406,7 @@ public interface IPackageFragmentRoot
 	 * <li> This root does not exist (ELEMENT_DOES_NOT_EXIST)</li>
 	 * <li> A <code>CoreException</code> occurred while copying the
 	 * resource or updating a classpath</li>
-	 * <li> TODO: (jim) if we want to later remove the following restriction, can we still specify it?
+	 * <li>
 	 * The destination is not inside an existing project and <code>updateModelFlags</code>
 	 * has been specified as <code>DESTINATION_PROJECT_CLASSPATH</code> 
 	 * (INVALID_DESTINATION)</li>

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -62,6 +62,11 @@ public class ClassLiteralAccess extends Expression {
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 
+	public StringBuffer printExpression(int indent, StringBuffer output) {
+
+		return type.print(0, output).append(".class"); //$NON-NLS-1$
+	}
+
 	public TypeBinding resolveType(BlockScope scope) {
 
 		constant = NotAConstant;
@@ -75,13 +80,6 @@ public class ClassLiteralAccess extends Expression {
 		}
 
 		return this.resolvedType = scope.getJavaLangClass();
-	}
-
-	public String toStringExpression() {
-
-		String s = ""; //$NON-NLS-1$
-		s = s + type.toString(0) + ".class"; //$NON-NLS-1$
-		return s;
 	}
 
 	public void traverse(

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -32,6 +32,7 @@ public class FieldDeclaration extends AbstractVariableDeclaration {
 	public int endPart2Position;
 
 	public FieldDeclaration() {
+		// for subtypes or conversion
 	}
 
 	public FieldDeclaration(
@@ -55,6 +56,11 @@ public class FieldDeclaration extends AbstractVariableDeclaration {
 		FlowContext flowContext,
 		FlowInfo flowInfo) {
 
+		if (this.binding != null && this.binding.isPrivate() && !this.binding.isPrivateUsed()) {
+			if (!initializationScope.referenceCompilationUnit().compilationResult.hasSyntaxError()) {
+				initializationScope.problemReporter().unusedPrivateField(this);
+			}
+		}
 		// cannot define static non-constant field inside nested class
 		if (binding != null
 			&& binding.isValidBinding()
@@ -74,16 +80,13 @@ public class FieldDeclaration extends AbstractVariableDeclaration {
 					.analyseCode(initializationScope, flowContext, flowInfo)
 					.unconditionalInits();
 			flowInfo.markAsDefinitelyAssigned(binding);
-		} else {
-			flowInfo.markAsDefinitelyNotAssigned(binding);
-			// clear the bit in case it was already set (from enclosing info)
 		}
 		return flowInfo;
 	}
 
 	/**
 	 * Code generation for a field declaration:
-	 *	i.e.&nbsp;normal assignment to a field 
+	 *	   standard assignment to a field 
 	 *
 	 * @param currentScope org.eclipse.jdt.internal.compiler.lookup.BlockScope
 	 * @param codeStream org.eclipse.jdt.internal.compiler.codegen.CodeStream
@@ -131,11 +134,6 @@ public class FieldDeclaration extends AbstractVariableDeclaration {
 		return (modifiers & AccStatic) != 0;
 	}
 
-	public String name() {
-
-		return String.valueOf(name);
-	}
-
 	public void resolve(MethodScope initializationScope) {
 
 		// the two <constant = Constant.NotAConstant> could be regrouped into
@@ -147,6 +145,27 @@ public class FieldDeclaration extends AbstractVariableDeclaration {
 
 			this.hasBeenResolved = true;
 
+			// check if field is hiding some variable - issue is that field binding already got inserted in scope
+			ClassScope classScope = initializationScope.enclosingClassScope();
+			if (classScope != null) {
+				SourceTypeBinding declaringType = classScope.enclosingSourceType();
+				boolean checkLocal = true;
+				if (declaringType.superclass != null) {
+					Binding existingVariable = classScope.findField(declaringType.superclass, name, this);
+					if (existingVariable != null && existingVariable.isValidBinding()) {
+						initializationScope.problemReporter().fieldHiding(this, existingVariable);
+						checkLocal = false; // already found a matching field
+					}
+				}
+				if (checkLocal) {
+					Scope outerScope = classScope.parent;
+					Binding existingVariable = outerScope.getBinding(name, BindingIds.VARIABLE, this);
+					if (existingVariable != null && existingVariable.isValidBinding()){
+						initializationScope.problemReporter().fieldHiding(this, existingVariable);
+					}
+				}
+			}
+			
 			if (isTypeUseDeprecated(this.binding.type, initializationScope))
 				initializationScope.problemReporter().deprecatedType(this.binding.type, this.type);
 
@@ -168,7 +187,7 @@ public class FieldDeclaration extends AbstractVariableDeclaration {
 					
 					if (initialization instanceof ArrayInitializer) {
 
-						if ((initializationTypeBinding = this.initialization.resolveTypeExpecting(initializationScope, typeBinding)) 	!= null) {
+						if ((initializationTypeBinding = this.initialization.resolveTypeExpecting(initializationScope, typeBinding)) != null) {
 							((ArrayInitializer) this.initialization).binding = (ArrayBinding) initializationTypeBinding;
 							this.initialization.implicitWidening(typeBinding, initializationTypeBinding);
 						}
@@ -179,7 +198,7 @@ public class FieldDeclaration extends AbstractVariableDeclaration {
 
 							this.initialization.implicitWidening(typeBinding, initializationTypeBinding);
 
-						}	else if (Scope.areTypesCompatible(initializationTypeBinding, typeBinding)) {
+						}	else if (initializationTypeBinding.isCompatibleWith(typeBinding)) {
 							this.initialization.implicitWidening(typeBinding, initializationTypeBinding);
 
 						} else {

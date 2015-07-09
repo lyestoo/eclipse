@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
@@ -29,7 +29,7 @@ import java.util.List;
  *			<b>{</b> { ClassBodyDeclaration | <b>;</b> } <b>}</b>
  * InterfaceDeclaration:
  *      [ Javadoc ] { Modifier } <b>interface</b> Identifier
- *			[ <b>extends</b> Type]
+ *			[ <b>extends</b> Type { <b>,</b> Type } ]
  * 			<b>{</b> { InterfaceBodyDeclaration | <b>;</b> } <b>}</b>
  * </pre>
  * <p>
@@ -127,11 +127,11 @@ public class TypeDeclaration extends BodyDeclaration {
 		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setModifiers(getModifiers());
 		result.setJavadoc(
-			(Javadoc) ASTNode.copySubtree(target,(ASTNode) getJavadoc()));
+			(Javadoc) ASTNode.copySubtree(target, getJavadoc()));
 		result.setInterface(isInterface());
 		result.setName((SimpleName) getName().clone(target));
 		result.setSuperclass(
-			(Name) ASTNode.copySubtree(target,(ASTNode) getSuperclass()));
+			(Name) ASTNode.copySubtree(target, getSuperclass()));
 		result.superInterfaces().addAll(
 			ASTNode.copySubtrees(target, superInterfaces()));
 		result.bodyDeclarations().addAll(
@@ -295,8 +295,8 @@ public class TypeDeclaration extends BodyDeclaration {
 	 */ 
 	public void setSuperclass(Name superclassName) {
 		replaceChild(
-			(ASTNode) this.optionalSuperclassName,
-			(ASTNode) superclassName, false);
+			this.optionalSuperclassName,
+			superclassName, false);
 		this.optionalSuperclassName = superclassName;
 	}
 

@@ -1,17 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -45,15 +46,19 @@ public class FieldReference extends Reference implements InvocationSite {
 
 		// compound assignment extra work
 		if (isCompound) { // check the variable part is initialized if blank final
-			if (binding.isFinal()
+			if (binding.isBlankFinal()
 				&& receiver.isThis()
 				&& currentScope.allowBlankFinalFieldAssignment(binding)
 				&& (!flowInfo.isDefinitelyAssigned(binding))) {
 				currentScope.problemReporter().uninitializedBlankFinalField(binding, this);
 				// we could improve error msg here telling "cannot use compound assignment on final blank field"
 			}
-			manageSyntheticReadAccessIfNecessary(currentScope);
+			manageSyntheticReadAccessIfNecessary(currentScope, flowInfo);
 		}
+		flowInfo =
+			receiver
+				.analyseCode(currentScope, flowContext, flowInfo, !binding.isStatic())
+				.unconditionalInits();
 		if (assignment.expression != null) {
 			flowInfo =
 				assignment
@@ -61,27 +66,27 @@ public class FieldReference extends Reference implements InvocationSite {
 					.analyseCode(currentScope, flowContext, flowInfo)
 					.unconditionalInits();
 		}
-		flowInfo =
-			receiver
-				.analyseCode(currentScope, flowContext, flowInfo, !binding.isStatic())
-				.unconditionalInits();
-		manageSyntheticWriteAccessIfNecessary(currentScope);
+		manageSyntheticWriteAccessIfNecessary(currentScope, flowInfo);
 
 		// check if assigning a final field 
 		if (binding.isFinal()) {
 			// in a context where it can be assigned?
-			if (receiver.isThis()
+			if (binding.isBlankFinal()
+				&& !isCompound
+				&& receiver.isThis()
 				&& !(receiver instanceof QualifiedThisReference)
+				&& ((receiver.bits & ParenthesizedMASK) == 0) // (this).x is forbidden
 				&& currentScope.allowBlankFinalFieldAssignment(binding)) {
 				if (flowInfo.isPotentiallyAssigned(binding)) {
 					currentScope.problemReporter().duplicateInitializationOfBlankFinalField(
 						binding,
 						this);
+				} else {
+					flowContext.recordSettingFinal(binding, this);
 				}
 				flowInfo.markAsDefinitelyAssigned(binding);
-				flowContext.recordSettingFinal(binding, this);
 			} else {
-				// assigning a final field outside an initializer or constructor
+				// assigning a final field outside an initializer or constructor or wrong reference
 				currentScope.problemReporter().cannotAssignToFinalField(binding, this);
 			}
 		}
@@ -104,7 +109,7 @@ public class FieldReference extends Reference implements InvocationSite {
 
 		receiver.analyseCode(currentScope, flowContext, flowInfo, !binding.isStatic());
 		if (valueRequired) {
-			manageSyntheticReadAccessIfNecessary(currentScope);
+			manageSyntheticReadAccessIfNecessary(currentScope, flowInfo);
 		}
 		return flowInfo;
 	}
@@ -154,10 +159,7 @@ public class FieldReference extends Reference implements InvocationSite {
 			}
 		} else {
 			boolean isStatic = this.codegenBinding.isStatic();
-			receiver.generateCode(
-				currentScope,
-				codeStream,
-				valueRequired && (!isStatic) && (this.codegenBinding.constant == NotAConstant));
+			receiver.generateCode(currentScope, codeStream, !isStatic);
 			if (valueRequired) {
 				if (this.codegenBinding.constant == NotAConstant) {
 					if (this.codegenBinding.declaringClass == null) { // array length
@@ -175,7 +177,16 @@ public class FieldReference extends Reference implements InvocationSite {
 					}
 					codeStream.generateImplicitConversion(implicitConversion);
 				} else {
+					if (!isStatic) {
+						codeStream.invokeObjectGetClass(); // perform null check
+						codeStream.pop();
+					}
 					codeStream.generateConstant(this.codegenBinding.constant, implicitConversion);
+				}
+			} else {
+				if (!isStatic){
+					codeStream.invokeObjectGetClass(); // perform null check
+					codeStream.pop();
 				}
 			}
 		}
@@ -286,10 +297,9 @@ public class FieldReference extends Reference implements InvocationSite {
 
 	public static final Constant getConstantFor(
 		FieldBinding binding,
-		boolean implicitReceiver,
 		Reference reference,
-		Scope referenceScope,
-		int indexInQualification) {
+		boolean isImplicit,
+		Scope referenceScope) {
 
 		//propagation of the constant.
 
@@ -298,7 +308,7 @@ public class FieldReference extends Reference implements InvocationSite {
 		//if ref==null then indexInQualification==0 AND implicitReceiver == false. This case is a 
 		//degenerated case where a fake reference field (null) 
 		//is associted to a real FieldBinding in order 
-		//to allow its constant computation using the regular path (i.e. find the fieldDeclaration
+		//to allow its constant computation using the regular path (in other words, find the fieldDeclaration
 		//and proceed to its type resolution). As implicitReceiver is false, no error reporting
 		//against ref will be used ==> no nullPointerException risk .... 
 
@@ -311,12 +321,8 @@ public class FieldReference extends Reference implements InvocationSite {
 			return binding.constant = NotAConstant;
 		}
 		if (binding.constant != null) {
-			if (indexInQualification == 0) {
-				return binding.constant;
-			}
-			//see previous comment for the (sould-always-be) valid cast
-			QualifiedNameReference qualifiedReference = (QualifiedNameReference) reference;
-			if (indexInQualification == (qualifiedReference.indexOfFirstFieldBinding - 1)) {
+			if (isImplicit || (reference instanceof QualifiedNameReference
+					&& binding == ((QualifiedNameReference)reference).binding)) {
 				return binding.constant;
 			}
 			return NotAConstant;
@@ -331,47 +337,15 @@ public class FieldReference extends Reference implements InvocationSite {
 		TypeDeclaration typeDecl = typeBinding.scope.referenceContext;
 		FieldDeclaration fieldDecl = typeDecl.declarationOf(binding);
 
-		//what scope to use (depend on the staticness of the field binding)
-		MethodScope fieldScope =
-			binding.isStatic()
+		fieldDecl.resolve(binding.isStatic() //side effect on binding 
 				? typeDecl.staticInitializerScope
-				: typeDecl.initializerScope;
+				: typeDecl.initializerScope); 
 
-		if (implicitReceiver) { //Determine if the ref is legal in the current class of the field
-			//i.e. not a forward reference .... 
-			if (fieldScope.fieldDeclarationIndex == MethodScope.NotInFieldDecl) {
-				// no field is currently being analysed in typeDecl
-				fieldDecl.resolve(fieldScope); //side effect on binding 
-				return binding.constant;
-			}
-			//We are re-entering the same class fields analysing
-			if ((reference != null)
-				&& (binding.declaringClass == referenceScope.enclosingSourceType()) // only complain for access inside same type
-				&& (binding.id > fieldScope.fieldDeclarationIndex)) {
-				//forward reference. The declaration remains unresolved.
-				referenceScope.problemReporter().forwardReference(reference, indexInQualification, typeBinding);
-				return NotAConstant;
-			}
-			fieldDecl.resolve(fieldScope); //side effect on binding 
+		if (isImplicit || (reference instanceof QualifiedNameReference
+				&& binding == ((QualifiedNameReference)reference).binding)) {
 			return binding.constant;
 		}
-		//the field reference is explicity. It has to be a "simple" like field reference to get the
-		//constant propagation. For example in Packahe.Type.field1.field2 , field1 may have its
-		//constant having a propagation where field2 is always not propagating its
-		if (indexInQualification == 0) {
-			fieldDecl.resolve(fieldScope); //side effect on binding ... 
-			return binding.constant;
-		}
-		// Side-effect on the field binding may not be propagated out for the qualified reference
-		// unless it occurs in first place of the name sequence
-		fieldDecl.resolve(fieldScope); //side effect on binding ... 
-		//see previous comment for the cast that should always be valid
-		QualifiedNameReference qualifiedReference = (QualifiedNameReference) reference;
-		if (indexInQualification == (qualifiedReference.indexOfFirstFieldBinding - 1)) {
-			return binding.constant;
-		} else {
-			return NotAConstant;
-		}
+		return NotAConstant;
 	}
 
 	public boolean isSuperAccess() {
@@ -387,8 +361,9 @@ public class FieldReference extends Reference implements InvocationSite {
 	/*
 	 * No need to emulate access to protected fields since not implicitly accessed
 	 */
-	public void manageSyntheticReadAccessIfNecessary(BlockScope currentScope) {
+	public void manageSyntheticReadAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
 
+		if (!flowInfo.isReachable()) return;
 		if (binding.isPrivate()) {
 			if ((currentScope.enclosingSourceType() != binding.declaringClass)
 				&& (binding.constant == NotAConstant)) {
@@ -425,12 +400,12 @@ public class FieldReference extends Reference implements InvocationSite {
 		}
 		// if the binding declaring class is not visible, need special action
 		// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
-		// NOTE: from 1.4 on, field's declaring class is touched if any different from receiver type
+		// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
 		if (binding.declaringClass != this.receiverType
 			&& !this.receiverType.isArrayType()
 			&& binding.declaringClass != null // array.length
 			&& binding.constant == NotAConstant
-			&& ((currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4
+			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2
 				&& binding.declaringClass.id != T_Object)
 			//no change for Object fields (in case there was)
 				|| !binding.declaringClass.canBeSeenBy(currentScope))) {
@@ -444,8 +419,9 @@ public class FieldReference extends Reference implements InvocationSite {
 	/*
 	 * No need to emulate access to protected fields since not implicitly accessed
 	 */
-	public void manageSyntheticWriteAccessIfNecessary(BlockScope currentScope) {
+	public void manageSyntheticWriteAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
 
+		if (!flowInfo.isReachable()) return;
 		if (binding.isPrivate()) {
 			if (currentScope.enclosingSourceType() != binding.declaringClass) {
 				syntheticWriteAccessor =
@@ -482,12 +458,12 @@ public class FieldReference extends Reference implements InvocationSite {
 		}
 		// if the binding declaring class is not visible, need special action
 		// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
-		// NOTE: from 1.4 on, field's declaring class is touched if any different from receiver type
+		// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
 		if (binding.declaringClass != this.receiverType
 			&& !this.receiverType.isArrayType()
 			&& binding.declaringClass != null // array.length
 			&& binding.constant == NotAConstant
-			&& ((currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4
+			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2
 				&& binding.declaringClass.id != T_Object)
 			//no change for Object fields (in case there was)
 				|| !binding.declaringClass.canBeSeenBy(currentScope))) {
@@ -498,48 +474,50 @@ public class FieldReference extends Reference implements InvocationSite {
 		}
 	}
 
+	public StringBuffer printExpression(int indent, StringBuffer output) {
+
+		return receiver.printExpression(0, output).append('.').append(token);
+	}
+	
 	public TypeBinding resolveType(BlockScope scope) {
 
 		// Answer the signature type of the field.
 		// constants are propaged when the field is final
 		// and initialized with a (compile time) constant 
 
-		// regular receiver reference 
+		//always ignore receiver cast, since may affect constant pool reference
+		if (this.receiver instanceof CastExpression) this.receiver.bits |= IgnoreNeedForCastCheckMASK; // will check later on
 		this.receiverType = receiver.resolveType(scope);
 		if (this.receiverType == null) {
 			constant = NotAConstant;
 			return null;
 		}
 		// the case receiverType.isArrayType and token = 'length' is handled by the scope API
-		this.codegenBinding =
-			this.binding = scope.getField(this.receiverType, token, this);
+		this.codegenBinding = this.binding = scope.getField(this.receiverType, token, this);
 		if (!binding.isValidBinding()) {
 			constant = NotAConstant;
 			scope.problemReporter().invalidField(this, this.receiverType);
 			return null;
 		}
 
-		if (isFieldUseDeprecated(binding, scope))
+		if (isFieldUseDeprecated(binding, scope, (this.bits & IsStrictlyAssignedMASK) !=0)) {
 			scope.problemReporter().deprecatedField(binding, this);
-
-		// check for this.x in static is done in the resolution of the receiver
-		constant =
-			FieldReference.getConstantFor(
-				binding,
-				receiver == ThisReference.ThisImplicit,
-				this,
-				scope,
-				0);
-		if (receiver != ThisReference.ThisImplicit)
+		}
+		boolean isImplicitThisRcv = receiver.isImplicitThis();
+		constant = FieldReference.getConstantFor(binding, this, isImplicitThisRcv, scope);
+		if (!isImplicitThisRcv) {
 			constant = NotAConstant;
-
+		}
 		if (binding.isStatic()) {
 			// static field accessed through receiver? legal but unoptimal (optional warning)
-			if (!(receiver == ThisReference.ThisImplicit
+			if (!(isImplicitThisRcv
 					|| receiver.isSuper()
 					|| (receiver instanceof NameReference 
 						&& (((NameReference) receiver).bits & BindingIds.TYPE) != 0))) {
-				scope.problemReporter().unnecessaryReceiverForStaticField(this, binding);
+				scope.problemReporter().nonStaticAccessToStaticField(this, binding);
+			}
+			if (!isImplicitThisRcv && binding.declaringClass != receiverType) {
+				scope.problemReporter().indirectAccessToStaticField(this, binding);
 			}
 		}
 		return this.resolvedType = binding.type;
@@ -551,20 +529,14 @@ public class FieldReference extends Reference implements InvocationSite {
 
 	public void setDepth(int depth) {
 
+		bits &= ~DepthMASK; // flush previous depth if any			
 		if (depth > 0) {
-			bits &= ~DepthMASK; // flush previous depth if any			
 			bits |= (depth & 0xFF) << DepthSHIFT; // encoded on 8 bits
 		}
 	}
 
 	public void setFieldIndex(int index) {
 		// ignored
-	}
-
-	public String toStringExpression() {
-
-		return receiver.toString() + "." //$NON-NLS-1$
-		+ new String(token);
 	}
 
 	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {

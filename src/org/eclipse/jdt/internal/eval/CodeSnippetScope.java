@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -272,7 +272,7 @@ public FieldBinding findFieldForCodeSnippet(TypeBinding receiverType, char[] fie
 			return new ProblemFieldBinding((ReferenceBinding)leafType, fieldName, ReceiverTypeNotVisible);
 		}
 		if (CharOperation.equals(fieldName, LENGTH))
-			return ArrayBinding.LengthField;
+			return ArrayBinding.ArrayLength;
 		return null;
 	}
 
@@ -561,7 +561,7 @@ public Binding getBinding(char[][] compoundName, int mask, InvocationSite invoca
 	 			if (!binding.isValidBinding())
 					return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), binding.problemId());
 	 			if (!this.canBeSeenByForCodeSnippet((ReferenceBinding) binding, receiverType))
-					return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), binding, NotVisible);
+					return new ProblemReferenceBinding(CharOperation.subarray(compoundName, 0, currentIndex), (ReferenceBinding) binding, NotVisible);
 	 			break foundType;
  			}
  			packageBinding = (PackageBinding) binding;
@@ -612,14 +612,15 @@ public Binding getBinding(char[][] compoundName, int mask, InvocationSite invoca
 
 public MethodBinding getConstructor(ReferenceBinding receiverType, TypeBinding[] argumentTypes, InvocationSite invocationSite) {
 	MethodBinding methodBinding = receiverType.getExactConstructor(argumentTypes);
-	if (methodBinding != null)
-		if (canBeSeenByForCodeSnippet(methodBinding, receiverType, invocationSite, this))
+	if (methodBinding != null) {
+		if (canBeSeenByForCodeSnippet(methodBinding, receiverType, invocationSite, this)) {
 			return methodBinding;
-
+		}
+	}
 	MethodBinding[] methods = receiverType.getMethods(ConstructorDeclaration.ConstantPoolName);
-	if (methods == NoMethods)
+	if (methods == NoMethods) {
 		return new ProblemMethodBinding(ConstructorDeclaration.ConstantPoolName, argumentTypes, NotFound);
-
+	}
 	MethodBinding[] compatible = new MethodBinding[methods.length];
 	int compatibleIndex = 0;
 	for (int i = 0, length = methods.length; i < length; i++)
@@ -632,13 +633,16 @@ public MethodBinding getConstructor(ReferenceBinding receiverType, TypeBinding[]
 	int visibleIndex = 0;
 	for (int i = 0; i < compatibleIndex; i++) {
 		MethodBinding method = compatible[i];
-		if (canBeSeenByForCodeSnippet(method, receiverType, invocationSite, this))
+		if (canBeSeenByForCodeSnippet(method, receiverType, invocationSite, this)) {
 			visible[visibleIndex++] = method;
+		}
 	}
-	if (visibleIndex == 1)
+	if (visibleIndex == 1) {
 		return visible[0];
-	if (visibleIndex == 0)
+	}
+	if (visibleIndex == 0) {
 		return new ProblemMethodBinding(ConstructorDeclaration.ConstantPoolName, compatible[0].parameters, NotVisible);
+	}
 	return mostSpecificClassMethodBinding(visible, visibleIndex);
 }
 /* API
@@ -716,7 +720,6 @@ public MethodBinding getImplicitMethod(ReferenceBinding receiverType, char[] sel
 					fuzzyProblem = new ProblemMethodBinding(selector, argumentTypes, methodBinding.declaringClass, NotVisible);
 				}
 			}
-			//TODO: (philippe) should set closest match
 			if (fuzzyProblem == null && !methodBinding.isStatic()) {
 				if (insideConstructorCall) {
 					insideProblem = new ProblemMethodBinding(methodBinding.selector, methodBinding.parameters, NonStaticReferenceInConstructorInvocation);
@@ -728,7 +731,7 @@ public MethodBinding getImplicitMethod(ReferenceBinding receiverType, char[] sel
 				// found a valid method in the 'immediate' scope (ie. not inherited)
 				// OR the receiverType implemented a method with the correct name
 				if (foundMethod == null) {
-					// return the methodBinding if it is not declared in a superclass of the scope's binding (i.e. "inherited")
+					// return the methodBinding if it is not declared in a superclass of the scope's binding (it is inherited)
 					if (fuzzyProblem != null)
 						return fuzzyProblem;
 					if (insideProblem != null)

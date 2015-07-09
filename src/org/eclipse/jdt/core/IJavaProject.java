@@ -1,7 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2003 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
@@ -11,7 +11,9 @@
  *     IBM Corporation - deprecated getPackageFragmentRoots(IClasspathEntry) and 
  *                               added findPackageFragmentRoots(IClasspathEntry)
  *     IBM Corporation - added isOnClasspath(IResource)
- ******************************************************************************/
+ *     IBM Corporation - added setOption(String, String)
+ *     IBM Corporation - added forceClasspathReload(IProgressMonitor)
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import java.util.Map;
@@ -77,6 +79,33 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * <code>IJavaElement</code> is found
 	 */
 	IJavaElement findElement(IPath path) throws JavaModelException;
+	
+	/**
+	 * Returns the <code>IJavaElement</code> corresponding to the given
+	 * classpath-relative path, or <code>null</code> if no such 
+	 * <code>IJavaElement</code> is found. The result is one of an
+	 * <code>ICompilationUnit</code>, <code>IClassFile</code>, or
+	 * <code>IPackageFragment</code>. If it is an <code>ICompilationUnit</code>,
+	 * its owner is the given owner.
+	 * <p>
+	 * When looking for a package fragment, there might be several potential
+	 * matches; only one of them is returned.
+	 *
+	 * <p>For example, the path "java/lang/Object.java", would result in the
+	 * <code>ICompilationUnit</code> or <code>IClassFile</code> corresponding to
+	 * "java.lang.Object". The path "java/lang" would result in the
+	 * <code>IPackageFragment</code> for "java.lang".
+	 * @param path the given classpath-relative path
+	 * @param owner the owner of the returned compilation unit, ignored if it is
+	 *   not a compilation unit.
+	 * @exception JavaModelException if the given path is <code>null</code>
+	 *  or absolute
+	 * @return the <code>IJavaElement</code> corresponding to the given
+	 * classpath-relative path, or <code>null</code> if no such 
+	 * <code>IJavaElement</code> is found
+	 * @since 3.0
+	 */
+	IJavaElement findElement(IPath path, WorkingCopyOwner owner) throws JavaModelException;
 
 	/**
 	 * Returns the first existing package fragment on this project's classpath
@@ -136,6 +165,7 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * a class B defined as a member type of a class A in package x.y should have a 
 	 * the fully qualified name "x.y.A.B".
 	 * 
+	 * TODO: (kent) need to change spec if secondary types are found
 	 * Note that in order to be found, a type name (or its toplevel enclosing
 	 * type name) must match its corresponding compilation unit name. As a 
 	 * consequence, secondary types cannot be found using this functionality.
@@ -153,6 +183,32 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	IType findType(String fullyQualifiedName) throws JavaModelException;
 	/**
 	 * Returns the first type found following this project's classpath 
+	 * with the given fully qualified name or <code>null</code> if none is found.
+	 * The fully qualified name is a dot-separated name. For example,
+	 * a class B defined as a member type of a class A in package x.y should have a 
+	 * the fully qualified name "x.y.A.B".
+	 * If the returned type is part of a compilation unit, its owner is the given
+	 * owner.
+	 * 
+	 * TODO: (kent) need to change spec if secondary types are found
+	 * Note that in order to be found, a type name (or its toplevel enclosing
+	 * type name) must match its corresponding compilation unit name. As a 
+	 * consequence, secondary types cannot be found using this functionality.
+	 * Secondary types can however be explicitely accessed through their enclosing
+	 * unit or found by the <code>SearchEngine</code>.
+	 * 
+	 * @param fullyQualifiedName the given fully qualified name
+	 * @param owner the owner of the returned type's compilation unit
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource
+	 * @return the first type found following this project's classpath 
+	 * with the given fully qualified name or <code>null</code> if none is found
+	 * @see IType#getFullyQualifiedName(char)
+	 * @since 3.0
+	 */
+	IType findType(String fullyQualifiedName, WorkingCopyOwner owner) throws JavaModelException;
+	/**
+	 * Returns the first type found following this project's classpath 
 	 * with the given package name and type qualified name
 	 * or <code>null</code> if none is found.
 	 * The package name is a dot-separated name.
@@ -160,6 +216,7 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * a class B defined as a member type of a class A should have the 
 	 * type qualified name "A.B".
 	 * 
+	 * TODO: (kent) need to change spec if secondary types are found
 	 * Note that in order to be found, a type name (or its toplevel enclosing
 	 * type name) must match its corresponding compilation unit name. As a 
 	 * consequence, secondary types cannot be found using this functionality.
@@ -174,11 +231,66 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * with the given package name and type qualified name
 	 * or <code>null</code> if none is found
 	 * @see IType#getTypeQualifiedName(char)
-
 	 * @since 2.0
 	 */
 	IType findType(String packageName, String typeQualifiedName) throws JavaModelException;
-
+	/**
+	 * Returns the first type found following this project's classpath 
+	 * with the given package name and type qualified name
+	 * or <code>null</code> if none is found.
+	 * The package name is a dot-separated name.
+	 * The type qualified name is also a dot-separated name. For example,
+	 * a class B defined as a member type of a class A should have the 
+	 * type qualified name "A.B".
+	 * If the returned type is part of a compilation unit, its owner is the given
+	 * owner.
+	 * 
+	 * TODO: (kent) need to change spec if secondary types are found
+	 * Note that in order to be found, a type name (or its toplevel enclosing
+	 * type name) must match its corresponding compilation unit name. As a 
+	 * consequence, secondary types cannot be found using this functionality.
+	 * Secondary types can however be explicitely accessed through their enclosing
+	 * unit or found by the <code>SearchEngine</code>.
+	 * 
+	 * @param packageName the given package name
+	 * @param typeQualifiedName the given type qualified name
+	 * @param owner the owner of the returned type's compilation unit
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource
+	 * @return the first type found following this project's classpath 
+	 * with the given package name and type qualified name
+	 * or <code>null</code> if none is found
+	 * @see IType#getTypeQualifiedName(char)
+	 * @since 3.0
+	 */
+	IType findType(String packageName, String typeQualifiedName, WorkingCopyOwner owner) throws JavaModelException;
+	/**
+	 * Force the project to reload its <code>.classpath</code> file from disk and update the classpath accordingly.
+	 * Usually, a change to the <code>.classpath</code> file is automatically noticed and reconciled at the next 
+	 * resource change notification event. If required to consider such a change prior to the next automatic
+	 * refresh, then this functionnality should be used to trigger a refresh. In particular, if a change to the file is performed,
+	 * during an operation where this change needs to be reflected before the operation ends, then an explicit refresh is
+	 * necessary.
+	 * 
+	 * @param monitor a progress monitor for reporting operation progress
+	 * @exception JavaModelException if the classpath could not be updated. Reasons
+	 * include:
+	 * <ul>
+	 * <li> This Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
+	 * <li> Two or more entries specify source roots with the same or overlapping paths (NAME_COLLISION)
+	 * <li> A entry of kind <code>CPE_PROJECT</code> refers to this project (INVALID_PATH)
+	 *  <li>This Java element does not exist (ELEMENT_DOES_NOT_EXIST)</li>
+	 *	<li>The output location path refers to a location not contained in this project (<code>PATH_OUTSIDE_PROJECT</code>)
+	 *	<li>The output location path is not an absolute path (<code>RELATIVE_PATH</code>)
+	 *  <li>The output location path is nested inside a package fragment root of this project (<code>INVALID_PATH</code>)
+	 * <li> The classpath is being modified during resource change event notification (CORE_EXCEPTION)
+	 * </ul>
+	 * @deprecated - use setRawClasspath(readRawClasspath(), readOutputLocation(), monitor) instead
+	 * TODO (frederic) remove before 3.0
+	 * @since 3.0
+	 */
+	void forceClasspathReload(IProgressMonitor monitor) throws JavaModelException;
+	
 	/**
 	 * Returns all of the existing package fragment roots that exist
 	 * on the classpath, in the order they are defined by the classpath.
@@ -203,7 +315,8 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * (possibly in a folder)
 	 * </p>
 	 * 
-	 * @return an array of non-Java resources directly contained in this project
+	 * @return an array of non-Java resources (<code>IFile</code>s and/or 
+	 *              <code>IFolder</code>s) directly contained in this project
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource
 	 */
@@ -226,7 +339,7 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	
 	/**
 	 * Returns the table of the current custom options for this project. Projects remember their custom options,
-	 * i.e. only the options different from the the JavaCore global options for the workspace.
+	 * in other words, only the options different from the the JavaCore global options for the workspace.
 	 * A boolean argument allows to directly merge the project options with global ones from <code>JavaCore</code>.
 	 * <p>
 	 * For a complete description of the configurable options, see <code>JavaCore#getDefaultOptions</code>.
@@ -345,34 +458,6 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	IProject getProject();
 
 	/**
-	 * This is a helper method returning the resolved classpath for the project, as a list of classpath entries, 
-	 * where all classpath variable entries have been resolved and substituted with their final target entries.
-	 * <p>
-	 * A resolved classpath corresponds to a particular instance of the raw classpath bound in the context of 
-	 * the current values of the referred variables, and thus should not be persisted.
-	 * <p>
-	 * A classpath variable provides an indirection level for better sharing a classpath. As an example, it allows
-	 * a classpath to no longer refer directly to external JARs located in some user specific location. The classpath
-	 * can simply refer to some variables defining the proper locations of these external JARs.
-	 * <p>
-	 * The boolean argument <code>ignoreUnresolvedVariable</code> allows to specify how to handle unresolvable variables,
-	 * when set to <code>true</code>, missing variables are simply ignored, the resulting path is then only formed of the
-	 * resolvable entries, without any indication about which variable(s) was ignored. When set to <code>false</code>, a
-	 * JavaModelException will be thrown for the first unresolved variable (from left to right).
-	 * 
-	 * @exception JavaModelException in one of the corresponding situation:
-	 * <ul>
-	 *    <li> this element does not exist </li>
-	 *    <li> an exception occurs while accessing its corresponding resource </li>
-	 *    <li> a classpath variable was not resolvable and <code>ignoreUnresolvedVariable</code> was set to <code>false</code>. </li>
-	 * </ul>
-	 * @return 
-	 * @see IClasspathEntry 
-	 */
-//	IClasspathEntry[] getExpandedClasspath(boolean ignoreUnresolvedVariable)
-//		throws JavaModelException;
-
-	/**
 	 * Returns the raw classpath for the project, as a list of classpath entries. This corresponds to the exact set
 	 * of entries which were assigned using <code>setRawClasspath</code>, in particular such a classpath may contain
 	 * classpath variable entries. Classpath variable entries can be resolved individually (see <code>JavaCore#getClasspathVariable</code>),
@@ -381,6 +466,7 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * A classpath variable provides an indirection level for better sharing a classpath. As an example, it allows
 	 * a classpath to no longer refer directly to external JARs located in some user specific location. The classpath
 	 * can simply refer to some variables defining the proper locations of these external JARs.
+	 * TODO (jim) please reformulate to include classpath containers in resolution aspects
 	 *  <p>
 	 * Note that in case the project isn't yet opened, the classpath will directly be read from the associated <tt>.classpath</tt> file.
 	 * <p>
@@ -405,34 +491,40 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 */
 	String[] getRequiredProjectNames() throws JavaModelException;
 
-	/** TODO: (jim) improve doc to mention classpath containers
-	 * This is a helper method returning the resolved classpath for the project, as a list of classpath entries, 
-	 * where all classpath variable entries have been resolved and substituted with their final target entries.
+	/**
+	 * This is a helper method returning the resolved classpath for the project
+	 * as a list of simple (non-variable, non-container) classpath entries.
+	 * All classpath variable and classpath container entries in the project's
+	 * raw classpath will be replaced by the simple classpath entries they
+	 * resolve to.
 	 * <p>
-	 * A resolved classpath corresponds to a particular instance of the raw classpath bound in the context of 
-	 * the current values of the referred variables, and thus should not be persisted.
-	 * <p>
-	 * A classpath variable provides an indirection level for better sharing a classpath. As an example, it allows
-	 * a classpath to no longer refer directly to external JARs located in some user specific location. The classpath
-	 * can simply refer to some variables defining the proper locations of these external JARs.
-	 * <p>
-	 * The boolean argument <code>ignoreUnresolvedVariable</code> allows to specify how to handle unresolvable variables,
-	 * when set to <code>true</code>, missing variables are simply ignored, the resulting path is then only formed of the
-	 * resolvable entries, without any indication about which variable(s) was ignored. When set to <code>false</code>, a
-	 * JavaModelException will be thrown for the first unresolved variable (from left to right).
+	 * The resulting resolved classpath is accurate for the given point in time.
+	 * If the project's raw classpath is later modified, or if classpath
+	 * variables are changed, the resolved classpath can become out of date.
+	 * Because of this, hanging on resolved classpath is not recommended.
+	 * </p>
 	 * 
-	 * @param ignoreUnresolvedVariable specify how to handle unresolvable variables
-	 * @return the resolved classpath for the project, as a list of classpath entries, 
-	 * where all classpath variable entries have been resolved and substituted with their final target entries
+	 * @param ignoreUnresolvedEntry indicates how to handle unresolvable
+	 * variables and containers; <code>true</code> indicates that missing
+	 * variables and unresolvable classpath containers should be silently
+	 * ignored, and that the resulting list should consist only of the
+	 * entries that could be successfully resolved; <code>false</code> indicates
+	 * that a <code>JavaModelException</code> should be thrown for the first
+	 * unresolved variable or container
+	 * @return the resolved classpath for the project as a list of simple 
+	 * classpath entries, where all classpath variable and container entries
+	 * have been resolved and substituted with their final target entries
 	 * @exception JavaModelException in one of the corresponding situation:
 	 * <ul>
-	 *    <li> this element does not exist </li>
-	 *    <li> an exception occurs while accessing its corresponding resource </li>
-	 *    <li> a classpath variable was not resolvable and <code>ignoreUnresolvedVariable</code> was set to <code>false</code>. </li>
+	 *    <li>this element does not exist</li>
+	 *    <li>an exception occurs while accessing its corresponding resource</li>
+	 *    <li>a classpath variable or classpath container was not resolvable
+	 *    and <code>ignoreUnresolvedEntry</code> is <code>false</code>.</li>
 	 * </ul>
-	 * @see IClasspathEntry 
+	 * @see IClasspathEntry
 	 */
-	IClasspathEntry[] getResolvedClasspath(boolean ignoreUnresolvedVariable) throws JavaModelException;
+	IClasspathEntry[] getResolvedClasspath(boolean ignoreUnresolvedEntry)
+	     throws JavaModelException;
 
 	/**
 	 * Returns whether this project has been built at least once and thus whether it has a build state.
@@ -457,28 +549,24 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 	 * using an exclusion pattern. 
 	 * 
 	 * @param element the given element
-	 * @exception JavaModelException if this element does not exist or if an
-	 *		exception occurs while accessing its corresponding resource
 	 * @return <code>true</code> if the given element is on the classpath of
 	 * this project, <code>false</code> otherwise
 	 * @see IClasspathEntry#getExclusionPatterns
 	 * @since 2.0
 	 */
-	boolean isOnClasspath(IJavaElement element) throws JavaModelException;
+	boolean isOnClasspath(IJavaElement element);
 	/**
 	 * Returns whether the given resource is on the classpath of this project,
 	 * that is, referenced from a classpath entry and not explicitly excluded
 	 * using an exclusion pattern.
 	 * 
 	 * @param element the given element
-	 * @exception JavaModelException if this project does not exist or if an
-	 *		exception occurs while accessing its corresponding resource
 	 * @return <code>true</code> if the given resource is on the classpath of
 	 * this project, <code>false</code> otherwise
 	 * @see IClasspathEntry#getExclusionPatterns
 	 * @since 2.1
 	 */
-	boolean isOnClasspath(IResource resource) throws JavaModelException;
+	boolean isOnClasspath(IResource resource);
 
 	/**
 	 * Creates a new evaluation context.
@@ -502,12 +590,36 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 		throws JavaModelException;
 
 	/**
+	 * Creates and returns a type hierarchy for all types in the given
+	 * region, considering subtypes within that region and considering types in the 
+	 * working copies with the given owner. 
+	 * In other words, the owner's working copies will take 
+	 * precedence over their original compilation units in the workspace.
+	 * <p>
+	 * Note that if a working copy is empty, it will be as if the original compilation
+	 * unit had been deleted.
+	 * <p>
+	 *
+	 * @param monitor the given progress monitor
+	 * @param region the given region
+	 * @param owner the owner of working copies that take precedence over their original compilation units
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource
+	 * @exception IllegalArgumentException if region is <code>null</code>
+	 * @return a type hierarchy for all types in the given
+	 * region, considering subtypes within that region
+	 * @since 3.0
+	 */
+	ITypeHierarchy newTypeHierarchy(IRegion region, WorkingCopyOwner owner, IProgressMonitor monitor)
+		throws JavaModelException;
+
+	/**
 	 * Creates and returns a type hierarchy for the given type considering
 	 * subtypes in the specified region.
 	 * 
-	 * @param monitor the given monitor
-	 * @param region the given region
 	 * @param type the given type
+	 * @param region the given region
+	 * @param monitor the given monitor
 	 * 
 	 * @exception JavaModelException if this element does not exist or if an
 	 *		exception occurs while accessing its corresponding resource
@@ -521,6 +633,112 @@ public interface IJavaProject extends IParent, IJavaElement, IOpenable {
 		IRegion region,
 		IProgressMonitor monitor)
 		throws JavaModelException;
+
+	/**
+	 * Creates and returns a type hierarchy for the given type considering
+	 * subtypes in the specified region and considering types in the 
+	 * working copies with the given owner. 
+	 * In other words, the owner's working copies will take 
+	 * precedence over their original compilation units in the workspace.
+	 * <p>
+	 * Note that if a working copy is empty, it will be as if the original compilation
+	 * unit had been deleted.
+	 * <p>
+	 * 
+	 * @param type the given type
+	 * @param region the given region
+	 * @param monitor the given monitor
+	 * @param owner the owner of working copies that take precedence over their original compilation units
+	 * 
+	 * @exception JavaModelException if this element does not exist or if an
+	 *		exception occurs while accessing its corresponding resource
+	 *
+	 * @exception IllegalArgumentException if type or region is <code>null</code>
+	 * @return a type hierarchy for the given type considering
+	 * subtypes in the specified region
+	 * @since 3.0
+	 */
+	ITypeHierarchy newTypeHierarchy(
+		IType type,
+		IRegion region,
+		WorkingCopyOwner owner,
+		IProgressMonitor monitor)
+		throws JavaModelException;
+
+	/**
+	 * Returns the default output location for the project as defined by its <code>.classpath</code> file from disk, or <code>null</code>
+	 * if unable to read the file. 
+	 * <p>
+	 * This output location may differ from the in-memory one returned by <code>getOutputLocation</code>, in case the 
+	 * automatic reconciliation mechanism has not been performed yet. Usually, any change to the <code>.classpath</code> file 
+	 * is automatically noticed and reconciled at the next resource change notification event. 
+	 * However, if the file is modified within an operation, where this change needs to be taken into account before the 
+	 * operation ends, then the output location from disk can be read using this method, and further assigned to the project 
+	 * using <code>setRawClasspath(...)</code>.
+	 * <p>
+	 * The default output location is where class files are ordinarily generated
+	 * (and resource files, copied). Each source classpath entry can also
+	 * specify an output location for the generated class files (and copied
+	 * resource files) corresponding to compilation units under that source
+	 * folder. This makes it possible to arrange generated class files for
+	 * different source folders in different output folders, and not
+	 * necessarily the default output folder. This means that the generated
+	 * class files for the project may end up scattered across several folders,
+	 * rather than all in the default output folder (which is more standard).
+	 * <p>
+	 * In order to force manual a project classpath refresh, one can simply assign the project classpath using the result of this 
+	 * method, as follows:
+	 * <code>proj.setRawClasspath(proj.readRawClasspath(), proj.readOutputLocation(), monitor)</code>
+	 * <p>
+	 * @return the workspace-relative absolute path of the default output folder
+	 * @see #getOutputLocation
+	 * @since 3.0
+	 */
+	IPath readOutputLocation();
+
+	/**
+	 * Returns the raw classpath for the project as defined by its <code>.classpath</code> file from disk, or <code>null</code>
+	 * if unable to read the file. 
+	 * <p>
+	 * This classpath may differ from the in-memory classpath returned by <code>getRawClasspath</code>, in case the 
+	 * automatic reconciliation mechanism has not been performed yet. Usually, any change to the <code>.classpath</code> file 
+	 * is automatically noticed and reconciled at the next resource change notification event. 
+	 * However, if the file is modified within an operation, where this change needs to be taken into account before the 
+	 * operation ends, then the classpath from disk can be read using this method, and further assigned to the project 
+	 * using <code>setRawClasspath(...)</code>.
+	 * <p>
+	 * A raw classpath may contain classpath variable and/or container entries. Classpath variable entries can be resolved 
+	 * individually (see <code>JavaCore#getClasspathVariable</code>), or the full classpath can be resolved at once using the 
+	 * helper method <code>getResolvedClasspath</code>.
+	 * TODO (jim) please reformulate to include classpath containers in resolution aspects
+	 * <p>
+	 * Note that no check is performed whether the project has the Java nature set, allowing an existing <code>.classpath</code> 
+	 * file to be considered independantly (unlike <code>getRawClasspath</code> which requires the Java nature to be associated 
+	 * with the project). 
+	 * <p>
+	 * In order to force manual a project classpath refresh, one can simply assign the project classpath using the result of this 
+	 * method, as follows:
+	 * <code>proj.setRawClasspath(proj.readRawClasspath(), proj.readOutputLocation(), monitor)</code>
+	 * <p>
+	 * @return the raw classpath from disk for the project, as a list of classpath entries
+	 * @see #getRawClassPath
+	 * @see IClasspathEntry
+	 * @since 3.0
+	 */
+	IClasspathEntry[] readRawClasspath();
+
+	/**
+	 * Helper method for setting one option value only. Equivalent to <code>Map options = this.getOptions(false); map.put(optionName, optionValue); this.setOptions(map)</code>
+	 * <p>
+	 * For a complete description of the configurable options, see <code>JavaCore#getDefaultOptions</code>.
+	 * </p>
+	 * 
+	 * @param optionName the name of an option
+	 * @param optionValue the value of the option to set
+	 * @see JavaCore#getDefaultOptions
+	 * @since 3.0
+	 */
+	void setOption(String optionName, String optionValue);
 
 	/**
 	 * Sets the project custom options. All and only the options explicitly included in the given table 

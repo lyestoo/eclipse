@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -16,6 +16,7 @@ import org.eclipse.jdt.internal.compiler.env.IBinaryMethod;
 import org.eclipse.jdt.internal.compiler.env.IBinaryNestedType;
 import org.eclipse.jdt.internal.compiler.env.IBinaryType;
 import org.eclipse.jdt.internal.compiler.env.IConstants;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
 
 /**
  * The skeleton of the class 'org.eclipse.jdt.internal.eval.target.CodeSnippet'
@@ -103,7 +104,7 @@ public IBinaryField[] getFields() {
 	return null;
 }
 public char[] getFileName() {
-	return CharOperation.concat(CODE_SNIPPET_NAME, ".java".toCharArray()); //$NON-NLS-1$
+	return CharOperation.concat(CODE_SNIPPET_NAME, SuffixConstants.SUFFIX_java); //$NON-NLS-1$
 }
 public char[][] getInterfaceNames() {
 	return null;

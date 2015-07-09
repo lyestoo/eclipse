@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.internal.compiler.ast.Assignment;
@@ -16,8 +16,9 @@ import org.eclipse.jdt.internal.compiler.ast.Expression;
 import org.eclipse.jdt.internal.compiler.ast.FieldReference;
 import org.eclipse.jdt.internal.compiler.ast.IntLiteral;
 import org.eclipse.jdt.internal.compiler.ast.QualifiedNameReference;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
-import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
@@ -42,8 +43,8 @@ public class CodeSnippetQualifiedNameReference extends QualifiedNameReference im
  * @param sourceStart int
  * @param sourceEnd int
  */
-public CodeSnippetQualifiedNameReference(char[][] sources, int sourceStart, int sourceEnd, EvaluationContext evaluationContext) {
-	super(sources, sourceStart, sourceEnd);
+public CodeSnippetQualifiedNameReference(char[][] sources, long[] positions, int sourceStart, int sourceEnd, EvaluationContext evaluationContext) {
+	super(sources, positions, sourceStart, sourceEnd);
 	this.evaluationContext = evaluationContext;	
 }
 /**
@@ -384,11 +385,14 @@ public void generateReadSequence(BlockScope currentScope, CodeStream codeStream)
 
 public void generateReceiver(CodeStream codeStream) {
 	codeStream.aload_0();
-	if (delegateThis != null) codeStream.getfield(delegateThis); // delegated field access
+	if (delegateThis != null) {
+		codeStream.getfield(delegateThis); // delegated field access
+	}
 }
 public TypeBinding getOtherFieldBindings(BlockScope scope) {
 	// At this point restrictiveFlag may ONLY have two potential value : FIELD LOCAL (i.e cast <<(VariableBinding) binding>> is valid)
 
+	int length = tokens.length;
 	if ((bits & FIELD) != 0) {
 		if (!((FieldBinding) binding).isStatic()) { //must check for the static status....
 			if (indexOfFirstFieldBinding == 1) {
@@ -402,13 +406,14 @@ public TypeBinding getOtherFieldBindings(BlockScope scope) {
 				return null;
 			}
 		}
-		if (isFieldUseDeprecated((FieldBinding) binding, scope))
+		// only last field is actually a write access if any
+		if (isFieldUseDeprecated((FieldBinding) binding, scope, (this.bits & IsStrictlyAssignedMASK) !=0 && indexOfFirstFieldBinding == length)) {
 			scope.problemReporter().deprecatedField((FieldBinding) binding, this);
+		}
 	}
 
 	TypeBinding type = ((VariableBinding) binding).type;
 	int index = indexOfFirstFieldBinding;
-	int length = tokens.length;
 	if (index == length) { //	restrictiveFlag == FIELD
 		constant = FieldReference.getConstantFor((FieldBinding) binding, this, false, scope);
 		return type;
@@ -437,7 +442,7 @@ public TypeBinding getOtherFieldBindings(BlockScope scope) {
 			if (delegateThis == null) {
 				if (this.evaluationContext.declaringTypeName != null) {
 					delegateThis = scope.getField(scope.enclosingSourceType(), DELEGATE_THIS, this);
-					if (delegateThis == null){ ; // if not found then internal error, field should have been found
+					if (delegateThis == null){  // if not found then internal error, field should have been found
 						return super.reportError(scope);
 					}
 				} else {
@@ -450,8 +455,10 @@ public TypeBinding getOtherFieldBindings(BlockScope scope) {
 			otherBindings[place] = field;
 		}
 		if (field.isValidBinding()) {
-			if (isFieldUseDeprecated(field, scope))
+			// only last field is actually a write access if any
+			if (isFieldUseDeprecated(field, scope, (this.bits & IsStrictlyAssignedMASK) !=0 && index+1 == length)) {
 				scope.problemReporter().deprecatedField(field, this);
+			}
 			Constant someConstant = FieldReference.getConstantFor(field, this, false, scope);
 			// constant propagation can only be performed as long as the previous one is a constant too.
 			if (constant != NotAConstant){
@@ -487,19 +494,24 @@ public TypeBinding getReceiverType(BlockScope currentScope) {
 		BlockScope currentScope,
 		FieldBinding fieldBinding,
 		TypeBinding lastReceiverType,
-		int index) {
+		int index,
+		FlowInfo flowInfo) {
+
+		if (!flowInfo.isReachable()) return;
+	
 
 		// if the binding declaring class is not visible, need special action
 		// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
-		// NOTE: from 1.4 on, field's declaring class is touched if any different from receiver type
+		// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
 		boolean useDelegate = index == 0 && this.delegateThis != null;
-		if (useDelegate) lastReceiverType = this.delegateThis.type;
-
+		if (useDelegate) {
+			lastReceiverType = this.delegateThis.type;
+		}
 		if (fieldBinding.declaringClass != lastReceiverType
 			&& !lastReceiverType.isArrayType()			
 			&& fieldBinding.declaringClass != null
 			&& fieldBinding.constant == NotAConstant
-			&& ((currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4
+			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2
 					&& (index > 0 || indexOfFirstFieldBinding > 1 || !fieldBinding.isStatic())
 					&& fieldBinding.declaringClass.id != T_Object)
 				|| !(useDelegate
@@ -522,19 +534,23 @@ public TypeBinding getReceiverType(BlockScope currentScope) {
 	public void manageSyntheticWriteAccessIfNecessary(
 		BlockScope currentScope,
 		FieldBinding fieldBinding,
-		TypeBinding lastReceiverType) {
+		TypeBinding lastReceiverType,
+		FlowInfo flowInfo) {
 
+		if (!flowInfo.isReachable()) return;
+	
 		// if the binding declaring class is not visible, need special action
 		// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
-		// NOTE: from 1.4 on, field's declaring class is touched if any different from receiver type
+		// NOTE: from target 1.2 on, field's declaring class is touched if any different from receiver type
 		boolean useDelegate = fieldBinding == binding && this.delegateThis != null;
-		if (useDelegate) lastReceiverType = this.delegateThis.type;
-
+		if (useDelegate) {
+			lastReceiverType = this.delegateThis.type;
+		}
 		if (fieldBinding.declaringClass != lastReceiverType
 			&& !lastReceiverType.isArrayType()			
 			&& fieldBinding.declaringClass != null
 			&& fieldBinding.constant == NotAConstant
-			&& ((currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4
+			&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2
 					&& (fieldBinding != binding || indexOfFirstFieldBinding > 1 || !fieldBinding.isStatic())
 					&& fieldBinding.declaringClass.id != T_Object)
 				|| !(useDelegate
@@ -559,7 +575,7 @@ public TypeBinding reportError(BlockScope scope) {
 
 	if (this.evaluationContext.declaringTypeName != null) {
 		delegateThis = scope.getField(scope.enclosingSourceType(), DELEGATE_THIS, this);
-		if (delegateThis == null){ ; // if not found then internal error, field should have been found
+		if (delegateThis == null){  // if not found then internal error, field should have been found
 			return super.reportError(scope);
 		}
 	} else {
@@ -592,8 +608,9 @@ public TypeBinding reportError(BlockScope scope) {
 	if (binding instanceof ProblemFieldBinding
 		&& ((ProblemFieldBinding) binding).problemId() == NotVisible) {
 		result = resolveTypeVisibility(scope);
-		if (result == null)
+		if (result == null) {
 			return super.reportError(scope);
+		}
 		if (result.isValidBinding()) {
 			return result;
 		}

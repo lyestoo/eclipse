@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
@@ -19,6 +19,7 @@ import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Scope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
 
 public class CodeSnippetCodeStream extends CodeStream {
 	static InvocationSite NO_INVOCATION_SITE = 
@@ -71,12 +72,12 @@ protected void checkcast(int baseId) {
 	}
 }
 public void generateEmulatedAccessForMethod(Scope scope, MethodBinding methodBinding) {
-	CodeSnippetCodeStream localCodeStream = (CodeSnippetCodeStream) this;
+	CodeSnippetCodeStream localCodeStream = this;
 	localCodeStream.generateEmulationForMethod(scope, methodBinding);
 	localCodeStream.invokeJavaLangReflectMethodInvoke();
 }
 public void generateEmulatedReadAccessForField(FieldBinding fieldBinding) {
-	CodeSnippetCodeStream localCodeStream = (CodeSnippetCodeStream) this;
+	CodeSnippetCodeStream localCodeStream = this;
 	localCodeStream.generateEmulationForField(fieldBinding);
 	// swap  the field with the receiver
 	this.swap();
@@ -86,17 +87,17 @@ public void generateEmulatedReadAccessForField(FieldBinding fieldBinding) {
 	}
 }
 public void generateEmulatedWriteAccessForField(FieldBinding fieldBinding) {
-	CodeSnippetCodeStream localCodeStream = (CodeSnippetCodeStream) this;
+	CodeSnippetCodeStream localCodeStream = this;
 	localCodeStream.invokeJavaLangReflectFieldSetter(fieldBinding.type.id);
 }
 public void generateEmulationForConstructor(Scope scope, MethodBinding methodBinding) {
 	// leave a java.lang.reflect.Field object on the stack
-	CodeSnippetCodeStream localCodeStream = (CodeSnippetCodeStream) this;
+	CodeSnippetCodeStream localCodeStream = this;
 	this.ldc(String.valueOf(methodBinding.declaringClass.constantPoolName()).replace('/', '.'));
 	this.invokeClassForName();
 	int paramLength = methodBinding.parameters.length;
 	this.generateInlinedValue(paramLength);
-	this.newArray(scope, new ArrayBinding(scope.getType(TypeBinding.JAVA_LANG_CLASS), 1));
+	this.newArray(scope, new ArrayBinding(scope.getType(TypeConstants.JAVA_LANG_CLASS), 1));
 	if (paramLength > 0) {
 		this.dup();
 		for (int i = 0; i < paramLength; i++) {
@@ -135,7 +136,7 @@ public void generateEmulationForConstructor(Scope scope, MethodBinding methodBin
 }
 public void generateEmulationForField(FieldBinding fieldBinding) {
 	// leave a java.lang.reflect.Field object on the stack
-	CodeSnippetCodeStream localCodeStream = (CodeSnippetCodeStream) this;
+	CodeSnippetCodeStream localCodeStream = this;
 	this.ldc(String.valueOf(fieldBinding.declaringClass.constantPoolName()).replace('/', '.'));
 	this.invokeClassForName();
 	this.ldc(String.valueOf(fieldBinding.name));
@@ -146,13 +147,13 @@ public void generateEmulationForField(FieldBinding fieldBinding) {
 }
 public void generateEmulationForMethod(Scope scope, MethodBinding methodBinding) {
 	// leave a java.lang.reflect.Field object on the stack
-	CodeSnippetCodeStream localCodeStream = (CodeSnippetCodeStream) this;
+	CodeSnippetCodeStream localCodeStream = this;
 	this.ldc(String.valueOf(methodBinding.declaringClass.constantPoolName()).replace('/', '.'));
 	this.invokeClassForName();
 	this.ldc(String.valueOf(methodBinding.selector));
 	int paramLength = methodBinding.parameters.length;
 	this.generateInlinedValue(paramLength);
-	this.newArray(scope, new ArrayBinding(scope.getType(TypeBinding.JAVA_LANG_CLASS), 1));
+	this.newArray(scope, new ArrayBinding(scope.getType(TypeConstants.JAVA_LANG_CLASS), 1));
 	if (paramLength > 0) {
 		this.dup();
 		for (int i = 0; i < paramLength; i++) {

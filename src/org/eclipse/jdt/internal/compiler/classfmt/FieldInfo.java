@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.classfmt;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -33,7 +33,6 @@ public class FieldInfo extends ClassFileStruct implements AttributeNamesConstant
 	private int accessFlags;
 	private char[] name;
 	private char[] signature;
-	private int attributesCount;
 	private int attributeBytes;
 	private Object wrappedConstantValue;
 /**
@@ -41,7 +40,7 @@ public class FieldInfo extends ClassFileStruct implements AttributeNamesConstant
  * @param offsets int[]
  * @param offset int
  */
-public FieldInfo (byte classFileBytes[], int offsets[], int offset) throws ClassFormatException {
+public FieldInfo (byte classFileBytes[], int offsets[], int offset) {
 	super(classFileBytes, offset);
 	constantPoolOffsets = offsets;
 	accessFlags = -1;
@@ -117,44 +116,40 @@ public char[] getTypeName() {
 }
 /**
  * Return a wrapper that contains the constant of the field.
- * Throws a java.ibm.compiler.java.classfmt.ClassFormatException in case the signature is 
- * incompatible with the constant tag.
- * 
- * @exception java.ibm.compiler.java.classfmt.ClassFormatException
  * @return java.lang.Object
  */
-public Object getWrappedConstantValue() throws ClassFormatException {
+public Object getWrappedConstantValue() {
 
 	if (this.wrappedConstantValue == null) {
 		if (hasConstant()) {
-			Constant constant = getConstant();
-			switch (constant.typeID()) {
+			Constant fieldConstant = getConstant();
+			switch (fieldConstant.typeID()) {
 				case T_int :
-					this.wrappedConstantValue = new Integer(constant.intValue());
+					this.wrappedConstantValue = new Integer(fieldConstant.intValue());
 					break;
 				case T_byte :
-					this.wrappedConstantValue = new Byte(constant.byteValue());
+					this.wrappedConstantValue = new Byte(fieldConstant.byteValue());
 					break;
 				case T_short :
-					this.wrappedConstantValue = new Short(constant.shortValue());
+					this.wrappedConstantValue = new Short(fieldConstant.shortValue());
 					break;
 				case T_char :
-					this.wrappedConstantValue = new Character(constant.charValue());
+					this.wrappedConstantValue = new Character(fieldConstant.charValue());
 					break;
 				case T_float :
-					this.wrappedConstantValue = new Float(constant.floatValue());
+					this.wrappedConstantValue = new Float(fieldConstant.floatValue());
 					break;
 				case T_double :
-					this.wrappedConstantValue = new Double(constant.doubleValue());
+					this.wrappedConstantValue = new Double(fieldConstant.doubleValue());
 					break;
 				case T_boolean :
-					this.wrappedConstantValue = new Boolean(constant.booleanValue());
+					this.wrappedConstantValue = new Boolean(fieldConstant.booleanValue());
 					break;
 				case T_long :
-					this.wrappedConstantValue = new Long(constant.longValue());
+					this.wrappedConstantValue = new Long(fieldConstant.longValue());
 					break;
 				case T_String :
-					this.wrappedConstantValue = constant.stringValue();
+					this.wrappedConstantValue = fieldConstant.stringValue();
 			}
 		}
 	}

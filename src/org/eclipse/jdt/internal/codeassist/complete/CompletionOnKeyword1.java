@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2003 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.complete;
 
 import org.eclipse.jdt.internal.compiler.ast.SingleTypeReference;
@@ -35,7 +35,8 @@ public class CompletionOnKeyword1 extends SingleTypeReference implements Complet
 	public TypeBinding getTypeBinding(Scope scope) {
 		throw new CompletionNodeFound(this, scope);
 	}
-	public String toStringExpression(int tab){
-		return "<CompleteOnKeyword:"+new String(token)+">";  //$NON-NLS-1$  //$NON-NLS-2$
+	public StringBuffer printExpression(int indent, StringBuffer output){
+		
+		return output.append("<CompleteOnKeyword:").append(token).append('>');  //$NON-NLS-1$ 
 	}
 }

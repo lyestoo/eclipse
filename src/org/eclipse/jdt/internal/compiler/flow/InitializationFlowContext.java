@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
 import org.eclipse.jdt.internal.compiler.ast.AstNode;
@@ -35,7 +35,7 @@ public class InitializationFlowContext extends ExceptionHandlingFlowContext {
 			associatedNode,
 			NoExceptions, // no exception allowed by default
 			scope, 
-			FlowInfo.DeadEnd);
+			FlowInfo.DEAD_END);
 	}
 
 	public void checkInitializerExceptions(
@@ -51,6 +51,16 @@ public class InitializationFlowContext extends ExceptionHandlingFlowContext {
 		}
 	}
 
+	public String individualToString() {
+		
+		StringBuffer buffer = new StringBuffer("Initialization flow context"); //$NON-NLS-1$
+		for (int i = 0; i < exceptionCount; i++) {
+			buffer.append('[').append(thrownExceptions[i].readableName());
+			buffer.append('-').append(exceptionThrowerFlowInfos[i].toString()).append(']');
+		}
+		return buffer.toString();
+	}
+	
 	public void recordHandlingException(
 		ReferenceBinding exceptionType,
 		UnconditionalFlowInfo flowInfo,
@@ -58,6 +68,7 @@ public class InitializationFlowContext extends ExceptionHandlingFlowContext {
 		AstNode invocationSite,
 		boolean wasMasked) {
 			
+		// even if unreachable code, need to perform unhandled exception diagnosis
 		int size = thrownExceptions.length;
 		if (exceptionCount == size) {
 			System.arraycopy(

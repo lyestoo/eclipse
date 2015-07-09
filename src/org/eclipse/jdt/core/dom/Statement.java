@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2003 International Business Machines Corp. and others. All
- * rights reserved. This program and the accompanying materials are made
- * available under the terms of the Common Public License v1.0 which accompanies
- * this distribution, and is available at http://www.eclipse.org/legal/cpl-v10.
- * html
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
@@ -87,8 +87,7 @@ public abstract class Statement extends ASTNode {
 	 * comments with statements. Furthermore, AST.parseCompilationUnit did not
 	 * associate leading comments, making this moot. Clients that need to access
 	 * comments preceding a statement should use a scanner to reanalyze the
-	 * source text immediately preceding the statement's source range. Clients
-	 * that need to associate a comment with a statement should use a property.
+	 * source text immediately preceding the statement's source range.
 	 */
 	public String getLeadingComment() {
 		return optionalLeadingComment;
@@ -102,9 +101,8 @@ public abstract class Statement extends ASTNode {
 	 * A leading comment is a comment that appears before the statement.
 	 * It may be either a traditional comment or an end-of-line comment.
 	 * Traditional comments must begin with "/&#42;, may contain line breaks,
-	 * and must end with "&#42;/. End-of-line comments must begin with "//",
-	 * must end with a line delimiter (as per JLS 3.7), and must not contain
-	 * line breaks.
+	 * and must end with "&#42;/. End-of-line comments must begin with "//"
+	 * (as per JLS 3.7), and must not contain line breaks.
 	 * </p>
 	 * <p>
 	 * Examples:
@@ -115,7 +113,7 @@ public abstract class Statement extends ASTNode {
 	 * setLeadingComment("/&#42; unterminated traditional comment ");  // wrong
 	 * setLeadingComment("/&#42; broken\n traditional comment &#42;/");  // correct
 	 * setLeadingComment("// end-of-line comment\n");  // correct
-	 * setLeadingComment("// end-of-line comment without line terminator");  // wrong
+	 * setLeadingComment("// end-of-line comment without line terminator");  // correct
 	 * setLeadingComment("// broken\n end-of-line comment\n");  // wrong
 	 * </pre>
 	 * </code>
@@ -125,8 +123,7 @@ public abstract class Statement extends ASTNode {
 	 * @exception IllegalArgumentException if the comment string is invalid
 	 * @deprecated This feature was removed in the 2.1 release because it was
 	 * only a partial, and inadequate, solution to the issue of associating
-	 * comments with statements. Clients that need to associate a comment with
-	 * a statement should use a property.
+	 * comments with statements.
 	 */
 	public void setLeadingComment(String comment) {
 		if (comment != null) {

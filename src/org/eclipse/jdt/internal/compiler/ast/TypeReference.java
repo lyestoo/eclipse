@@ -1,16 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.flow.FlowContext;
+import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public abstract class TypeReference extends Expression {
@@ -18,9 +20,15 @@ public abstract class TypeReference extends Expression {
 public TypeReference() {
 		super () ;
 		}
-// allows us to trap completion & selection nodes
 
-public void aboutToResolve(Scope scope) {}
+public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
+	return flowInfo;
+}
+
+// allows us to trap completion & selection nodes
+public void aboutToResolve(Scope scope) {
+	// default implementation: do nothing
+}
 /*
  * Answer a base type reference (can be an array of base type).
  */
@@ -96,7 +104,7 @@ public TypeBinding resolveType(BlockScope scope) {
 		if (isTypeUseDeprecated(this.resolvedType, scope))
 			scope.problemReporter().deprecatedType(this.resolvedType, this);
 	}
-	return this.resolvedType = this.resolvedType;
+	return this.resolvedType;
 }
 public abstract void traverse(IAbstractSyntaxTreeVisitor visitor, ClassScope classScope);
 }

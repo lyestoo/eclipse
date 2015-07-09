@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.parser;
 
 /*An interface that contains static declarations for some basic information
@@ -15,22 +15,22 @@ package org.eclipse.jdt.internal.compiler.parser;
 
 public interface ParserBasicInformation {
 
-    public final static int
-      ERROR_SYMBOL      = 309,
-      MAX_NAME_LENGTH   = 36,
-      NUM_STATES        = 594,
-      NT_OFFSET         = 310,
-      SCOPE_UBOUND      = -1,
-      SCOPE_SIZE        = 0,
-      LA_STATE_OFFSET   = 16753,
-      MAX_LA            = 1,
-      NUM_RULES         = 438,
-      NUM_TERMINALS     = 105,
-      NUM_NON_TERMINALS = 205,
-      NUM_SYMBOLS       = 310,
-      START_STATE       = 16710,
-      EOFT_SYMBOL       = 158,
-      EOLT_SYMBOL       = 158,
-      ACCEPT_ACTION     = 16752,
-      ERROR_ACTION      = 16753;
+	public final static int
+		ERROR_SYMBOL = 105,
+		MAX_NAME_LENGTH = 36,
+		NUM_STATES = 606,
+		NT_OFFSET = 105,
+		SCOPE_UBOUND = 63,
+		SCOPE_SIZE = 64,
+		LA_STATE_OFFSET = 6077,
+		MAX_LA = 1,
+		NUM_RULES = 435,
+		NUM_TERMINALS = 105,
+		NUM_NON_TERMINALS = 203,
+		NUM_SYMBOLS = 308,
+		START_STATE = 1014,
+		EOFT_SYMBOL = 54,
+		EOLT_SYMBOL = 54,
+		ACCEPT_ACTION = 6076,
+		ERROR_ACTION = 6077;
 }

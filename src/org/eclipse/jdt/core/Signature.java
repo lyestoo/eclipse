@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.jdt.core.compiler.*;
@@ -26,8 +26,8 @@ import org.eclipse.jdt.core.compiler.*;
  *   | "S"  // short
  *   | "V"  // void
  *   | "Z"  // boolean
- *   | "L" + binaryTypeName + ";"  // resolved named type (i.e., in compiled code)
- *   | "Q" + sourceTypeName + ";"  // unresolved named type (i.e., in source code)
+ *   | "L" + binaryTypeName + ";"  // resolved named type (in compiled code)
+ *   | "Q" + sourceTypeName + ";"  // unresolved named type (in source code)
  *   | "[" + typeSignature  // array of type denoted by typeSignature
  * </pre>
  * </p>
@@ -36,9 +36,9 @@ import org.eclipse.jdt.core.compiler.*;
  * <ul>
  *   <li><code>"[[I"</code> denotes <code>int[][]</code></li>
  *   <li><code>"Ljava.lang.String;"</code> denotes <code>java.lang.String</code> in compiled code</li>
- *   <li><code>"QString"</code> denotes <code>String</code> in source code</li>
- *   <li><code>"Qjava.lang.String"</code> denotes <code>java.lang.String</code> in source code</li>
- *   <li><code>"[QString"</code> denotes <code>String[]</code> in source code</li>
+ *   <li><code>"QString;"</code> denotes <code>String</code> in source code</li>
+ *   <li><code>"Qjava.lang.String;"</code> denotes <code>java.lang.String</code> in source code</li>
+ *   <li><code>"[QString;"</code> denotes <code>String[]</code> in source code</li>
  * </ul>
  * </p>
  * <p>
@@ -234,11 +234,19 @@ public final class Signature {
 	private static final char[] SHORT = {'s', 'h', 'o', 'r', 't'};
 	private static final char[] VOID = {'v', 'o', 'i', 'd'};
 	
+	private static final String EMPTY = new String(CharOperation.NO_CHAR);
 	
-/**
- * Not instantiable.
- */
-private Signature() {}
+private Signature() {
+	// Not instantiable
+}
+
+private static boolean checkPrimitiveType(char[] primitiveTypeName, char[] typeName) {
+	return CharOperation.fragmentEquals(primitiveTypeName, typeName, 0, true) &&
+		(typeName.length == primitiveTypeName.length
+		 || Character.isWhitespace(typeName[primitiveTypeName.length])
+		 || typeName[primitiveTypeName.length] == C_ARRAY
+		 || typeName[primitiveTypeName.length] == C_DOT);
+}
 
 private static long copyType(char[] signature, int sigPos, char[] dest, int index, boolean fullyQualifyTypeNames) {
 	int arrayCount = 0;
@@ -441,60 +449,60 @@ public static char[] createCharArrayTypeSignature(char[] typeName, boolean isRes
 	switch (typeName[0]) {
 		// primitive type?
 		case 'b' :
-			if (CharOperation.fragmentEquals(BOOLEAN, typeName, 0, true)) {
+			if (checkPrimitiveType(BOOLEAN, typeName)) {
 				sig = new char[arrayCount+1];
 				sig[arrayCount] = C_BOOLEAN;
 				break;
-			} else if (CharOperation.fragmentEquals(BYTE, typeName, 0, true)) {
+			} else if (checkPrimitiveType(BYTE, typeName)) {
 				sig = new char[arrayCount+1];
 				sig[arrayCount] = C_BYTE;
 				break;
 			}
 		case 'c':
-			if (CharOperation.fragmentEquals(CHAR, typeName, 0, true)) {
+			if (checkPrimitiveType(CHAR, typeName)) {
 				sig = new char[arrayCount+1];
 				sig[arrayCount] = C_CHAR;
 				break;
 			}
 		case 'd':
-			if (CharOperation.fragmentEquals(DOUBLE, typeName, 0, true)) {
+			if (checkPrimitiveType(DOUBLE, typeName)) {
 				sig = new char[arrayCount+1];
 				sig[arrayCount] = C_DOUBLE;
 				break;
 			}
 		case 'f':
-			if (CharOperation.fragmentEquals(FLOAT, typeName, 0, true)) {
+			if (checkPrimitiveType(FLOAT, typeName)) {
 				sig = new char[arrayCount+1];
 				sig[arrayCount] = C_FLOAT;
 				break;
 			}
 		case 'i':
-			if (CharOperation.fragmentEquals(INT, typeName, 0, true)) {
+			if (checkPrimitiveType(INT, typeName)) {
 				sig = new char[arrayCount+1];
 				sig[arrayCount] = C_INT;
 				break;
 			}
 		case 'l':
-			if (CharOperation.fragmentEquals(LONG, typeName, 0, true)) {
+			if (checkPrimitiveType(LONG, typeName)) {
 				sig = new char[arrayCount+1];
 				sig[arrayCount] = C_LONG;
 				break;
 			}
 		case 's':
-			if (CharOperation.fragmentEquals(SHORT, typeName, 0, true)) {
+			if (checkPrimitiveType(SHORT, typeName)) {
 				sig = new char[arrayCount+1];
 				sig[arrayCount] = C_SHORT;
 				break;
 			}
 		case 'v':
-			if (CharOperation.fragmentEquals(VOID, typeName, 0, true)) {
+			if (checkPrimitiveType(VOID, typeName)) {
 				sig = new char[arrayCount+1];
 				sig[arrayCount] = C_VOID;
 				break;
 			}
 		default:
 			// non primitive type
-			int sigLength = arrayCount + 1 + length + 1; // e.g. '[[[Ljava.lang.String;'
+			int sigLength = arrayCount + 1 + length + 1; // for example '[[[Ljava.lang.String;'
 			sig = new char[sigLength];
 			int sigIndex = arrayCount+1; // index in sig
 			int startID = 0; // start of current ID in typeName
@@ -842,13 +850,13 @@ public static String[] getParameterTypes(String methodSignature) throws IllegalA
  * @param name the name
  * @return the qualifier prefix, or the empty char array if the name contains no
  *   dots
- * 
+ * @exception NullPointerException if name is null
  * @since 2.0
  */
 public static char[] getQualifier(char[] name) {
 	int lastDot = CharOperation.lastIndexOf(C_DOT, name);
 	if (lastDot == -1) {
-		return CharOperation.NO_CHAR; //$NON-NLS-1$
+		return CharOperation.NO_CHAR;
 	}
 	return CharOperation.subarray(name, 0, lastDot);
 }
@@ -868,9 +876,14 @@ public static char[] getQualifier(char[] name) {
  * @param name the name
  * @return the qualifier prefix, or the empty string if the name contains no
  *   dots
+ * @exception NullPointerException if name is null
  */
 public static String getQualifier(String name) {
-	return new String(getQualifier(name.toCharArray()));
+	int lastDot = name.lastIndexOf(C_DOT);
+	if (lastDot == -1) {
+		return EMPTY;
+	}
+	return name.substring(0, lastDot);
 }
 /**
  * Extracts the return type from the given method signature. The method signature is 
@@ -916,7 +929,7 @@ public static String getReturnType(String methodSignature) throws IllegalArgumen
  *
  * @param name the name
  * @return the last segment of the qualified name
- * 
+ * @exception NullPointerException if name is null
  * @since 2.0
  */
 public static char[] getSimpleName(char[] name) {
@@ -940,9 +953,14 @@ public static char[] getSimpleName(char[] name) {
  *
  * @param name the name
  * @return the last segment of the qualified name
+ * @exception NullPointerException if name is null
  */
 public static String getSimpleName(String name) {
-	return new String(getSimpleName(name.toCharArray()));
+	int lastDot = name.lastIndexOf(C_DOT);
+	if (lastDot == -1) {
+		return name;
+	}
+	return name.substring(lastDot + 1, name.length());
 }
 /**
  * Returns all segments of the given dot-separated qualified name.
@@ -960,7 +978,7 @@ public static String getSimpleName(String name) {
  *
  * @param name the name
  * @return the list of simple names, possibly empty
- * 
+ * @exception NullPointerException if name is null
  * @since 2.0
  */
 public static char[][] getSimpleNames(char[] name) {
@@ -1001,6 +1019,7 @@ public static char[][] getSimpleNames(char[] name) {
  *
  * @param name the name
  * @return the list of simple names, possibly empty
+ * @exception NullPointerException if name is null
  */
 public static String[] getSimpleNames(String name) {
 	char[][] simpleNames = getSimpleNames(name.toCharArray());

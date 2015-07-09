@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
@@ -15,6 +15,7 @@ import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
 import org.eclipse.jdt.internal.compiler.lookup.BaseTypes;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
+import org.eclipse.jdt.internal.compiler.lookup.PackageBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 
 /**
@@ -40,7 +41,7 @@ class TypeBinding implements ITypeBinding {
 	 * @see ITypeBinding#isPrimitive()
 	 */
 	public boolean isPrimitive() {
-		return binding.isBaseType();
+		return !isNullType() && binding.isBaseType();
 	}
 
 	/*
@@ -438,12 +439,18 @@ class TypeBinding implements ITypeBinding {
 		}
 		
 		if (isTopLevel() || isMember()) {
-			StringBuffer stringBuffer = new StringBuffer();
-			stringBuffer
-				.append(this.binding.qualifiedPackageName())
-				.append('.')
-				.append(this.binding.qualifiedSourceName());
-			return stringBuffer.toString();
+			PackageBinding packageBinding = this.binding.getPackage();
+			
+			if (packageBinding == null || packageBinding.compoundName == CharOperation.NO_CHAR_CHAR) {
+				return new String(this.binding.qualifiedSourceName());
+			} else {
+				StringBuffer stringBuffer = new StringBuffer();
+				stringBuffer
+					.append(this.binding.qualifiedPackageName())
+					.append('.')
+					.append(this.binding.qualifiedSourceName());
+				return stringBuffer.toString();
+			}
 		}
 		return NO_NAME;
 	}

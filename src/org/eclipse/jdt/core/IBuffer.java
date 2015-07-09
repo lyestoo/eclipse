@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.core.resources.IResource;
@@ -20,9 +20,9 @@ import org.eclipse.core.runtime.IProgressMonitor;
  * If a buffer does not have an underlying resource, saving the buffer has no effect. 
  * Buffers can be read-only.
  * <p>
- * Note that java model operations that manipulate an <code>IBuffer</code> (e.g. 
+ * Note that java model operations that manipulate an <code>IBuffer</code> (for example, 
  * <code>IType.createMethod(...)</code>) ensures that the same line delimiter 
- * (i.e. either <code>"\n"</code> or <code>"\r"</code> or <code>"\r\n"</code>) is 
+ * (either <code>"\n"</code> or <code>"\r"</code> or <code>"\r\n"</code>) is 
  * used across the whole buffer. Thus these operations may change the line delimiter(s) 
  * included in the string to be append, or replaced.
  * However implementers of this interface should be aware that other clients of <code>IBuffer</code>
@@ -148,7 +148,11 @@ public IResource getUnderlyingResource();
  * was opened or since it was last saved.
  * If a buffer does not have an underlying resource, this method always
  * returns <code>true</code>.
- *
+ * <p>
+ * NOTE: when a buffer does not have unsaved changes, the model may decide to close it 
+ * to claim some memory back. If the associated element needs to be reopened later on, its
+ * buffer factory will be requested to create a new buffer.
+ * </p>
  * @return a <code>boolean</code> indicating presence of unsaved changes (in
  *   the absence of any underlying resource, it will always return <code>true</code>).
  */

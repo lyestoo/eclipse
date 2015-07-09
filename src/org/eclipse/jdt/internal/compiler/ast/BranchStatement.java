@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.codegen.*;
@@ -16,7 +16,7 @@ import org.eclipse.jdt.internal.compiler.lookup.*;
 public abstract class BranchStatement extends Statement {
 	public char[] label;
 	public Label targetLabel;
-	public AstNode[] subroutines;
+	public SubRoutineStatement[] subroutines;
 /**
  * BranchStatement constructor comment.
  */
@@ -41,26 +41,28 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream) {
 	// blocks in sequence
 	if (subroutines != null){
 		for (int i = 0, max = subroutines.length; i < max; i++){
-			AstNode sub;
-			if ((sub = subroutines[i]) instanceof SynchronizedStatement){
-				codeStream.load(((SynchronizedStatement)sub).synchroVariable);
-				codeStream.monitorexit(); 
-			} else {
-				TryStatement trySub = (TryStatement) sub;
-				if (trySub.subRoutineCannotReturn)	{
-					codeStream.goto_(trySub.subRoutineStartLabel);
+			SubRoutineStatement sub = subroutines[i];
+			sub.generateSubRoutineInvocation(currentScope, codeStream);
+			if (sub.isSubRoutineEscaping()) {
 					codeStream.recordPositionsFrom(pc, this.sourceStart);
+					SubRoutineStatement.reenterExceptionHandlers(subroutines, i, codeStream);
 					return;
-				} else {
-					codeStream.jsr(trySub.subRoutineStartLabel);
-				}
 			}
+			sub.exitAnyExceptionHandler();
 		}
 	}
 	codeStream.goto_(targetLabel);
 	codeStream.recordPositionsFrom(pc, this.sourceStart);
+	SubRoutineStatement.reenterExceptionHandlers(subroutines, -1, codeStream);
 }
 public void resetStateForCodeGeneration() {
-	this.targetLabel.resetStateForCodeGeneration();
+	if (this.targetLabel != null) {
+		this.targetLabel.resetStateForCodeGeneration();
+	}
 }
+
+public void resolve(BlockScope scope) {
+	// nothing to do during name resolution
+}
+
 }

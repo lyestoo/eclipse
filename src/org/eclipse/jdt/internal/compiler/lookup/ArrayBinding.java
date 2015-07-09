@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -16,7 +16,7 @@ import org.eclipse.jdt.internal.compiler.impl.Constant;
 public final class ArrayBinding extends TypeBinding {
 	// creation and initialization of the length field
 	// the declaringClass of this field is intentionally set to null so it can be distinguished.
-	public static final FieldBinding LengthField = new FieldBinding(LENGTH, IntBinding, AccPublic | AccFinal, null, Constant.NotAConstant);
+	public static final FieldBinding ArrayLength = new FieldBinding(LENGTH, IntBinding, AccPublic | AccFinal, null, Constant.NotAConstant);
 
 	public TypeBinding leafComponentType;
 	public int dimensions;
@@ -27,18 +27,18 @@ public ArrayBinding(TypeBinding type, int dimensions) {
 	this.leafComponentType = type;
 	this.dimensions = dimensions;
 }
-/* Answer the receiver's constant pool name.
-*
-* NOTE: This method should only be used during/after code gen.
-*/
+/**
+ * Answer the receiver's constant pool name.
+ * NOTE: This method should only be used during/after code gen.
+ * e.g. '[Ljava/lang/Object;'
+ */
 
-public char[] constantPoolName() /*	[Ljava/lang/Object; */ {
+public char[] constantPoolName() {
 	if (constantPoolName != null)
 		return constantPoolName;
 
 	char[] brackets = new char[dimensions];
-	for (int i = dimensions - 1; i >= 0; i--)
-		brackets[i] = '[';
+	for (int i = dimensions - 1; i >= 0; i--) brackets[i] = '[';
 	return constantPoolName = CharOperation.concat(brackets, leafComponentType.signature());
 }
 String debugName() {
@@ -47,6 +47,10 @@ String debugName() {
 		brackets.append("[]"); //$NON-NLS-1$
 	return leafComponentType.debugName() + brackets.toString();
 }
+public int dimensions() {
+	return this.dimensions;
+}
+
 /* Answer an array whose dimension size is one less than the receiver.
 *
 * When the receiver's dimension size is one then answer the leaf component type.
@@ -64,7 +68,7 @@ public PackageBinding getPackage() {
 /* Answer true if the receiver type can be assigned to the argument type (right)
 */
 
-boolean isCompatibleWith(TypeBinding right) {
+public boolean isCompatibleWith(TypeBinding right) {
 	if (this == right)
 		return true;
 

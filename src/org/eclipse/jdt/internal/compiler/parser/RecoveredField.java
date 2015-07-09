@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.parser;
 
 /**
@@ -40,10 +40,10 @@ public RecoveredField(FieldDeclaration fieldDeclaration, RecoveredElement parent
  * Record an expression statement if field is expecting an initialization expression,
  * used for completion inside field initializers.
  */
-public RecoveredElement add(Statement statement, int bracketBalance) {
+public RecoveredElement add(Statement statement, int bracketBalanceValue) {
 
 	if (this.alreadyCompletedFieldInitialization || !(statement instanceof Expression)) {
-		return super.add(statement, bracketBalance);
+		return super.add(statement, bracketBalanceValue);
 	} else {
 		this.alreadyCompletedFieldInitialization = true;
 		this.fieldDeclaration.initialization = (Expression)statement;
@@ -57,12 +57,12 @@ public RecoveredElement add(Statement statement, int bracketBalance) {
  * and the type is an anonymous type.
  * Used for completion inside field initializers.
  */
-public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalance) {
+public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalanceValue) {
 
 	if (this.alreadyCompletedFieldInitialization 
 			|| !(typeDeclaration instanceof AnonymousLocalTypeDeclaration)
 			|| (this.fieldDeclaration.declarationSourceEnd != 0 && typeDeclaration.sourceStart > this.fieldDeclaration.declarationSourceEnd)) {
-		return super.add(typeDeclaration, bracketBalance);
+		return super.add(typeDeclaration, bracketBalanceValue);
 	} else { 
 		// Prepare anonymous type list
 		if (this.anonymousTypes == null) {
@@ -79,7 +79,7 @@ public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalance)
 			}
 		}
 		// Store type declaration as an anonymous type
-		RecoveredType element = new RecoveredType(typeDeclaration, this, bracketBalance);
+		RecoveredType element = new RecoveredType(typeDeclaration, this, bracketBalanceValue);
 		this.anonymousTypes[this.anonymousTypeCount++] = element;
 		return element;
 	}
@@ -99,7 +99,7 @@ public int sourceEnd(){
 public String toString(int tab){
 	StringBuffer buffer = new StringBuffer(tabString(tab));
 	buffer.append("Recovered field:\n"); //$NON-NLS-1$
-	buffer.append(fieldDeclaration.toString(tab + 1));
+	buffer.append(fieldDeclaration.print(tab + 1, buffer));
 	if (this.anonymousTypes != null) {
 		for (int i = 0; i < this.anonymousTypeCount; i++){
 			buffer.append("\n"); //$NON-NLS-1$
@@ -142,7 +142,7 @@ public RecoveredElement updateOnClosingBrace(int braceStart, int braceEnd){
  * An opening brace got consumed, might be the expected opening one of the current element,
  * in which case the bodyStart is updated.
  */
-public RecoveredElement updateOnOpeningBrace(int currentPosition){
+public RecoveredElement updateOnOpeningBrace(int braceStart, int braceEnd){
 	if (fieldDeclaration.declarationSourceEnd == 0 
 		&& fieldDeclaration.type instanceof ArrayTypeReference
 		&& !alreadyCompletedFieldInitialization){
@@ -150,8 +150,8 @@ public RecoveredElement updateOnOpeningBrace(int currentPosition){
 		return null; // no update is necessary	(array initializer)
 	}
 	// might be an array initializer
-	this.updateSourceEndIfNecessary(currentPosition - 1);	
-	return this.parent.updateOnOpeningBrace(currentPosition);	
+	this.updateSourceEndIfNecessary(braceStart - 1, braceEnd - 1);	
+	return this.parent.updateOnOpeningBrace(braceStart, braceEnd);	
 }
 public void updateParseTree(){
 	this.updatedFieldDeclaration();
@@ -159,10 +159,10 @@ public void updateParseTree(){
 /*
  * Update the declarationSourceEnd of the corresponding parse node
  */
-public void updateSourceEndIfNecessary(int sourceEnd){
+public void updateSourceEndIfNecessary(int bodyStart, int bodyEnd){
 	if (this.fieldDeclaration.declarationSourceEnd == 0) {
-		this.fieldDeclaration.declarationSourceEnd = sourceEnd;
-		this.fieldDeclaration.declarationEnd = sourceEnd;
+		this.fieldDeclaration.declarationSourceEnd = bodyEnd;
+		this.fieldDeclaration.declarationEnd = bodyEnd;
 	}
 }
 }

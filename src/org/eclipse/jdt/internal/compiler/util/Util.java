@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.util;
 
 import java.io.BufferedInputStream;
@@ -25,21 +25,18 @@ import java.util.zip.ZipFile;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 
-public class Util {
+public class Util implements SuffixConstants {
+
+	public interface Displayable {
+		String displayString(Object o);
+	}
 
 	public static String LINE_SEPARATOR = System.getProperty("line.separator"); //$NON-NLS-1$
 	public static char[] LINE_SEPARATOR_CHARS = LINE_SEPARATOR.toCharArray();
-	public final static char[] SUFFIX_class = ".class".toCharArray(); //$NON-NLS-1$
-	public final static char[] SUFFIX_CLASS = ".CLASS".toCharArray(); //$NON-NLS-1$
-	public final static char[] SUFFIX_java = ".java".toCharArray(); //$NON-NLS-1$
-	public final static char[] SUFFIX_JAVA = ".JAVA".toCharArray(); //$NON-NLS-1$
-	public final static char[] SUFFIX_jar = ".jar".toCharArray(); //$NON-NLS-1$
-	public final static char[] SUFFIX_JAR = ".JAR".toCharArray(); //$NON-NLS-1$
-	public final static char[] SUFFIX_zip = ".zip".toCharArray(); //$NON-NLS-1$
-	public final static char[] SUFFIX_ZIP = ".ZIP".toCharArray(); //$NON-NLS-1$
-		
+	
 	private final static char[] DOUBLE_QUOTES = "''".toCharArray(); //$NON-NLS-1$
 	private final static char[] SINGLE_QUOTE = "'".toCharArray(); //$NON-NLS-1$
+	private static final int DEFAULT_READING_SIZE = 8192;
 
 	/* Bundle containing messages */
 	protected static ResourceBundle bundle;
@@ -82,31 +79,42 @@ public class Util {
 			CharOperation.replace(message.toCharArray(), DOUBLE_QUOTES, SINGLE_QUOTE);
 		message = new String(messageWithNoDoubleQuotes);
 
-		if (bindings == null)
-			return message;
-
 		int length = message.length();
 		int start = -1;
 		int end = length;
-		StringBuffer output = new StringBuffer(80);
+		StringBuffer output = null;
 		while (true) {
 			if ((end = message.indexOf('{', start)) > -1) {
+				if (output == null) output = new StringBuffer(80);
 				output.append(message.substring(start + 1, end));
 				if ((start = message.indexOf('}', end)) > -1) {
 					int index = -1;
 					try {
 						index = Integer.parseInt(message.substring(end + 1, start));
 						output.append(bindings[index]);
-					} catch (NumberFormatException nfe) {
-						output.append(message.substring(end + 1, start + 1));
+					} catch (NumberFormatException nfe) { // could be nested message ID {compiler.name}
+						String argId = message.substring(end + 1, start);
+						boolean done = false;
+						if (!id.equals(argId)) {
+							String argMessage = null;
+							try {
+								argMessage = bundle.getString(argId);
+								output.append(argMessage);
+								done = true;
+							} catch (MissingResourceException e) {
+								// ignore
+							}
+						}
+						if (!done) output.append(message.substring(end + 1, start + 1));
 					} catch (ArrayIndexOutOfBoundsException e) {
-						output.append("{missing " + Integer.toString(index) + "}");	//$NON-NLS-2$ //$NON-NLS-1$
+						output.append("{missing " + Integer.toString(index) + "}"); //$NON-NLS-2$ //$NON-NLS-1$
 					}
 				} else {
 					output.append(message.substring(end, length));
 					break;
 				}
 			} else {
+				if (output == null) return message;
 				output.append(message.substring(start + 1, length));
 				break;
 			}
@@ -123,7 +131,12 @@ public class Util {
 	 * Creates a NLS catalog for the given locale.
 	 */
 	public static void relocalize() {
-		bundle = ResourceBundle.getBundle(bundleName, Locale.getDefault());
+		try {
+			bundle = ResourceBundle.getBundle(bundleName, Locale.getDefault());
+		} catch(MissingResourceException e) {
+			System.out.println("Missing resource : " + bundleName.replace('.', '/') + ".properties for locale " + Locale.getDefault()); //$NON-NLS-1$//$NON-NLS-2$
+			throw e;
+		}
 	}
 	/**
 	 * Returns the given bytes as a char array using a given encoding (null means platform default).
@@ -147,6 +160,7 @@ public class Util {
 				try {
 					stream.close();
 				} catch (IOException e) {
+					// ignore
 				}
 			}
 		}
@@ -166,6 +180,7 @@ public class Util {
 				try {
 					stream.close();
 				} catch (IOException e) {
+					// ignore
 				}
 			}
 		}
@@ -183,28 +198,28 @@ public class Util {
 		if (length == -1) {
 			contents = new byte[0];
 			int contentsLength = 0;
-			int bytesRead = -1;
+			int amountRead = -1;
 			do {
-				int available = stream.available();
-
+				int amountRequested = Math.max(stream.available(), DEFAULT_READING_SIZE);  // read at least 8K
+				
 				// resize contents if needed
-				if (contentsLength + available > contents.length) {
+				if (contentsLength + amountRequested > contents.length) {
 					System.arraycopy(
 						contents,
 						0,
-						contents = new byte[contentsLength + available],
+						contents = new byte[contentsLength + amountRequested],
 						0,
 						contentsLength);
 				}
 
 				// read as many bytes as possible
-				bytesRead = stream.read(contents, contentsLength, available);
+				amountRead = stream.read(contents, contentsLength, amountRequested);
 
-				if (bytesRead > 0) {
+				if (amountRead > 0) {
 					// remember length of contents
-					contentsLength += bytesRead;
+					contentsLength += amountRead;
 				}
-			} while (bytesRead > 0);
+			} while (amountRead != -1); 
 
 			// resize contents if necessary
 			if (contentsLength < contents.length) {
@@ -246,28 +261,28 @@ public class Util {
 		if (length == -1) {
 			contents = CharOperation.NO_CHAR;
 			int contentsLength = 0;
-			int charsRead = -1;
+			int amountRead = -1;
 			do {
-				int available = stream.available();
+				int amountRequested = Math.max(stream.available(), DEFAULT_READING_SIZE);  // read at least 8K
 
 				// resize contents if needed
-				if (contentsLength + available > contents.length) {
+				if (contentsLength + amountRequested > contents.length) {
 					System.arraycopy(
 						contents,
 						0,
-						contents = new char[contentsLength + available],
+						contents = new char[contentsLength + amountRequested],
 						0,
 						contentsLength);
 				}
 
 				// read as many chars as possible
-				charsRead = reader.read(contents, contentsLength, available);
+				amountRead = reader.read(contents, contentsLength, amountRequested);
 
-				if (charsRead > 0) {
+				if (amountRead > 0) {
 					// remember length of contents
-					contentsLength += charsRead;
+					contentsLength += amountRead;
 				}
-			} while (charsRead > 0);
+			} while (amountRead != -1);
 
 			// resize contents if necessary
 			if (contentsLength < contents.length) {
@@ -314,6 +329,7 @@ public class Util {
 				try {
 					stream.close();
 				} catch (IOException e) {
+					// ignore
 				}
 			}
 		}
@@ -378,4 +394,30 @@ public class Util {
 		}
 		return true;		
 	}
+	/**
+	 * Converts an array of Objects into String.
+	 */
+	public static String toString(Object[] objects) {
+		return toString(objects, 
+			new Displayable(){ 
+				public String displayString(Object o) { 
+					if (o == null) return "null"; //$NON-NLS-1$
+					return o.toString(); 
+				}
+			});
+	}
+
+	/**
+	 * Converts an array of Objects into String.
+	 */
+	public static String toString(Object[] objects, Displayable renderer) {
+		if (objects == null) return ""; //$NON-NLS-1$
+		StringBuffer buffer = new StringBuffer(10);
+		for (int i = 0; i < objects.length; i++){
+			if (i > 0) buffer.append(", "); //$NON-NLS-1$
+			buffer.append(renderer.displayString(objects[i]));
+		}
+		return buffer.toString();
+	}
+	
 }

@@ -1,20 +1,24 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.CompilationResult;
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.flow.ExceptionHandlingFlowContext;
+import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
+import org.eclipse.jdt.internal.compiler.flow.InitializationFlowContext;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
+import org.eclipse.jdt.internal.compiler.problem.AbortMethod;
 
 public class MethodDeclaration extends AbstractMethodDeclaration {
 	
@@ -27,6 +31,63 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 		super(compilationResult);
 	}
 
+	public void analyseCode(
+		ClassScope classScope,
+		InitializationFlowContext initializationContext,
+		FlowInfo flowInfo) {
+
+		// starting of the code analysis for methods
+		if (ignoreFurtherInvestigation)
+			return;
+		try {
+			if (binding == null)
+				return;
+				
+			if (this.binding.isPrivate() && !this.binding.isPrivateUsed()) {
+				if (!classScope.referenceCompilationUnit().compilationResult.hasSyntaxError()) {
+					scope.problemReporter().unusedPrivateMethod(this);
+				}
+			}
+				
+			// may be in a non necessary <clinit> for innerclass with static final constant fields
+			if (binding.isAbstract() || binding.isNative())
+				return;
+
+			ExceptionHandlingFlowContext methodContext =
+				new ExceptionHandlingFlowContext(
+					initializationContext,
+					this,
+					binding.thrownExceptions,
+					scope,
+					FlowInfo.DEAD_END);
+
+			// propagate to statements
+			if (statements != null) {
+				boolean didAlreadyComplain = false;
+				for (int i = 0, count = statements.length; i < count; i++) {
+					Statement stat = statements[i];
+					if (!stat.complainIfUnreachable(flowInfo, scope, didAlreadyComplain)) {
+						flowInfo = stat.analyseCode(scope, methodContext, flowInfo);
+					} else {
+						didAlreadyComplain = true;
+					}
+				}
+			}
+			// check for missing returning path
+			TypeBinding returnTypeBinding = binding.returnType;
+			if ((returnTypeBinding == VoidBinding) || isAbstract()) {
+				this.needFreeReturn = flowInfo.isReachable();
+			} else {
+				if (flowInfo != FlowInfo.DEAD_END) { 
+					scope.problemReporter().shouldReturn(returnTypeBinding, this);
+				}
+			}
+			// check unreachable catch blocks
+			methodContext.complainIfUnusedExceptionHandlers(this);
+		} catch (AbortMethod e) {
+			this.ignoreFurtherInvestigation = true;
+		}
+	}
 
 	public void parseStatements(Parser parser, CompilationUnitDeclaration unit) {
 
@@ -36,7 +97,13 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 		parser.parse(this, unit);
 	}
 
-	public void resolveStatements(ClassScope upperScope) {
+	public StringBuffer printReturnType(int indent, StringBuffer output) {
+
+		if (returnType == null) return output;
+		return returnType.printExpression(0, output).append(' ');
+	}
+
+	public void resolveStatements() {
 
 		// ========= abort on fatal error =============
 		if (this.returnType != null && this.binding != null) {
@@ -47,9 +114,11 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 		if (binding != null && isTypeUseDeprecated(binding.returnType, scope))
 			scope.problemReporter().deprecatedType(binding.returnType, returnType);
 
-		if (CharOperation.equals(scope.enclosingSourceType().sourceName, selector))
+		// check if method with constructor name
+		if (CharOperation.equals(scope.enclosingSourceType().sourceName, selector)) {
 			scope.problemReporter().methodWithConstructorName(this);
-
+		}
+		
 		// by grammatical construction, interface methods are always abstract
 		if (!scope.enclosingSourceType().isInterface()){
 
@@ -65,14 +134,7 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 					scope.problemReporter().methodNeedingNoBody(this);
 			}
 		}
-		super.resolveStatements(upperScope); 
-	}
-
-	public String returnTypeToString(int tab) {
-
-		if (returnType == null)
-			return ""; //$NON-NLS-1$
-		return returnType.toString(tab) + " "; //$NON-NLS-1$
+		super.resolveStatements(); 
 	}
 
 	public void traverse(

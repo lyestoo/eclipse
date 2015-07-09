@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.classfmt;
 
 import org.eclipse.jdt.internal.compiler.env.IBinaryNestedType;
@@ -29,8 +29,7 @@ public class InnerClassInfo extends ClassFileStruct implements IBinaryNestedType
 	private boolean readInnerClassName = false;
 	private boolean readOuterClassName = false;
 	private boolean readInnerName = false;
-public InnerClassInfo(byte classFileBytes[], int offsets[], int offset)
-	throws ClassFormatException {
+public InnerClassInfo(byte classFileBytes[], int offsets[], int offset) {
 	super(classFileBytes, offset);
 	constantPoolOffsets = offsets;
 	innerClassNameIndex = u2At(0);

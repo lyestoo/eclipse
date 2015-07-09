@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2003 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
@@ -99,6 +99,13 @@ import java.util.Map;
  * <p>
  * ASTs also support the visitor pattern; see the class <code>ASTVisitor</code>
  * for details.
+ * </p>
+ * <p>
+ * Note that there is no built-in way to serialize a modified AST to a source
+ * code string. Naive serialization of a newly-constructed AST to a string is
+ * a straightforward application of an AST visitor. However, preserving comments
+ * and formatting from the originating source code string is a challenging
+ * problem (support for this is planned for a future release).
  * </p>
  * 
  * @see AST#parseCompilationUnit

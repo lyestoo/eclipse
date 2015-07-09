@@ -1,20 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.formatter.impl;
-import java.util.Map;
+
+import java.util.Map;
 
 import org.eclipse.jdt.core.JavaCore;
 
 public class FormatterOptions {	
-	/**
+
+	/**
 	 * Option IDs
 	 */
 	public static final String OPTION_InsertNewlineBeforeOpeningBrace = "org.eclipse.jdt.core.formatter.newline.openingBrace"; //$NON-NLS-1$
@@ -65,6 +67,7 @@ public class FormatterOptions {
  * Initializing the formatter options with default settings
  */
 public FormatterOptions(){
+	// empty constructor
 }
 /** 
  * Initializing the formatter options with external settings
@@ -145,6 +148,7 @@ public FormatterOptions(Map settings){
 				int val = Integer.parseInt(optionValue);
 				if (val >= 0) this.maxLineLength = val;
 			} catch(NumberFormatException e){
+				// should not happen
 			}
 		}
 		if(optionID.equals(OPTION_CompactAssignment)){
@@ -168,6 +172,7 @@ public FormatterOptions(Map settings){
 				int val = Integer.parseInt(optionValue);
 				if (val > 0) this.tabSize = val;
 			} catch(NumberFormatException e){
+				// should not happen
 			}
 		}
 		if(optionID.equals(OPTION_InsertSpaceAfterCast)){

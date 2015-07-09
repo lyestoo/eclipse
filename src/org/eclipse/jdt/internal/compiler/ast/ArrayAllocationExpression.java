@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
@@ -58,7 +58,6 @@ public class ArrayAllocationExpression extends Expression {
 		boolean valueRequired) {
 
 		int pc = codeStream.position;
-		ArrayBinding arrayBinding;
 
 		if (initializer != null) {
 			initializer.generateCode(currentScope, codeStream, valueRequired);
@@ -73,10 +72,9 @@ public class ArrayAllocationExpression extends Expression {
 			}
 
 		// Generate a sequence of bytecodes corresponding to an array allocation
-		if ((this.resolvedType.isArrayType())
-			&& ((arrayBinding = (ArrayBinding) this.resolvedType).dimensions == 1)) {
+		if (this.resolvedType.dimensions() == 1) {
 			// Mono-dimensional array
-			codeStream.newArray(currentScope, arrayBinding);
+			codeStream.newArray(currentScope, (ArrayBinding)this.resolvedType);
 		} else {
 			// Multi-dimensional array
 			codeStream.multianewarray(this.resolvedType, nonNullDimensionsLength);
@@ -91,6 +89,24 @@ public class ArrayAllocationExpression extends Expression {
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 
+
+	public StringBuffer printExpression(int indent, StringBuffer output) {
+
+		output.append("new "); //$NON-NLS-1$
+		type.print(0, output); 
+		for (int i = 0; i < dimensions.length; i++) {
+			if (dimensions[i] == null)
+				output.append("[]"); //$NON-NLS-1$
+			else {
+				output.append('[');
+				dimensions[i].printExpression(0, output);
+				output.append(']');
+			}
+		} 
+		if (initializer != null) initializer.printExpression(0, output);
+		return output;
+	}
+	
 	public TypeBinding resolveType(BlockScope scope) {
 
 		// Build an array type reference using the current dimensions
@@ -140,6 +156,9 @@ public class ArrayAllocationExpression extends Expression {
 
 		// building the array binding
 		if (referenceType != null) {
+			if (dimensions.length > 255) {
+				scope.problemReporter().tooManyDimensions(this);
+			}
 			this.resolvedType = scope.createArray(referenceType, dimensions.length);
 
 			// check the initializer
@@ -151,19 +170,6 @@ public class ArrayAllocationExpression extends Expression {
 		return this.resolvedType;
 	}
 
-	public String toStringExpression() {
-
-		String s = "new " + type.toString(0); //$NON-NLS-1$
-		for (int i = 0; i < dimensions.length; i++) {
-			if (dimensions[i] == null)
-				s = s + "[]"; //$NON-NLS-1$
-			else
-				s = s + "[" + dimensions[i].toStringExpression() + "]"; //$NON-NLS-2$ //$NON-NLS-1$
-		} 
-		if (initializer != null)
-			s = s + initializer.toStringExpression();
-		return s;
-	}
 
 	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
 

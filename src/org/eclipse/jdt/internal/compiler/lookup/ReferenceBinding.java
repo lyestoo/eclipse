@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -440,7 +440,7 @@ public final boolean isClass() {
 /* Answer true if the receiver type can be assigned to the argument type (right)
 */
 	
-boolean isCompatibleWith(TypeBinding right) {
+public boolean isCompatibleWith(TypeBinding right) {
 	if (right == this)
 		return true;
 	if (right.id == T_Object)
@@ -490,6 +490,12 @@ public final boolean isNestedType() {
 
 public final boolean isPrivate() {
 	return (modifiers & AccPrivate) != 0;
+}
+/* Answer true if the receiver has private visibility and is used locally
+*/
+
+public final boolean isPrivateUsed() {
+	return (modifiers & AccPrivateUsed) != 0;
 }
 /* Answer true if the receiver has protected visibility
 */
@@ -548,24 +554,21 @@ public MethodBinding[] methods() {
 */
 
 public char[] qualifiedSourceName() {
-	if (isMemberType()) {
+	if (isMemberType())
 		return CharOperation.concat(enclosingType().qualifiedSourceName(), sourceName(), '.');
-	} else {
-		return sourceName();
-	}
+	return sourceName();
 }
+
 public char[] readableName() /*java.lang.Object*/ {
 	if (isMemberType())
 		return CharOperation.concat(enclosingType().readableName(), sourceName, '.');
-	else
-		return CharOperation.concatWith(compoundName, '.');
+	return CharOperation.concatWith(compoundName, '.');
 }
 
 public char[] shortReadableName() /*Object*/ {
 	if (isMemberType())
 		return CharOperation.concat(enclosingType().shortReadableName(), sourceName, '.');
-	else
-		return sourceName;
+	return sourceName;
 }
 
 /* Answer the receiver's signature.
@@ -599,5 +602,8 @@ public ReferenceBinding[] syntheticEnclosingInstanceTypes() {
 }
 public SyntheticArgumentBinding[] syntheticOuterLocalVariables() {
 	return null;		// is null if no enclosing instances are required
+}
+MethodBinding[] unResolvedMethods() { // for the MethodVerifier so it doesn't resolve types
+	return methods();
 }
 }

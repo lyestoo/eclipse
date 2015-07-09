@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler;
 
 /*
@@ -62,8 +62,7 @@ public DocumentElementParser(
 			requestor.acceptProblem(problem);
 		}
 	},
-	false,
-	options.sourceLevel >= CompilerOptions.JDK1_4);
+	false);
 	this.requestor = requestor;
 	intArrayStack = new int[30][];
 	this.options = options;
@@ -89,47 +88,31 @@ public void checkAnnotation() {
 	pushOnIntArrayStack(this.getJavaDocPositions());
 	boolean deprecated = false;
 	int lastAnnotationIndex = -1;
+	int commentPtr = scanner.commentPtr;
 
 	//since jdk1.2 look only in the last java doc comment...
-	found : {
-		if ((lastAnnotationIndex = scanner.commentPtr) >= 0) { //look for @deprecated
-			scanner.commentPtr = -1;
-			// reset the comment stack, since not necessary after having checked
-			int commentSourceStart = scanner.commentStarts[lastAnnotationIndex];
-			// javadoc only (non javadoc comment have negative end positions.)
-			int commentSourceEnd = scanner.commentStops[lastAnnotationIndex] - 1;
-			//stop is one over
-			char[] comment = scanner.source;
-
-			for (int i = commentSourceStart + 3; i < commentSourceEnd - 10; i++) {
-				if ((comment[i] == '@')
-					&& (comment[i + 1] == 'd')
-					&& (comment[i + 2] == 'e')
-					&& (comment[i + 3] == 'p')
-					&& (comment[i + 4] == 'r')
-					&& (comment[i + 5] == 'e')
-					&& (comment[i + 6] == 'c')
-					&& (comment[i + 7] == 'a')
-					&& (comment[i + 8] == 't')
-					&& (comment[i + 9] == 'e')
-					&& (comment[i + 10] == 'd')) {
-					// ensure the tag is properly ended: either followed by a space, line end or asterisk.
-					int nextPos = i + 11;
-					deprecated = 
-						(comment[nextPos] == ' ')
-							|| (comment[nextPos] == '\n')
-							|| (comment[nextPos] == '\r')
-							|| (comment[nextPos] == '*'); 
-					break found;
-				}
-			}
+	nextComment : for (lastAnnotationIndex = scanner.commentPtr; lastAnnotationIndex >= 0; lastAnnotationIndex--){
+		//look for @deprecated into the first javadoc comment preceeding the declaration
+		int commentSourceStart = scanner.commentStarts[lastAnnotationIndex];
+		// javadoc only (non javadoc comment have negative end positions.)
+		if (modifiersSourceStart != -1 && modifiersSourceStart < commentSourceStart) {
+			continue nextComment;
 		}
+		if (scanner.commentStops[lastAnnotationIndex] < 0) {
+			continue nextComment;
+		}
+		int commentSourceEnd = scanner.commentStops[lastAnnotationIndex] - 1; //stop is one over
+		deprecated =
+			this.annotationParser.checkDeprecation(
+				commentSourceStart,
+				commentSourceEnd);
+		break nextComment;
 	}
 	if (deprecated) {
 		checkAndSetModifiers(AccDeprecated);
 	}
 	// modify the modifier source start to point at the first comment
-	if (lastAnnotationIndex >= 0) {
+	if (commentPtr >= 0) {
 		declarationSourceStart = scanner.commentStarts[0];
 	}
 }
@@ -263,11 +246,11 @@ protected void consumeClassHeaderName() {
 	// 'class' and 'interface' push an int position
 	typeStartPosition = typeDecl.declarationSourceStart = intStack[intPtr--];
 	intPtr--;
-	int declarationSourceStart = intStack[intPtr--];
+	int declSourceStart = intStack[intPtr--];
 	typeDecl.modifiersSourceStart = intStack[intPtr--];
 	typeDecl.modifiers = intStack[intPtr--];
-	if (typeDecl.declarationSourceStart > declarationSourceStart) {
-		typeDecl.declarationSourceStart = declarationSourceStart;
+	if (typeDecl.declarationSourceStart > declSourceStart) {
+		typeDecl.declarationSourceStart = declSourceStart;
 	}
 	typeDecl.bodyStart = typeDecl.sourceEnd + 1;
 	pushOnAstStack(typeDecl);
@@ -427,7 +410,7 @@ protected void consumeEnterVariable() {
 	if (!isLocalDeclaration && (variablesCounter[nestedType] != 0)) {
 		requestor.exitField(lastFieldBodyEndPosition, lastFieldEndPosition);
 	}
-	char[] name = identifierStack[identifierPtr];
+	char[] varName = identifierStack[identifierPtr];
 	long namePosition = identifierPositionStack[identifierPtr--];
 	int extendedTypeDimension = intStack[intPtr--];
 
@@ -435,11 +418,11 @@ protected void consumeEnterVariable() {
 	if (nestedMethod[nestedType] != 0) {
 		// create the local variable declarations
 		declaration = 
-			new LocalDeclaration(null, name, (int) (namePosition >>> 32), (int) namePosition); 
+			new LocalDeclaration(null, varName, (int) (namePosition >>> 32), (int) namePosition); 
 	} else {
 		// create the field declaration
 		declaration = 
-			new FieldDeclaration(null, name, (int) (namePosition >>> 32), (int) namePosition); 
+			new FieldDeclaration(null, varName, (int) (namePosition >>> 32), (int) namePosition); 
 	}
 	identifierLengthPtr--;
 	TypeReference type;
@@ -505,7 +488,7 @@ protected void consumeEnterVariable() {
 				type.sourceStart, 
 				type.sourceEnd, 
 				typeDims, 
-				name, 
+				varName, 
 				(int) (namePosition >>> 32), 
 				(int) namePosition, 
 				extendedTypeDimension, 
@@ -564,13 +547,13 @@ protected void consumeFormalParameter() {
 	*/
 
 	identifierLengthPtr--;
-	char[] name = identifierStack[identifierPtr];
+	char[] parameterName = identifierStack[identifierPtr];
 	long namePositions = identifierPositionStack[identifierPtr--];
 	TypeReference type = getTypeReference(intStack[intPtr--] + intStack[intPtr--]);
 	intPtr -= 3;
 	Argument arg = 
 		new Argument(
-			name, 
+			parameterName, 
 			namePositions, 
 			type, 
 			intStack[intPtr + 1]); // modifiers
@@ -666,11 +649,11 @@ protected void consumeInterfaceHeaderName() {
 	// 'class' and 'interface' push an int position
 	typeStartPosition = typeDecl.declarationSourceStart = intStack[intPtr--];
 	intPtr--;
-	int declarationSourceStart = intStack[intPtr--];
+	int declSourceStart = intStack[intPtr--];
 	typeDecl.modifiersSourceStart = intStack[intPtr--];
 	typeDecl.modifiers = intStack[intPtr--];
-	if (typeDecl.declarationSourceStart > declarationSourceStart) {
-		typeDecl.declarationSourceStart = declarationSourceStart;
+	if (typeDecl.declarationSourceStart > declSourceStart) {
+		typeDecl.declarationSourceStart = declSourceStart;
 	}
 	typeDecl.bodyStart = typeDecl.sourceEnd + 1;
 	pushOnAstStack(typeDecl);
@@ -916,6 +899,7 @@ protected void consumeStaticOnly() {
 	// StaticOnly ::= 'static'
 	checkAnnotation(); // might update declaration source start
 	pushOnIntStack(modifiersSourceStart);
+	pushOnIntStack(scanner.currentPosition);
 	pushOnIntStack(
 		declarationSourceStart >= 0 ? declarationSourceStart : modifiersSourceStart); 
 	jumpOverMethodBody();
@@ -1013,7 +997,7 @@ This variable is a type reference and dim will be its dimensions*/
 				ref.sourceEnd = endPosition;
 			}
 		}
-	};
+	}
 	return ref;
 }
 public void initialize() {
@@ -1055,6 +1039,7 @@ public void parseCompilationUnit(ICompilationUnit unit) {
 		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
+		// ignore this exception
 	}
 }
 /*
@@ -1075,6 +1060,7 @@ public void parseConstructor(char[] regionSource) {
 		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
+		// ignore this exception
 	}
 }
 /*
@@ -1095,6 +1081,7 @@ public void parseField(char[] regionSource) {
 		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
+		// ignore this exception
 	}
 
 }
@@ -1116,6 +1103,7 @@ public void parseImport(char[] regionSource) {
 		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
+		// ignore this exception
 	}
 
 }
@@ -1140,6 +1128,7 @@ public void parseInitializer(char[] regionSource) {
 		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
+		// ignore this exception
 	}
 
 }
@@ -1161,6 +1150,7 @@ public void parseMethod(char[] regionSource) {
 		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
+		// ignore this exception
 	}
 
 }
@@ -1182,6 +1172,7 @@ public void parsePackage(char[] regionSource) {
 		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
+		// ignore this exception
 	}
 
 }
@@ -1203,6 +1194,7 @@ public void parseType(char[] regionSource) {
 		scanner.setSource(regionSource);
 		parse();
 	} catch (AbortCompilation ex) {
+		// ignore this exception
 	}
 
 }
@@ -1321,7 +1313,7 @@ protected TypeReference typeReference(
 			else
 				ref = new ArrayQualifiedTypeReference(tokens, dim, positions);
 		}
-	};
+	}
 	return ref;
 }
 }

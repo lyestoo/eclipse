@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2002 IBM Corporation and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core.dom;
 
 import java.util.Iterator;
@@ -39,12 +39,13 @@ class NaiveASTFlattener extends ASTVisitor {
 	 * The string buffer into which the serialized representation of the AST is
 	 * written.
 	 */
-	private StringBuffer buffer = new StringBuffer(6000);
+	private StringBuffer buffer;
 	
 	/**
 	 * Creates a new AST printer.
 	 */
 	NaiveASTFlattener() {
+		this.buffer = new StringBuffer(6000);
 	}
 	
 	/**
@@ -766,11 +767,11 @@ class NaiveASTFlattener extends ASTVisitor {
 	 */
 	public boolean visit(SwitchCase node) {
 		if (node.isDefault()) {
-			buffer.append("default : ");//$NON-NLS-1$
+			buffer.append("default :");//$NON-NLS-1$
 		} else {
 			buffer.append("case ");//$NON-NLS-1$
 			node.getExpression().accept(this);
-			buffer.append(": ");//$NON-NLS-1$
+			buffer.append(":");//$NON-NLS-1$
 		}
 		return false;
 	}
@@ -836,6 +837,7 @@ class NaiveASTFlattener extends ASTVisitor {
 			cc.accept(this);
 		}
 		if (node.getFinally() != null) {
+			buffer.append("finally ");//$NON-NLS-1$
 			node.getFinally().accept(this);
 		}
 		return false;

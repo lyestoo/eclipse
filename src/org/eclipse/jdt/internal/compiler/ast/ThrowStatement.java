@@ -1,20 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.flow.FlowContext;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
-import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
@@ -33,7 +33,7 @@ public class ThrowStatement extends Statement {
 		exception.analyseCode(currentScope, flowContext, flowInfo);
 		// need to check that exception thrown is actually caught somewhere
 		flowContext.checkExceptionHandlers(exceptionType, this, flowInfo, currentScope);
-		return FlowInfo.DeadEnd;
+		return FlowInfo.DEAD_END;
 	}
 
 	/**
@@ -52,23 +52,23 @@ public class ThrowStatement extends Statement {
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 
+	public StringBuffer printStatement(int indent, StringBuffer output) {
+
+		printIndent(indent, output).append("throw "); //$NON-NLS-1$
+		exception.printExpression(0, output);
+		return output.append(';');
+	}
+
 	public void resolve(BlockScope scope) {
 		
 		exceptionType = exception.resolveTypeExpecting(scope, scope.getJavaLangThrowable());
 		
 		if (exceptionType == NullBinding
-				&& scope.environment().options.complianceLevel <= CompilerOptions.JDK1_3){
+				&& scope.environment().options.complianceLevel <= ClassFileConstants.JDK1_3){
 			// if compliant with 1.4, this problem will not be reported
 			scope.problemReporter().cannotThrowNull(this);
 	 	}
 		exception.implicitWidening(exceptionType, exceptionType);
-	}
-
-	public String toString(int tab) {
-		String s = tabString(tab);
-		s = s + "throw "; //$NON-NLS-1$
-		s = s + exception.toStringExpression();
-		return s;
 	}
 
 	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope blockScope) {

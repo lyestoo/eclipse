@@ -1,17 +1,16 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.parser;
 
 import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.core.compiler.ITerminalSymbols;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Argument;
 import org.eclipse.jdt.internal.compiler.ast.AstNode;
@@ -32,7 +31,7 @@ import org.eclipse.jdt.internal.compiler.lookup.CompilerModifiers;
  * Internal method structure for parsing recovery 
  */
 
-public class RecoveredMethod extends RecoveredElement implements CompilerModifiers, ITerminalSymbols, BaseTypes {
+public class RecoveredMethod extends RecoveredElement implements CompilerModifiers, TerminalTokens, BaseTypes {
 
 	public AbstractMethodDeclaration methodDeclaration;
 
@@ -53,7 +52,7 @@ public RecoveredMethod(AbstractMethodDeclaration methodDeclaration, RecoveredEle
 /*
  * Record a nested block declaration
  */
-public RecoveredElement add(Block nestedBlockDeclaration, int bracketBalance) {
+public RecoveredElement add(Block nestedBlockDeclaration, int bracketBalanceValue) {
 
 	/* default behavior is to delegate recording to parent if any,
 	do not consider elements passed the known end (if set)
@@ -65,7 +64,7 @@ public RecoveredElement add(Block nestedBlockDeclaration, int bracketBalance) {
 				if (this.parent == null){
 					return this; // ignore
 				} else {
-					return this.parent.add(nestedBlockDeclaration, bracketBalance);
+					return this.parent.add(nestedBlockDeclaration, bracketBalanceValue);
 				}
 	}
 	/* consider that if the opening brace was not found, it is there */
@@ -74,14 +73,14 @@ public RecoveredElement add(Block nestedBlockDeclaration, int bracketBalance) {
 		this.bracketBalance++;
 	}
 
-	methodBody = new RecoveredBlock(nestedBlockDeclaration, this, bracketBalance);
+	methodBody = new RecoveredBlock(nestedBlockDeclaration, this, bracketBalanceValue);
 	if (nestedBlockDeclaration.sourceEnd == 0) return methodBody;
 	return this;
 }
 /*
  * Record a field declaration
  */
-public RecoveredElement add(FieldDeclaration fieldDeclaration, int bracketBalance) {
+public RecoveredElement add(FieldDeclaration fieldDeclaration, int bracketBalanceValue) {
 
 	/* local variables inside method can only be final and non void */
 	char[][] fieldTypeName; 
@@ -94,7 +93,7 @@ public RecoveredElement add(FieldDeclaration fieldDeclaration, int bracketBalanc
 			return this; // ignore
 		} else {
 			this.updateSourceEndIfNecessary(this.previousAvailableLineEnd(fieldDeclaration.declarationSourceStart - 1));
-			return this.parent.add(fieldDeclaration, bracketBalance);
+			return this.parent.add(fieldDeclaration, bracketBalanceValue);
 		}
 	}
 	/* default behavior is to delegate recording to parent if any,
@@ -107,7 +106,7 @@ public RecoveredElement add(FieldDeclaration fieldDeclaration, int bracketBalanc
 		if (this.parent == null){
 			return this; // ignore
 		} else {
-			return this.parent.add(fieldDeclaration, bracketBalance);
+			return this.parent.add(fieldDeclaration, bracketBalanceValue);
 		}
 	}
 	/* consider that if the opening brace was not found, it is there */
@@ -121,7 +120,7 @@ public RecoveredElement add(FieldDeclaration fieldDeclaration, int bracketBalanc
 /*
  * Record a local declaration - regular method should have been created a block body
  */
-public RecoveredElement add(LocalDeclaration localDeclaration, int bracketBalance) {
+public RecoveredElement add(LocalDeclaration localDeclaration, int bracketBalanceValue) {
 
 	/* local variables inside method can only be final and non void */
 /*	
@@ -147,7 +146,7 @@ public RecoveredElement add(LocalDeclaration localDeclaration, int bracketBalanc
 		if (this.parent == null) {
 			return this; // ignore
 		} else {
-			return this.parent.add(localDeclaration, bracketBalance);
+			return this.parent.add(localDeclaration, bracketBalanceValue);
 		}
 	}
 	if (methodBody == null){
@@ -160,14 +159,14 @@ public RecoveredElement add(LocalDeclaration localDeclaration, int bracketBalanc
 			}
 			this.bracketBalance = 1;
 		}
-		return currentBlock.add(localDeclaration, bracketBalance);
+		return currentBlock.add(localDeclaration, bracketBalanceValue);
 	}
-	return methodBody.add(localDeclaration, bracketBalance, true);
+	return methodBody.add(localDeclaration, bracketBalanceValue, true);
 }
 /*
  * Record a statement - regular method should have been created a block body
  */
-public RecoveredElement add(Statement statement, int bracketBalance) {
+public RecoveredElement add(Statement statement, int bracketBalanceValue) {
 
 	/* do not consider a type starting passed the type end (if set)
 		it must be belonging to an enclosing type */
@@ -177,7 +176,7 @@ public RecoveredElement add(Statement statement, int bracketBalance) {
 		if (this.parent == null) {
 			return this; // ignore
 		} else {
-			return this.parent.add(statement, bracketBalance);
+			return this.parent.add(statement, bracketBalanceValue);
 		}
 	}
 	if (methodBody == null){
@@ -190,11 +189,11 @@ public RecoveredElement add(Statement statement, int bracketBalance) {
 			}
 			this.bracketBalance = 1;
 		}
-		return currentBlock.add(statement, bracketBalance);
+		return currentBlock.add(statement, bracketBalanceValue);
 	}
-	return methodBody.add(statement, bracketBalance, true);	
+	return methodBody.add(statement, bracketBalanceValue, true);	
 }
-public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalance) {
+public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalanceValue) {
 
 	/* do not consider a type starting passed the type end (if set)
 		it must be belonging to an enclosing type */
@@ -204,7 +203,7 @@ public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalance)
 		if (this.parent == null) {
 			return this; // ignore
 		} else {
-			return this.parent.add(typeDeclaration, bracketBalance);
+			return this.parent.add(typeDeclaration, bracketBalanceValue);
 		}
 	}
 	if (typeDeclaration instanceof LocalTypeDeclaration){
@@ -213,7 +212,7 @@ public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalance)
 			block.sourceStart = methodDeclaration.bodyStart;
 			this.add(block, 1);
 		}
-		return methodBody.add(typeDeclaration, bracketBalance, true);	
+		return methodBody.add(typeDeclaration, bracketBalanceValue, true);	
 	}	
 	if (localTypes == null) {
 		localTypes = new RecoveredType[5];
@@ -228,7 +227,7 @@ public RecoveredElement add(TypeDeclaration typeDeclaration, int bracketBalance)
 				localTypeCount); 
 		}
 	}
-	RecoveredType element = new RecoveredType(typeDeclaration, this, bracketBalance);
+	RecoveredType element = new RecoveredType(typeDeclaration, this, bracketBalanceValue);
 	localTypes[localTypeCount++] = element;
 
 	/* consider that if the opening brace was not found, it is there */
@@ -256,7 +255,7 @@ public int sourceEnd(){
 public String toString(int tab) {
 	StringBuffer result = new StringBuffer(tabString(tab));
 	result.append("Recovered method:\n"); //$NON-NLS-1$
-	result.append(this.methodDeclaration.toString(tab + 1));
+	result.append(this.methodDeclaration.print(tab + 1, result));
 	if (this.localTypes != null) {
 		for (int i = 0; i < this.localTypeCount; i++) {
 			result.append("\n"); //$NON-NLS-1$
@@ -403,7 +402,7 @@ public void updateFromParserState(){
  * An opening brace got consumed, might be the expected opening one of the current element,
  * in which case the bodyStart is updated.
  */
-public RecoveredElement updateOnOpeningBrace(int braceEnd){
+public RecoveredElement updateOnOpeningBrace(int braceStart, int braceEnd){
 
 	/* in case the opening brace is close enough to the signature */
 	if (bracketBalance == 0){
@@ -420,7 +419,7 @@ public RecoveredElement updateOnOpeningBrace(int braceEnd){
 				bracketBalance = 1; // pretend the brace was already there
 		}
 	}	
-	return super.updateOnOpeningBrace(braceEnd);
+	return super.updateOnOpeningBrace(braceStart, braceEnd);
 }
 public void updateParseTree(){
 	this.updatedMethodDeclaration();
@@ -428,10 +427,15 @@ public void updateParseTree(){
 /*
  * Update the declarationSourceEnd of the corresponding parse node
  */
-public void updateSourceEndIfNecessary(int sourceEnd){
+public void updateSourceEndIfNecessary(int braceStart, int braceEnd){
 	if (this.methodDeclaration.declarationSourceEnd == 0) {
-		this.methodDeclaration.declarationSourceEnd = sourceEnd;
-		this.methodDeclaration.bodyEnd = sourceEnd;
+		if(parser().rBraceSuccessorStart >= braceEnd) {
+			this.methodDeclaration.declarationSourceEnd = parser().rBraceEnd;
+			this.methodDeclaration.bodyEnd = parser().rBraceStart;
+		} else {
+			this.methodDeclaration.declarationSourceEnd = braceEnd;
+			this.methodDeclaration.bodyEnd  = braceStart - 1;
+		}
 	}
 }
 }

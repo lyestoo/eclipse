@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.complete;
 
 /*
@@ -28,22 +28,22 @@ public class CompletionScanner extends Scanner {
 
 	public char[] completionIdentifier;
 	public int cursorLocation;
+	public int endOfEmptyToken = -1;
 		
 	/* Source positions of the completedIdentifier
 	 * if inside actual identifier, end goes to the actual identifier 
-	 * end, i.e. beyond cursor location
+	 * end, in other words, beyond cursor location
 	 */
 	public int completedIdentifierStart = 0;
 	public int completedIdentifierEnd = -1;
 
 	public static final char[] EmptyCompletionIdentifier = {};
-public CompletionScanner(boolean assertMode) {
+public CompletionScanner(long sourceLevel) {
 	super(
 		false /*comment*/, 
 		false /*whitespace*/, 
 		false /*nls*/, 
-		assertMode /*assert*/, 
-		false /*strict comment*/, // should never need to be on
+		sourceLevel, 
 		null /*taskTags*/, 
 		null/*taskPriorities*/);
 }
@@ -205,6 +205,11 @@ public int getNextToken() throws InvalidInputException {
 				/* might be completing at eof (e.g. behind a dot) */
 				if (completionIdentifier == null && 
 					startPosition == cursorLocation + 1){
+					// compute end of empty identifier.
+					// if the empty identifier is at the start of a next token the end of
+					// empty identifier is the end of the next token (eg. "<empty token>next").
+				 	while(getNextCharAsJavaIdentifierPart());
+				 	endOfEmptyToken = currentPosition - 1;
 					currentPosition = startPosition; // for being detected as empty free identifier
 					return TokenNameIdentifier;
 				}				
@@ -551,16 +556,11 @@ public int getNextToken() throws InvalidInputException {
 									return TokenNameCOMMENT_LINE;
 								}
 							} catch (IndexOutOfBoundsException e) {
-								if (strictCommentMode) {
-									// a line comment needs to be followed by a line break to be valid
-									throw new InvalidInputException(UNTERMINATED_COMMENT);
-								} else {
-									recordComment(false);
-									if (this.taskTags != null) checkTaskTag(this.startPosition, this.currentPosition-1);
-									if (tokenizeComments) {
-										this.currentPosition--; // reset one character behind
-										return TokenNameCOMMENT_LINE;
-									}
+								recordComment(false);
+								if (this.taskTags != null) checkTaskTag(this.startPosition, this.currentPosition-1);
+								if (tokenizeComments) {
+									this.currentPosition--; // reset one character behind
+									return TokenNameCOMMENT_LINE;
 								}
 							}
 							break;
@@ -684,6 +684,7 @@ public int getNextToken() throws InvalidInputException {
 		}
 	} //-----------------end switch while try--------------------
 	catch (IndexOutOfBoundsException e) {
+		// eof reached
 	}
 	/* might be completing at very end of file (e.g. behind a dot) */
 	if (completionIdentifier == null && 
@@ -697,7 +698,7 @@ public int getNextToken() throws InvalidInputException {
  * In case we actually read a keyword, but the cursor is located inside,
  * we pretend we read an identifier.
  */
-public int scanIdentifierOrKeyword() throws InvalidInputException {
+public int scanIdentifierOrKeyword() {
 
 	int id = super.scanIdentifierOrKeyword();
 

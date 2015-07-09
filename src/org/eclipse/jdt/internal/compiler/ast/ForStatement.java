@@ -1,18 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public class ForStatement extends Statement {
@@ -49,6 +51,8 @@ public class ForStatement extends Statement {
 		this.condition = condition;
 		this.increments = increments;
 		this.action = action;
+		// remember useful empty statement
+		if (action instanceof EmptyStatement) action.bits |= IsUsefulEmptyStatementMASK;
 		this.neededScope = neededScope;
 	}
 
@@ -70,15 +74,18 @@ public class ForStatement extends Statement {
 		preCondInitStateIndex =
 			currentScope.methodScope().recordInitializationStates(flowInfo);
 
-		boolean conditionIsInlinedToTrue = 
-			condition == null || (condition.constant != NotAConstant && condition.constant.booleanValue() == true);
-		boolean conditionIsInlinedToFalse = 
-			! conditionIsInlinedToTrue && (condition.constant != NotAConstant && condition.constant.booleanValue() == false);
+		Constant cst = this.condition == null ? null : this.condition.constant;
+		boolean isConditionTrue = cst == null || (cst != NotAConstant && cst.booleanValue() == true);
+		boolean isConditionFalse = cst != null && (cst != NotAConstant && cst.booleanValue() == false);
+
+		cst = this.condition == null ? null : this.condition.optimizedBooleanConstant();
+		boolean isConditionOptimizedTrue = cst == null ||  (cst != NotAConstant && cst.booleanValue() == true);
+		boolean isConditionOptimizedFalse = cst != null && (cst != NotAConstant && cst.booleanValue() == false);
 		
 		// process the condition
 		LoopingFlowContext condLoopContext = null;
 		if (condition != null) {
-			if (!conditionIsInlinedToTrue) {
+			if (!isConditionTrue) {
 				flowInfo =
 					condition.analyseCode(
 						scope,
@@ -91,13 +98,14 @@ public class ForStatement extends Statement {
 		// process the action
 		LoopingFlowContext loopingContext;
 		FlowInfo actionInfo;
-		if ((action == null) || action.isEmptyBlock()) {
+		if (action == null 
+			|| (action.isEmptyBlock() && currentScope.environment().options.complianceLevel <= ClassFileConstants.JDK1_3)) {
 			if (condLoopContext != null)
 				condLoopContext.complainOnFinalAssignmentsInLoop(scope, flowInfo);
-			if (conditionIsInlinedToTrue) {
-				return FlowInfo.DeadEnd;
+			if (isConditionTrue) {
+				return FlowInfo.DEAD_END;
 			} else {
-				if (conditionIsInlinedToFalse){
+				if (isConditionFalse){
 					continueLabel = null; // for(;false;p());
 				}
 				actionInfo = flowInfo.initsWhenTrue().copy();
@@ -111,17 +119,20 @@ public class ForStatement extends Statement {
 			condIfTrueInitStateIndex =
 				currentScope.methodScope().recordInitializationStates(initsWhenTrue);
 
-				actionInfo = conditionIsInlinedToFalse
-					? FlowInfo.DeadEnd  // unreachable when condition inlined to false
-					: initsWhenTrue.copy();
-			if (!actionInfo.complainIfUnreachable(action, scope)) {
+				if (isConditionFalse) {
+					actionInfo = FlowInfo.DEAD_END;
+				} else {
+					actionInfo = initsWhenTrue.copy();
+					if (isConditionOptimizedFalse){
+						actionInfo.setReachMode(FlowInfo.UNREACHABLE);
+					}
+				}
+			if (!this.action.complainIfUnreachable(actionInfo, scope, false)) {
 				actionInfo = action.analyseCode(scope, loopingContext, actionInfo);
 			}
 
 			// code generation can be optimized when no need to continue in the loop
-			if (((actionInfo == FlowInfo.DeadEnd) || actionInfo.isFakeReachable())
-				&& ((loopingContext.initsOnContinue == FlowInfo.DeadEnd)
-					|| loopingContext.initsOnContinue.isFakeReachable())) {
+			if (!actionInfo.isReachable() && !loopingContext.initsOnContinue.isReachable()) {
 				continueLabel = null;
 			} else {
 				if (condLoopContext != null)
@@ -138,12 +149,12 @@ public class ForStatement extends Statement {
 			int i = 0, count = increments.length;
 			while (i < count)
 				actionInfo = increments[i++].analyseCode(scope, loopContext, actionInfo);
-			loopContext.complainOnFinalAssignmentsInLoop(scope, flowInfo);
+			loopContext.complainOnFinalAssignmentsInLoop(scope, actionInfo);
 		}
 
 		// infinite loop
 		FlowInfo mergedInfo;
-		if (conditionIsInlinedToTrue) {
+		if (isConditionOptimizedTrue) {
 			mergedInitStateIndex =
 				currentScope.methodScope().recordInitializationStates(
 					mergedInfo = loopingContext.initsOnBreak);
@@ -154,6 +165,9 @@ public class ForStatement extends Statement {
 		mergedInfo =
 			flowInfo.initsWhenFalse().unconditionalInits().mergedWith(
 				loopingContext.initsOnBreak.unconditionalInits());
+		if (isConditionOptimizedTrue && continueLabel == null){
+			mergedInfo.setReachMode(FlowInfo.UNREACHABLE);
+		}
 		mergedInitStateIndex =
 			currentScope.methodScope().recordInitializationStates(mergedInfo);
 		return mergedInfo;
@@ -247,10 +261,46 @@ public class ForStatement extends Statement {
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
 	}
 
-	public void resetStateForCodeGeneration() {
+	public StringBuffer printStatement(int tab, StringBuffer output) {
 
-		this.breakLabel.resetStateForCodeGeneration();
-		this.continueLabel.resetStateForCodeGeneration();
+		printIndent(tab, output).append("for ("); //$NON-NLS-1$
+		//inits
+		if (initializations != null) {
+			for (int i = 0; i < initializations.length; i++) {
+				//nice only with expressions
+				if (i > 0) output.append(", "); //$NON-NLS-1$
+				initializations[i].print(0, output);
+			}
+		}
+		output.append("; "); //$NON-NLS-1$
+		//cond
+		if (condition != null) condition.printExpression(0, output);
+		output.append("; "); //$NON-NLS-1$
+		//updates
+		if (increments != null) {
+			for (int i = 0; i < increments.length; i++) {
+				if (i > 0) output.append(", "); //$NON-NLS-1$
+				increments[i].print(0, output);
+			}
+		}
+		output.append(") "); //$NON-NLS-1$
+		//block
+		if (action == null)
+			output.append(';');
+		else {
+			output.append('\n');
+			action.printStatement(tab + 1, output); //$NON-NLS-1$
+		}
+		return output.append(';');
+	}
+
+	public void resetStateForCodeGeneration() {
+		if (this.breakLabel != null) {
+			this.breakLabel.resetStateForCodeGeneration();
+		}
+		if (this.continueLabel != null) {
+			this.continueLabel.resetStateForCodeGeneration();
+		}
 	}
 
 	public void resolve(BlockScope upperScope) {
@@ -269,43 +319,6 @@ public class ForStatement extends Statement {
 				increments[i].resolve(scope);
 		if (action != null)
 			action.resolve(scope);
-	}
-
-	public String toString(int tab) {
-
-		String s = tabString(tab) + "for ("; //$NON-NLS-1$
-		if (!neededScope)
-			s = s + " //--NO upperscope scope needed\n" + tabString(tab) + "     ";	//$NON-NLS-2$ //$NON-NLS-1$
-		//inits
-		if (initializations != null) {
-			for (int i = 0; i < initializations.length; i++) {
-				//nice only with expressions
-				s = s + initializations[i].toString(0);
-				if (i != (initializations.length - 1))
-					s = s + " , "; //$NON-NLS-1$
-			}
-		}; 
-		s = s + "; "; //$NON-NLS-1$
-		//cond
-		if (condition != null)
-			s = s + condition.toStringExpression();
-		s = s + "; "; //$NON-NLS-1$
-		//updates
-		if (increments != null) {
-			for (int i = 0; i < increments.length; i++) {
-				//nice only with expressions
-				s = s + increments[i].toString(0);
-				if (i != (increments.length - 1))
-					s = s + " , "; //$NON-NLS-1$
-			}
-		}; 
-		s = s + ") "; //$NON-NLS-1$
-		//block
-		if (action == null)
-			s = s + "{}"; //$NON-NLS-1$
-		else
-			s = s + "\n" + action.toString(tab + 1); //$NON-NLS-1$
-		return s;
 	}
 	
 	public void traverse(

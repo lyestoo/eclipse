@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.impl.*;
@@ -21,83 +21,99 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 	//some global provision for the hierarchy
 	public final static Constant NotAConstant = Constant.NotAConstant;
 
-	// storage for internal flags (32 bits)
-	public int bits = IsReachableMASK; // reachable by default
+	// storage for internal flags (32 bits)						BIT USAGE
+	public final static int Bit1 = 0x1; 						// return type (operator) | name reference kind (name ref) | add assertion (type decl) | useful empty statement (empty statement)
+	public final static int Bit2 = 0x2; 						// return type (operator) | name reference kind (name ref) | has local type (type, method, field decl)
+	public final static int Bit3 = 0x4; 						// return type (operator) | name reference kind (name ref) | implicit this (this ref)
+	public final static int Bit4 = 0x8; 						// return type (operator) | first assignment to local (local decl) | undocumented empty block (block, type and method decl)
+	public final static int Bit5 = 0x10; 					// value for return (expression) | has all method bodies (unit)
+	public final static int Bit6 = 0x20; 					// depth (name ref, msg) | only value required (binary expression) | ignore need cast check (cast expression)
+	public final static int Bit7 = 0x40; 					// depth (name ref, msg) | operator (operator) | need runtime checkcast (cast expression)
+	public final static int Bit8 = 0x80; 					// depth (name ref, msg) | operator (operator) 
+	public final static int Bit9 = 0x100; 				// depth (name ref, msg) | operator (operator)
+	public final static int Bit10= 0x200; 				// depth (name ref, msg) | operator (operator)
+	public final static int Bit11 = 0x400; 				// depth (name ref, msg) | operator (operator)
+	public final static int Bit12 = 0x800; 				// depth (name ref, msg) | operator (operator)
+	public final static int Bit13 = 0x1000; 			// depth (name ref, msg) 
+	public final static int Bit14 = 0x2000; 			// assigned (reference lhs)
+	public final static int Bit15 = 0x4000; 			// is unnecessary cast (expression)
+	public final static int Bit16 = 0x8000; 			
+	public final static int Bit17 = 0x10000; 
+	public final static int Bit18 = 0x20000; 
+	public final static int Bit19 = 0x40000; 
+	public final static int Bit20 = 0x80000; 
+	public final static int Bit21 = 0x100000; 		
+	public final static int Bit22 = 0x200000; 			// parenthesis count (expression)
+	public final static int Bit23 = 0x400000; 			// parenthesis count (expression)
+	public final static int Bit24 = 0x800000; 			// parenthesis count (expression)
+	public final static int Bit25 = 0x1000000; 		// parenthesis count (expression)
+	public final static int Bit26 = 0x2000000; 		// parenthesis count (expression)
+	public final static int Bit27 = 0x4000000; 		// parenthesis count (expression)
+	public final static int Bit28 = 0x8000000; 		// parenthesis count (expression)
+	public final static int Bit29 = 0x10000000; 		// parenthesis count (expression)
+	public final static int Bit30 = 0x20000000; 		// assignment with no effect (assignment)
+	public final static int Bit31 = 0x40000000; 		// local declaration reachable (local decl)
+	public final static int Bit32 = 0x80000000; 		// reachable (statement)
 
-	// for operators only
-	// Reach . . . . . . . . . . . . . . . . . O O O O O O V VrR R R R
-	public static final int ReturnTypeIDMASK = 15; // 4 lower bits for operators
-	public static final int ValueForReturnMASK = 16; // for binary expressions
-	public static final int OnlyValueRequiredMASK = 32; // for binary expressions
-	public static final int OperatorSHIFT = 6;
-	public static final int OperatorMASK = 63 << OperatorSHIFT;
+	public int bits = IsReachableMASK; 				// reachable by default
 
-	// for name references only
-	// Reach . . . . . . . . . . . . . . . . D D D D D D D D VrF R R R
-	public static final int RestrictiveFlagMASK = 7;
-	// 3 lower bits for name references
-	public static final int FirstAssignmentToLocalMASK = 8;
+	// for operators 
+	public static final int ReturnTypeIDMASK = Bit1|Bit2|Bit3|Bit4; 
+	public static final int OperatorSHIFT = 6;	// Bit7 -> Bit12
+	public static final int OperatorMASK = Bit7|Bit8|Bit9|Bit10|Bit11|Bit12; // 6 bits for operator ID
+
+	// for binary expressions
+	public static final int ValueForReturnMASK = Bit5; 
+	public static final int OnlyValueRequiredMASK = Bit6; 
+
+	// for cast expressions
+	public static final int UnnecessaryCastMask = Bit15;
+	public static final int NeedRuntimeCheckCastMASK = Bit7;
+	public static final int IgnoreNeedForCastCheckMASK = Bit6;
+	
+	// for name references 
+	public static final int RestrictiveFlagMASK = Bit1|Bit2|Bit3;	
+	public static final int FirstAssignmentToLocalMASK = Bit4;
+	
+	// for this reference
+	public static final int IsImplicitThisMask = Bit3; 
+
 	// for single name references
-	public static final int DepthSHIFT = 5;
-	public static final int DepthMASK = 0xFF << DepthSHIFT;
-	// 8 bits for actual depth value (max. 255)
+	public static final int DepthSHIFT = 5;	// Bit6 -> Bit13
+	public static final int DepthMASK = Bit6|Bit7|Bit8|Bit9|Bit10|Bit11|Bit12|Bit13; // 8 bits for actual depth value (max. 255)
 
-	// for statements only
-	public static final int IsReachableMASK = 0x80000000; // highest bit
-	public static final int IsLocalDeclarationReachableMASK = 0x40000000; // below highest bit
+	// for statements 
+	public static final int IsReachableMASK = Bit32; 
+	public static final int IsLocalDeclarationReachableMASK = Bit31; 
 
-	// for type declaration only
-	public static final int AddAssertionMASK = 1; // lowest bit
+	// for type declaration
+	public static final int AddAssertionMASK = Bit1;
 
-	// for type, method and field declarations only
-	public static final int HasLocalTypeMASK = 2;
-	// cannot conflict with AddAssertionMASK
+	// for type, method and field declarations 
+	public static final int HasLocalTypeMASK = Bit2; // cannot conflict with AddAssertionMASK
 
-	/*
-	public final static int BitMask1= 0x1; // decimal 1
-	public final static int BitMask2= 0x2; // decimal 2
-	public final static int BitMask3= 0x4; // decimal 4
-	public final static int BitMask4= 0x8; // decimal 8
-	public final static int BitMask5= 0x10; // decimal 16
-	public final static int BitMask6= 0x20; // decimal 32
-	public final static int BitMask7= 0x40; // decimal 64
-	public final static int BitMask8= 0x80; // decimal 128
-	public final static int BitMask9= 0x100; // decimal 256
-	public final static int BitMask10= 0x200; // decimal 512
-	public final static int BitMask11= 0x400; // decimal 1024
-	public final static int BitMask12= 0x800; // decimal 2048
-	public final static int BitMask13= 0x1000; // decimal 4096
-	public final static int BitMask14= 0x2000; // decimal 8192
-	public final static int BitMask15= 0x4000; // decimal 16384
-	public final static int BitMask16= 0x8000; // decimal 32768
-	public final static int BitMask17= 0x10000; // decimal 65536
-	public final static int BitMask18= 0x20000; // decimal 131072
-	public final static int BitMask19= 0x40000; // decimal 262144
-	public final static int BitMask20= 0x80000; // decimal 524288
-	public final static int BitMask21= 0x100000; // decimal 1048576
-	public final static int BitMask22= 0x200000; // decimal 2097152
-	public final static int BitMask23= 0x400000; // decimal 4194304
-	public final static int BitMask24= 0x800000; // decimal 8388608
-	public final static int BitMask25= 0x1000000; // decimal 16777216
-	public final static int BitMask26= 0x2000000; // decimal 33554432
-	public final static int BitMask27= 0x4000000; // decimal 67108864
-	public final static int BitMask28= 0x8000000; // decimal 134217728
-	public final static int BitMask29= 0x10000000; // decimal 268435456
-	public final static int BitMask30= 0x20000000; // decimal 536870912
-	public final static int BitMask31= 0x40000000; // decimal 1073741824
-	public final static int BitMask32= 0x80000000; // decimal 2147483648	
-	*/
+	// for expression 
+	public static final int ParenthesizedSHIFT = 21; // Bit22 -> Bit29
+	public static final int ParenthesizedMASK = Bit22|Bit23|Bit24|Bit25|Bit26|Bit27|Bit28|Bit29; // 8 bits for parenthesis count value (max. 255)
 
-	/**
-	 * AstNode constructor comment.
-	 */
+	// for assignment
+	public static final int IsAssignmentWithNoEffectMASK = Bit30;	
+	
+	// for references on lhs of assignment (set only for true assignments, as opposed to compound ones)
+	public static final int IsStrictlyAssignedMASK = Bit14;
+
+	// for empty statement
+	public static final int IsUsefulEmptyStatementMASK = Bit1;
+
+	// for block and method declaration
+	public static final int UndocumentedEmptyBlockMASK = Bit4;
+
+	// for compilation unit
+	public static final int HasAllMethodBodies = Bit5;
+	
 	public AstNode() {
 
 		super();
-	}
-
-	public boolean cannotReturn() {
-		return false;
 	}
 
 	public AstNode concreteStatement() {
@@ -107,7 +123,12 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 	/* Answer true if the field use is considered deprecated.
 	* An access in the same compilation unit is allowed.
 	*/
-	public final boolean isFieldUseDeprecated(FieldBinding field, Scope scope) {
+	public final boolean isFieldUseDeprecated(FieldBinding field, Scope scope, boolean isStrictlyAssigned) {
+
+		if (!isStrictlyAssigned && field.isPrivate() && !scope.isDefinedInField(field)) {
+			// ignore cases where field is used from within inside itself 
+			field.modifiers |= AccPrivateUsed;
+		}
 
 		if (!field.isViewedAsDeprecated()) return false;
 
@@ -119,11 +140,21 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 		return true;
 	}
 
+	public boolean isImplicitThis() {
+		
+		return false;
+	}
+	
 	/* Answer true if the method use is considered deprecated.
 	* An access in the same compilation unit is allowed.
 	*/
 	public final boolean isMethodUseDeprecated(MethodBinding method, Scope scope) {
 
+		if (method.isPrivate() && !scope.isDefinedInMethod(method)) {
+			// ignore cases where method is used from within inside itself (e.g. direct recursions)
+			method.modifiers |= AccPrivateUsed;
+		}
+		
 		if (!method.isViewedAsDeprecated()) return false;
 
 		// inside same unit - no report
@@ -155,6 +186,12 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 			return false;
 
 		ReferenceBinding refType = (ReferenceBinding) type;
+
+		if (refType.isPrivate() && !scope.isDefinedInType(refType)) {
+			// ignore cases where type is used from within inside itself 
+			refType.modifiers |= AccPrivateUsed;
+		}
+
 		if (!refType.isViewedAsDeprecated()) return false;
 		
 		// inside same unit - no report
@@ -165,64 +202,45 @@ public abstract class AstNode implements BaseTypes, CompilerModifiers, TypeConst
 		return true;
 	}
 
-	public static String modifiersString(int modifiers) {
+	public abstract StringBuffer print(int indent, StringBuffer output);
 
-		String s = ""; //$NON-NLS-1$
+	public static StringBuffer printIndent(int indent, StringBuffer output) {
+
+		for (int i = indent; i > 0; i--) output.append("  "); //$NON-NLS-1$
+		return output;
+	}
+
+	public static StringBuffer printModifiers(int modifiers, StringBuffer output) {
+
 		if ((modifiers & AccPublic) != 0)
-			s = s + "public "; //$NON-NLS-1$
+			output.append("public "); //$NON-NLS-1$
 		if ((modifiers & AccPrivate) != 0)
-			s = s + "private "; //$NON-NLS-1$
+			output.append("private "); //$NON-NLS-1$
 		if ((modifiers & AccProtected) != 0)
-			s = s + "protected "; //$NON-NLS-1$
+			output.append("protected "); //$NON-NLS-1$
 		if ((modifiers & AccStatic) != 0)
-			s = s + "static "; //$NON-NLS-1$
+			output.append("static "); //$NON-NLS-1$
 		if ((modifiers & AccFinal) != 0)
-			s = s + "final "; //$NON-NLS-1$
+			output.append("final "); //$NON-NLS-1$
 		if ((modifiers & AccSynchronized) != 0)
-			s = s + "synchronized "; //$NON-NLS-1$
+			output.append("synchronized "); //$NON-NLS-1$
 		if ((modifiers & AccVolatile) != 0)
-			s = s + "volatile "; //$NON-NLS-1$
+			output.append("volatile "); //$NON-NLS-1$
 		if ((modifiers & AccTransient) != 0)
-			s = s + "transient "; //$NON-NLS-1$
+			output.append("transient "); //$NON-NLS-1$
 		if ((modifiers & AccNative) != 0)
-			s = s + "native "; //$NON-NLS-1$
+			output.append("native "); //$NON-NLS-1$
 		if ((modifiers & AccAbstract) != 0)
-			s = s + "abstract "; //$NON-NLS-1$
-		return s;
-	}
-
-	/** 
-	 * @deprecated - use field instead
-	*/
-	public int sourceEnd() {
-		return sourceEnd;
-	}
-	
-	/** 
-	 * @deprecated - use field instead
-	*/
-	public int sourceStart() {
-		return sourceStart;
-	}
-
-	public static String tabString(int tab) {
-
-		String s = ""; //$NON-NLS-1$
-		for (int i = tab; i > 0; i--)
-			s = s + "  "; //$NON-NLS-1$
-		return s;
+			output.append("abstract "); //$NON-NLS-1$
+		return output;
 	}
 
 	public String toString() {
 
-		return toString(0);
+		return print(0, new StringBuffer(30)).toString();
 	}
 
-	public String toString(int tab) {
-
-		return "****" + super.toString() + "****";  //$NON-NLS-2$ //$NON-NLS-1$
-	}
-	
 	public void traverse(IAbstractSyntaxTreeVisitor visitor, BlockScope scope) {
+		// do nothing by default
 	}
 }

@@ -1,19 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
 import org.eclipse.jdt.internal.compiler.ast.MessageSend;
 import org.eclipse.jdt.internal.compiler.ast.NameReference;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
-import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
 import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
 import org.eclipse.jdt.internal.compiler.lookup.BindingIds;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
@@ -23,6 +24,7 @@ import org.eclipse.jdt.internal.compiler.lookup.ProblemMethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
 
 public class CodeSnippetMessageSend extends MessageSend implements ProblemReasons, EvaluationConstants {
 	EvaluationContext evaluationContext;
@@ -103,7 +105,7 @@ public void generateCode(
 		if (arguments != null) {
 			int argsLength = arguments.length;
 			codeStream.generateInlinedValue(argsLength);
-			codeStream.newArray(currentScope, new ArrayBinding(currentScope.getType(TypeBinding.JAVA_LANG_OBJECT), 1));
+			codeStream.newArray(currentScope, new ArrayBinding(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT), 1));
 			codeStream.dup();
 			for (int i = 0; i < argsLength; i++) {
 				codeStream.generateInlinedValue(i);
@@ -119,7 +121,7 @@ public void generateCode(
 			}
 		} else {
 			codeStream.generateInlinedValue(0);
-			codeStream.newArray(currentScope, new ArrayBinding(currentScope.getType(TypeBinding.JAVA_LANG_OBJECT), 1));			
+			codeStream.newArray(currentScope, new ArrayBinding(currentScope.getType(TypeConstants.JAVA_LANG_OBJECT), 1));			
 		}
 		((CodeSnippetCodeStream) codeStream).invokeJavaLangReflectMethodInvoke();
 
@@ -155,21 +157,21 @@ public void generateCode(
 	}
 	codeStream.recordPositionsFrom(pc, this.sourceStart);
 }
-public void manageEnclosingInstanceAccessIfNecessary(BlockScope currentScope) {
-}
-public void manageSyntheticAccessIfNecessary(BlockScope currentScope) {
+public void manageSyntheticAccessIfNecessary(BlockScope currentScope, FlowInfo flowInfo) {
 
+	if (!flowInfo.isReachable()) return;
+	
 	// if the binding declaring class is not visible, need special action
 	// for runtime compatibility on 1.2 VMs : change the declaring class of the binding
-	// NOTE: from 1.4 on, method's declaring class is touched if any different from receiver type
+	// NOTE: from target 1.2 on, method's declaring class is touched if any different from receiver type
 	// and not from Object or implicit static method call.	
 	if (binding.declaringClass != this.qualifyingType
 		&& !this.qualifyingType.isArrayType()
-		&& ((currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4
+		&& ((currentScope.environment().options.targetJDK >= ClassFileConstants.JDK1_2
 				&& (!receiver.isImplicitThis() || !binding.isStatic())
 				&& binding.declaringClass.id != T_Object) // no change for Object methods
 			|| !binding.declaringClass.canBeSeenBy(currentScope))) {
-		codegenBinding = currentScope.enclosingSourceType().getUpdatedMethodBinding(binding, (ReferenceBinding) this.qualifyingType);
+		this.codegenBinding = currentScope.enclosingSourceType().getUpdatedMethodBinding(binding, (ReferenceBinding) this.qualifyingType);
 	}	
 }
 public TypeBinding resolveType(BlockScope scope) {
@@ -208,7 +210,7 @@ public TypeBinding resolveType(BlockScope scope) {
 			&& ((ProblemMethodBinding) binding).problemId() == NotVisible) {
 			if (this.evaluationContext.declaringTypeName != null) {
 				delegateThis = scope.getField(scope.enclosingSourceType(), DELEGATE_THIS, this);
-				if (delegateThis == null){ ; // if not found then internal error, field should have been found
+				if (delegateThis == null){ // if not found then internal error, field should have been found
 					constant = NotAConstant;
 					scope.problemReporter().invalidMethod(this, binding);
 					return null;
@@ -251,7 +253,7 @@ public TypeBinding resolveType(BlockScope scope) {
 		}
 	}
 	if (!binding.isStatic()) {
-		// the "receiver" must not be a type, i.e. a NameReference that the TC has bound to a Type
+		// the "receiver" must not be a type, in other words, a NameReference that the TC has bound to a Type
 		if (receiver instanceof NameReference) {
 			if ((((NameReference) receiver).bits & BindingIds.TYPE) != 0) {
 				scope.problemReporter().mustUseAStaticMethod(this, binding);

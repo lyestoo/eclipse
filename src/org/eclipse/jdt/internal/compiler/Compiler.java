@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler;
 
 import org.eclipse.jdt.core.compiler.*;
@@ -109,11 +109,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			new ProblemReporter(policy, this.options, problemFactory);
 		this.lookupEnvironment =
 			new LookupEnvironment(this, options, problemReporter, environment);
-		this.parser =
-			new Parser(
-				problemReporter, 
-				this.options.parseLiteralExpressionsAsConstants, 
-				options.sourceLevel >= CompilerOptions.JDK1_4);
+		initializeParser();
 	}
 	
 	/**
@@ -176,15 +172,9 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 				}
 			};
 		}
-		this.problemReporter =
-			new ProblemReporter(policy, this.options, problemFactory);
-		this.lookupEnvironment =
-			new LookupEnvironment(this, options, problemReporter, environment);
-		this.parser =
-			new Parser(
-				problemReporter, 
-				parseLiteralExpressionsAsConstants, 
-				this.options.sourceLevel >= CompilerOptions.JDK1_4);
+		this.problemReporter = new ProblemReporter(policy, this.options, problemFactory);
+		this.lookupEnvironment = new LookupEnvironment(this, options, problemReporter, environment);
+		initializeParser();
 	}
 	
 	/**
@@ -212,12 +202,13 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			}
 
 			if (options.verbose) {
+				String count = String.valueOf(totalUnits + 1);
 				System.out.println(
 					Util.bind(
 						"compilation.request" , //$NON-NLS-1$
 						new String[] {
-							String.valueOf(totalUnits + 1),
-							String.valueOf(totalUnits + 1),
+							count,
+							count,
 							new String(sourceUnit.getFileName())}));
 			}
 
@@ -244,7 +235,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 	public void accept(ISourceType[] sourceTypes, PackageBinding packageBinding) {
 		problemReporter.abortDueToInternalError(
 			Util.bind(
-				"abort.againstSourceModel " , //$NON-NLS-1$
+				"abort.againstSourceModel" , //$NON-NLS-1$
 				String.valueOf(sourceTypes[0].getName()),
 				String.valueOf(sourceTypes[0].getFileName())));
 	}
@@ -370,27 +361,6 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 		}
 	}
 
-	protected void getMethodBodies(CompilationUnitDeclaration unit, int place) {
-		//fill the methods bodies in order for the code to be generated
-
-		if (unit.ignoreMethodBodies) {
-			unit.ignoreFurtherInvestigation = true;
-			return;
-			// if initial diet parse did not work, no need to dig into method bodies.
-		}
-
-		if (place < parseThreshold)
-			return; //work already done ...
-
-		//real parse of the method....
-		parser.scanner.setSource(
-			unit.compilationResult.compilationUnit.getContents());
-		if (unit.types != null) {
-			for (int i = unit.types.length; --i >= 0;)
-				unit.types[i].parseMethod(parser, unit);
-		}
-	}
-
 	/*
 	 * Compiler crash recovery in case of unexpected runtime exceptions
 	 */
@@ -399,9 +369,6 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 		CompilationUnitDeclaration unit,
 		CompilationResult result) {
 
-		/* dump a stack trace to the console */
-		internalException.printStackTrace();
-
 		/* find a compilation result */
 		if ((unit != null)) // basing result upon the current unit if available
 			result = unit.compilationResult; // current unit being processed ?
@@ -409,6 +376,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			result = unitsToProcess[totalUnits - 1].compilationResult;
 		// last unit in beginToCompile ?
 
+		boolean needToPrint = true;
 		if (result != null) {
 			/* create and record a compilation problem */
 			StringWriter stringWriter = new StringWriter();
@@ -440,7 +408,12 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			/* hand back the compilation result */
 			if (!result.hasBeenAccepted) {
 				requestor.acceptResult(result.tagAsAccepted());
+				needToPrint = false;
 			}
+		}
+		if (needToPrint) {
+			/* dump a stack trace to the console */
+			internalException.printStackTrace();
 		}
 	}
 
@@ -518,12 +491,17 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 		}
 	}
 
+	public void initializeParser() {
+
+		this.parser = new Parser(this.problemReporter, this.options.parseLiteralExpressionsAsConstants);
+	}
+	
 	/**
 	 * Process a compilation unit already parsed and build.
 	 */
 	public void process(CompilationUnitDeclaration unit, int i) {
 
-		getMethodBodies(unit, i);
+		this.parser.getMethodBodies(unit);
 
 		// fault in fields & methods
 		if (unit.scope != null)
@@ -560,19 +538,27 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 	 * Internal API used to resolve a given compilation unit. Can run a subset of the compilation process
 	 */
 	public CompilationUnitDeclaration resolve(
+			CompilationUnitDeclaration unit, 
 			ICompilationUnit sourceUnit, 
 			boolean verifyMethods,
 			boolean analyzeCode,
 			boolean generateCode) {
 				
-		CompilationUnitDeclaration unit = null;
 		try {
-			// build and record parsed units
-			parseThreshold = 0; // will request a full parse
-			beginToCompile(new ICompilationUnit[] { sourceUnit });
-			// process all units (some more could be injected in the loop by the lookup environment)
-			unit = unitsToProcess[0];
-			getMethodBodies(unit, 0);
+			if (unit == null) {
+				// build and record parsed units
+				parseThreshold = 0; // will request a full parse
+				beginToCompile(new ICompilationUnit[] { sourceUnit });
+				// process all units (some more could be injected in the loop by the lookup environment)
+				unit = unitsToProcess[0];
+			} else {
+				// initial type binding creation
+				lookupEnvironment.buildTypeBindings(unit);
+
+				// binding resolution
+				lookupEnvironment.completeTypeBindings();
+			}
+			this.parser.getMethodBodies(unit);
 			if (unit.scope != null) {
 				// fault in fields & methods
 				unit.scope.faultInTypes();
@@ -590,7 +576,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 				// code generation
 				if (generateCode) unit.generateCode();
 			}
-			unitsToProcess[0] = null; // release reference to processed unit declaration
+			if (unitsToProcess != null) unitsToProcess[0] = null; // release reference to processed unit declaration
 			requestor.acceptResult(unit.compilationResult.tagAsAccepted());
 			return unit;
 		} catch (AbortCompilation e) {
@@ -611,5 +597,21 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			// environment.
 			// this.reset();
 		}
+	}
+	/**
+	 * Internal API used to resolve a given compilation unit. Can run a subset of the compilation process
+	 */
+	public CompilationUnitDeclaration resolve(
+			ICompilationUnit sourceUnit, 
+			boolean verifyMethods,
+			boolean analyzeCode,
+			boolean generateCode) {
+				
+		return resolve(
+			null,
+			sourceUnit,
+			verifyMethods,
+			analyzeCode,
+			generateCode);
 	}
 }

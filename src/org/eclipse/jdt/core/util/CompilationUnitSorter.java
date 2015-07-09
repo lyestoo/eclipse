@@ -1,23 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2003 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.eclipse.jdt.core.util;
 
 import java.util.Comparator;
 
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.jdt.core.ICompilationUnit;
-import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.internal.core.JavaElement;
 import org.eclipse.jdt.internal.core.SortElementsOperation;
 
 /**
@@ -35,6 +34,7 @@ public final class CompilationUnitSorter {
  	 * Private constructor to prevent instantiation.
  	 */
 	private CompilationUnitSorter() {
+		// Not instantiable
 	} 
 	
 	/**
@@ -52,11 +52,11 @@ public final class CompilationUnitSorter {
 	 * <p>
 	 * Example usage:
 	 * <pre>
-	 *      BodyDeclaration b1 = (BodyDeclaration) object1;
-	 *      BodyDeclaration b2 = (BodyDeclaration) object2;
-	 * 		Integer i1 = (Integer) b1.getProperty(RELATIVE_ORDER);
-	 * 		Integer i2 = (Integer) b2.getProperty(RELATIVE_ORDER);
-	 * 		return i1.intValue() - i2.intValue(); // preserve original order
+	 * BodyDeclaration b1 = (BodyDeclaration) object1;
+	 * BodyDeclaration b2 = (BodyDeclaration) object2;
+	 * Integer i1 = (Integer) b1.getProperty(RELATIVE_ORDER);
+	 * Integer i2 = (Integer) b2.getProperty(RELATIVE_ORDER);
+	 * return i1.intValue() - i2.intValue(); // preserve original order
 	 * </pre>
 	 * </p>
 	 * 
@@ -128,7 +128,7 @@ public final class CompilationUnitSorter {
      *		  RELATIVE_ORDER property</code></td>
 	 *	  </tr>
 	 * </table>
-	 * Clients should rely on the AST nodes being properly parented or on
+	 * Clients should not rely on the AST nodes being properly parented or on
 	 * having source range information. (Future releases may provide options
 	 * for requesting additional information like source positions, full ASTs,
 	 * non-recursive sorting, etc.)
@@ -172,10 +172,6 @@ public final class CompilationUnitSorter {
 		}
 		ICompilationUnit[] compilationUnits = new ICompilationUnit[] { compilationUnit };
 		SortElementsOperation operation = new SortElementsOperation(compilationUnits, positions, comparator);
-		try {
-			JavaCore.run(operation, monitor);
-		} catch(CoreException e) {
-			throw new JavaModelException(e);
-		}
+		JavaElement.runOperation(operation, monitor);
 	}
 }

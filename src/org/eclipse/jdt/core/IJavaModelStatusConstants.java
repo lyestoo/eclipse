@@ -1,13 +1,16 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ * 
+ * TODO: missing 2.1 and subsequent contributions
+ * COMPILER_FAILURE
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 /**
@@ -249,4 +252,49 @@ public interface IJavaModelStatusConstants {
 	 * has been made locally available.
 	 */
 	 public static final int NO_LOCAL_CONTENTS = 999;
+	 
+	 /**
+	  * Status indicating that a .classpath file is ill-formed, and thus cannot
+	  * be read/written successfully.
+	  * @since 2.1
+	  */
+	 public static final int INVALID_CLASSPATH_FILE_FORMAT = 1000;
+
+	 /**
+	  * Status indicating that a project is involved in a build path cycle.
+	  * @since 2.1
+	  */
+	 public static final int CLASSPATH_CYCLE = 1001;
+	 
+	/**
+	 * Status constant indicating that an exclusion pattern got specified
+	 * on a classpath source entry, though it was explicitely disabled 
+	 * according to its project preference settings.
+	 * @see org.eclipse.jdt.core.IJavaProject#getOptions(boolean)
+	 * @since 2.1
+	 */
+	public static final int DISABLED_CP_EXCLUSION_PATTERNS = 1002;
+
+	/**
+	 * Status constant indicating that a specific output location got associated
+	 * with a source entry, though it was explicitely disabled according to its project
+	 * preference settings.
+	 * @see org.eclipse.jdt.core.IJavaProject#getOptions(boolean)
+	 * @since 2.1
+	 */
+	public static final int DISABLED_CP_MULTIPLE_OUTPUT_LOCATIONS = 1003;
+	
+	/**
+	 * Status constant indicating that a project is prerequisiting some library for which the
+	 * classfile JDK version level is more recent than the project JDK target level setting. 
+	 * This can indicate some binary incompatibility issues later on.
+	 * @since 3.0
+	 */
+	public static final int INCOMPATIBLE_JDK_LEVEL	= 1004;
+	
+	/**
+	 * Status constant indicating that a compiler failure occurred.
+	 * @since 3.0
+	 */
+	public static final int COMPILER_FAILURE	= 1005;	
 }

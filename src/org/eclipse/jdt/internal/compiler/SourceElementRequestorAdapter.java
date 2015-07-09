@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.internal.compiler;
 
 import org.eclipse.jdt.core.compiler.IProblem;
@@ -21,28 +21,33 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		char[] typeName,
 		int argCount,
 		int sourcePosition) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#acceptFieldReference(char[], int)
 	 */
 	public void acceptFieldReference(char[] fieldName, int sourcePosition) {
+		// default implementation: do nothing
 	}
 
 	/*
-	 * @see ISourceElementRequestor#acceptImport(int, int, char[], boolean)
+	 * @see ISourceElementRequestor#acceptImport(int, int, char[], boolean, int)
 	 */
 	public void acceptImport(
 		int declarationStart,
 		int declarationEnd,
 		char[] name,
-		boolean onDemand) {
+		boolean onDemand,
+		int modifiers) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#acceptLineSeparatorPositions(int[])
 	 */
 	public void acceptLineSeparatorPositions(int[] positions) {
+		// default implementation: do nothing
 	}
 
 	/*
@@ -52,6 +57,7 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		char[] methodName,
 		int argCount,
 		int sourcePosition) {
+		// default implementation: do nothing
 	}
 
 	/*
@@ -61,12 +67,14 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		int declarationStart,
 		int declarationEnd,
 		char[] name) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#acceptProblem(IProblem)
 	 */
 	public void acceptProblem(IProblem problem) {
+		// default implementation: do nothing
 	}
 
 	/*
@@ -76,12 +84,14 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		char[][] typeName,
 		int sourceStart,
 		int sourceEnd) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#acceptTypeReference(char[], int)
 	 */
 	public void acceptTypeReference(char[] typeName, int sourcePosition) {
+		// default implementation: do nothing
 	}
 
 	/*
@@ -91,12 +101,14 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		char[][] name,
 		int sourceStart,
 		int sourceEnd) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#acceptUnknownReference(char[], int)
 	 */
 	public void acceptUnknownReference(char[] name, int sourcePosition) {
+		// default implementation: do nothing
 	}
 
 	/*
@@ -110,12 +122,14 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		int nameSourceEnd,
 		char[] superclass,
 		char[][] superinterfaces) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#enterCompilationUnit()
 	 */
 	public void enterCompilationUnit() {
+		// default implementation: do nothing
 	}
 
 	/*
@@ -130,6 +144,7 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		char[][] parameterTypes,
 		char[][] parameterNames,
 		char[][] exceptionTypes) {
+		// default implementation: do nothing
 	}
 
 	/*
@@ -142,12 +157,14 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		char[] name,
 		int nameSourceStart,
 		int nameSourceEnd) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#enterInitializer(int, int)
 	 */
 	public void enterInitializer(int declarationStart, int modifiers) {
+		// default implementation: do nothing
 	}
 
 	/*
@@ -160,6 +177,7 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		int nameSourceStart,
 		int nameSourceEnd,
 		char[][] superinterfaces) {
+		// default implementation: do nothing
 	}
 
 	/*
@@ -175,48 +193,56 @@ public class SourceElementRequestorAdapter implements ISourceElementRequestor {
 		char[][] parameterTypes,
 		char[][] parameterNames,
 		char[][] exceptionTypes) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#exitClass(int)
 	 */
 	public void exitClass(int declarationEnd) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#exitCompilationUnit(int)
 	 */
 	public void exitCompilationUnit(int declarationEnd) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#exitConstructor(int)
 	 */
 	public void exitConstructor(int declarationEnd) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#exitField(int)
 	 */
-	public void exitField(int initializationStart, int declarationEnd) {
+	public void exitField(int initializationStart, int declarationEnd, int declarationSourceEnd) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#exitInitializer(int)
 	 */
 	public void exitInitializer(int declarationEnd) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#exitInterface(int)
 	 */
 	public void exitInterface(int declarationEnd) {
+		// default implementation: do nothing
 	}
 
 	/*
 	 * @see ISourceElementRequestor#exitMethod(int)
 	 */
 	public void exitMethod(int declarationEnd) {
+		// default implementation: do nothing
 	}
 
 }

@@ -1,14 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2002 International Business Machines Corp. and others.
+ * Copyright (c) 2000, 2003 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v1.0 
+ * are made available under the terms of the Common Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *     IBM Corporation - added #createScanner allowing to make comment check stricter
- ******************************************************************************/
+ *******************************************************************************/
 package org.eclipse.jdt.core;
 
 import java.io.File;
@@ -27,6 +26,9 @@ import org.eclipse.jdt.core.compiler.IScanner;
 import org.eclipse.jdt.core.util.ClassFileBytesDisassembler;
 import org.eclipse.jdt.core.util.ClassFormatException;
 import org.eclipse.jdt.core.util.IClassFileReader;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
 import org.eclipse.jdt.internal.compiler.util.Util;
 import org.eclipse.jdt.internal.core.JarPackageFragmentRoot;
 import org.eclipse.jdt.internal.core.JavaModelManager;
@@ -34,6 +36,7 @@ import org.eclipse.jdt.internal.core.util.ClassFileReader;
 import org.eclipse.jdt.internal.core.util.Disassembler;
 import org.eclipse.jdt.internal.core.util.PublicScanner;
 import org.eclipse.jdt.internal.formatter.CodeFormatter;
+import org.eclipse.jdt.internal.formatter.DefaultCodeFormatter;
 
 /**
  * Factory for creating various compiler tools, such as scanners, parsers and compilers.
@@ -72,6 +75,7 @@ public class ToolFactory {
 								return (ICodeFormatter)execExt;
 							}
 						} catch(CoreException e){
+							// unable to instantiate extension, will answer default formatter instead
 						}
 					}
 				}	
@@ -94,20 +98,31 @@ public class ToolFactory {
 	 * @see JavaCore#getOptions()
 	 */
 	public static ICodeFormatter createDefaultCodeFormatter(Map options){
-
-		if (options == null) options = JavaCore.getOptions();
-		return new CodeFormatter(options);
+		final String NEW_CODE_FORMATTER_ACTIVATION = JavaCore.PLUGIN_ID + ".newformatter.activation"; //$NON-NLS-1$
+	
+		Object newFormatterActivation = JavaCore.getOption(NEW_CODE_FORMATTER_ACTIVATION);
+		
+		ICodeFormatter codeFormatter;
+		if (JavaCore.ENABLED.equals(newFormatterActivation)) {
+			codeFormatter = new DefaultCodeFormatter();
+		} else {
+			if (options == null) options = JavaCore.getOptions();
+			codeFormatter = new CodeFormatter(options);
+		}
+		return codeFormatter;
 	}
 	
 	/**
 	 * Create a classfile bytecode disassembler, able to produce a String representation of a given classfile.
 	 * 
 	 * @return a classfile bytecode disassembler
-	 * @see IClassFileDisassembler
+	 * @see org.eclipse.jdt.core.util.IClassFileDisassembler
 	 * @deprecated - should use factory method creating ClassFileBytesDisassembler instead 
 	 */
 	public static org.eclipse.jdt.core.util.IClassFileDisassembler createDefaultClassFileDisassembler(){
-		class DeprecatedDisassembler extends Disassembler implements org.eclipse.jdt.core.util.IClassFileDisassembler {};
+		class DeprecatedDisassembler extends Disassembler implements org.eclipse.jdt.core.util.IClassFileDisassembler {
+			// for backward compatibility, defines a disassembler which implements IClassFileDisassembler
+		}
 		return new DeprecatedDisassembler();
 	}
 	
@@ -182,6 +197,7 @@ public class ToolFactory {
 					return createDefaultClassFileReader(location.toOSString(), decodingFlag);
 				}
 			} catch(CoreException e){
+				// unable to read
 			}
 		}
 		return null;
@@ -203,16 +219,17 @@ public class ToolFactory {
 	 * @see IClassFileReader
 	 */
 	public static IClassFileReader createDefaultClassFileReader(String zipFileName, String zipEntryName, int decodingFlag){
+		ZipFile zipFile = null;
 		try {
 			if (JavaModelManager.ZIP_ACCESS_VERBOSE) {
 				System.out.println("(" + Thread.currentThread() + ") [ToolFactory.createDefaultClassFileReader()] Creating ZipFile on " + zipFileName); //$NON-NLS-1$	//$NON-NLS-2$
 			}
-			ZipFile zipFile = new ZipFile(zipFileName);
+			zipFile = new ZipFile(zipFileName);
 			ZipEntry zipEntry = zipFile.getEntry(zipEntryName);
 			if (zipEntry == null) {
 				return null;
 			}
-			if (!zipEntryName.toLowerCase().endsWith(".class")) {//$NON-NLS-1$
+			if (!zipEntryName.toLowerCase().endsWith(SuffixConstants.SUFFIX_STRING_class)) {
 				return null;
 			}
 			byte classFileBytes[] = Util.getZipEntryByteContent(zipEntry, zipFile);
@@ -221,6 +238,14 @@ public class ToolFactory {
 			return null;
 		} catch(IOException e) {
 			return null;
+		} finally {
+			if (zipFile != null) {
+				try {
+					zipFile.close();
+				} catch(IOException e) {
+					// ignore
+				}
+			}
 		}
 	}	
 	
@@ -256,11 +281,13 @@ public class ToolFactory {
 	 * can then be extracted using <code>IScanner#getLineEnds</code>. Only non-unicode escape sequences are 
 	 * considered as valid line separators.
   	 * @return a scanner
-	 * @see ToolFactory#createScanner(boolean,boolean,boolean,boolean, boolean)
 	 * @see org.eclipse.jdt.core.compiler.IScanner
 	 */
 	public static IScanner createScanner(boolean tokenizeComments, boolean tokenizeWhiteSpace, boolean assertMode, boolean recordLineSeparator){
-		return createScanner(tokenizeComments, tokenizeWhiteSpace, assertMode, recordLineSeparator, false);
+
+		PublicScanner scanner = new PublicScanner(tokenizeComments, tokenizeWhiteSpace, false/*nls*/, assertMode ? ClassFileConstants.JDK1_4 : ClassFileConstants.JDK1_3/*sourceLevel*/, null/*taskTags*/, null/*taskPriorities*/);
+		scanner.recordLineSeparator = recordLineSeparator;
+		return scanner;
 	}
 	
 	/**
@@ -280,27 +307,29 @@ public class ToolFactory {
 	 * </pre>
 	 * </code>
 	 * 
+	 * <p>
+	 * The returned scanner will tolerate unterminated line comments (missing line separator). It can be made stricter
+	 * by using API with extra boolean parameter (<code>strictCommentMode</code>).
+	 * <p>
 	 * @param tokenizeComments if set to <code>false</code>, comments will be silently consumed
 	 * @param tokenizeWhiteSpace if set to <code>false</code>, white spaces will be silently consumed,
-	 * @param assertMode if set to <code>false</code>, occurrences of 'assert' will be reported as identifiers
-	 * (<code>ITerminalSymbols#TokenNameIdentifier</code>), whereas if set to <code>true</code>, it
-	 * would report assert keywords (<code>ITerminalSymbols#TokenNameassert</code>). Java 1.4 has introduced
-	 * a new 'assert' keyword.
 	 * @param recordLineSeparator if set to <code>true</code>, the scanner will record positions of encountered line 
 	 * separator ends. In case of multi-character line separators, the last character position is considered. These positions
 	 * can then be extracted using <code>IScanner#getLineEnds</code>. Only non-unicode escape sequences are 
 	 * considered as valid line separators.
-	 * @param strictCommentMode if set to <code>true</code>, line comments with no trailing line separator will be
-	 * treated as invalid tokens.
+	 * @param sourceLevel if set to <code>&quot;1.3&quot;</code> or <code>null</code>, occurrences of 'assert' will be reported as identifiers
+	 * (<code>ITerminalSymbols#TokenNameIdentifier</code>), whereas if set to <code>&quot;1.4&quot;</code>, it
+	 * would report assert keywords (<code>ITerminalSymbols#TokenNameassert</code>). Java 1.4 has introduced
+	 * a new 'assert' keyword.
   	 * @return a scanner
-	 * 
 	 * @see org.eclipse.jdt.core.compiler.IScanner
-	 * @since 2.1
 	 */
-	public static IScanner createScanner(boolean tokenizeComments, boolean tokenizeWhiteSpace, boolean assertMode, boolean recordLineSeparator, boolean strictCommentMode){
-
-		PublicScanner scanner = new PublicScanner(tokenizeComments, tokenizeWhiteSpace, false/*nls*/, assertMode, strictCommentMode /*strict comment*/, null/*taskTags*/, null/*taskPriorities*/);
+	public static IScanner createScanner(boolean tokenizeComments, boolean tokenizeWhiteSpace, boolean recordLineSeparator, String sourceLevel) {
+		PublicScanner scanner = null;
+		long level = CompilerOptions.versionToJdkLevel(sourceLevel);
+		if (level == 0) level = ClassFileConstants.JDK1_3; // fault-tolerance
+		scanner = new PublicScanner(tokenizeComments, tokenizeWhiteSpace, false/*nls*/,level /*sourceLevel*/, null/*taskTags*/, null/*taskPriorities*/);
 		scanner.recordLineSeparator = recordLineSeparator;
 		return scanner;
-	}
+	}	
 }
