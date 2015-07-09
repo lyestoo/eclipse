@@ -1,15 +1,20 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
-import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public abstract class TypeReference extends Expression {
-	public TypeBinding binding;
+
 public TypeReference() {
 		super () ;
 		}
@@ -79,19 +84,19 @@ public boolean isTypeReference() {
 public TypeBinding resolveType(BlockScope scope) {
 	// handle the error here
 	constant = NotAConstant;
-	if (binding != null) { // is a shared type reference which was already resolved
-		if (!binding.isValidBinding())
+	if (this.resolvedType != null) { // is a shared type reference which was already resolved
+		if (!this.resolvedType.isValidBinding())
 			return null; // already reported error
 	} else {
-		binding = getTypeBinding(scope);
-		if (!binding.isValidBinding()) {
-			scope.problemReporter().invalidType(this, binding);
+		this.resolvedType = getTypeBinding(scope);
+		if (!this.resolvedType.isValidBinding()) {
+			scope.problemReporter().invalidType(this, this.resolvedType);
 			return null;
 		}
-		if (isTypeUseDeprecated(binding, scope))
-			scope.problemReporter().deprecatedType(binding, this);
+		if (isTypeUseDeprecated(this.resolvedType, scope))
+			scope.problemReporter().deprecatedType(this.resolvedType, this);
 	}
-	return binding;
+	return this.resolvedType = this.resolvedType;
 }
 public abstract void traverse(IAbstractSyntaxTreeVisitor visitor, ClassScope classScope);
 }

@@ -1,16 +1,14 @@
-/**********************************************************************
-Copyright (c) 2000, 2001, 2002 IBM Corp. and others.
-All rights reserved.   This program and the accompanying materials
-are made available under the terms of the Common Public License v0.5
-which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/cpl-v05.html
- 
-Contributors:
-     IBM Corporation - initial API and implementation
-**********************************************************************/
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core;
-
-import org.eclipse.jdt.internal.core.*;
 
 /**
  * Status codes used with Java model status objects.
@@ -20,19 +18,23 @@ import org.eclipse.jdt.internal.core.*;
  * </p>
  *
  * @see IJavaModelStatus
- * @see org.eclipse.core.runtime.IStatus#getCode
+ * @see org.eclipse.core.runtime.IStatus#getCode()
  */
 public interface IJavaModelStatusConstants {
 
 	/**
 	 * Status constant indicating that a container path was resolved
 	 * to invalid entries (null or container).
+	 * 
+	 * @since 2.0
 	 */
 	public static final int INVALID_CP_CONTAINER_ENTRY = 962;
 
 	/**
 	 * Status constant indicating that a container path was not resolvable
 	 * indicating either the referred container is undefined, unbound.
+	 * 
+	 * @since 2.0
 	 */
 	public static final int CP_CONTAINER_PATH_UNBOUND = 963;
 

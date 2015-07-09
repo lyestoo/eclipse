@@ -61,6 +61,7 @@ public class ArrayAccess extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		ArrayAccess result = new ArrayAccess(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setArray((Expression) getArray().clone(target));
 		result.setIndex((Expression) getIndex().clone(target));
 		return result;
@@ -95,7 +96,9 @@ public class ArrayAccess extends Expression {
 	public Expression getArray() {
 		if (arrayExpression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setArray(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return arrayExpression;
 	}
@@ -104,9 +107,12 @@ public class ArrayAccess extends Expression {
 	 * Sets the array expression of this array access expression.
 	 * 
 	 * @param expression the array expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setArray(Expression expression) {
 		if (expression == null) {
@@ -126,7 +132,9 @@ public class ArrayAccess extends Expression {
 	public Expression getIndex() {
 		if (indexExpression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setIndex(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return indexExpression;
 	}
@@ -135,9 +143,12 @@ public class ArrayAccess extends Expression {
 	 * Sets the index expression of this array access expression.
 	 * 
 	 * @param expression the index expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setIndex(Expression expression) {
 		if (expression == null) {

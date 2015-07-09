@@ -1,16 +1,24 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.batch;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import java.io.*;
-import java.util.*;
-import java.util.zip.*; 
+import java.io.File;
+import java.io.IOException;
+import java.util.Enumeration;
+import java.util.Hashtable;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
-import org.eclipse.jdt.internal.compiler.env.*;
-import org.eclipse.jdt.internal.compiler.classfmt.*;
-import org.eclipse.jdt.internal.compiler.util.Util;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader;
+import org.eclipse.jdt.internal.compiler.env.NameEnvironmentAnswer;
 
 public class ClasspathJar implements FileSystem.Classpath {
 	
@@ -27,7 +35,8 @@ public ClasspathJar(ZipFile zipFile, boolean closeZipFileAtEnd) throws IOExcepti
 	this.closeZipFileAtEnd = closeZipFileAtEnd;
 }	
 public NameEnvironmentAnswer findClass(char[] typeName, String qualifiedPackageName, String qualifiedBinaryFileName) {
-	if (!isPackage(qualifiedPackageName)) return null; // most common case
+	if (!isPackage(qualifiedPackageName)) 
+		return null; // most common case
 
 	try {
 		ClassFileReader reader = ClassFileReader.read(zipFile, qualifiedBinaryFileName);
@@ -65,6 +74,6 @@ public void reset() {
 	this.packageCache = null;
 }
 public String toString() {
-	return "Classpath for jar file " + zipFile; //$NON-NLS-1$
+	return "Classpath for jar file " + zipFile.getName(); //$NON-NLS-1$
 }
 }

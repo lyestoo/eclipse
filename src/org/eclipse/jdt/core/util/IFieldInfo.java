@@ -1,19 +1,21 @@
-/**********************************************************************
-Copyright (c) 2002 IBM Corp. and others.
-All rights reserved.   This program and the accompanying materials
-are made available under the terms of the Common Public License v0.5
-which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/cpl-v05.html
- 
-Contributors:
-     IBM Corporation - initial API and implementation
-**********************************************************************/
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core.util;
 
 /**
- * Description of a field info as described in the the JVM 
+ * Description of a field info as described in the JVM 
  * specifications.
  *  
+ * This interface may be implemented by clients. 
+ * 
  * @since 2.0
  */
 public interface IFieldInfo {
@@ -22,14 +24,15 @@ public interface IFieldInfo {
 	 * Answer back the constant value attribute of this field info if specified, 
 	 * null otherwise.
 	 * 
-	 * @return org.eclipse.jdt.core.util.IConstantValueAttribute
+	 * @return the constant value attribute of this field info if specified, 
+	 * null otherwise
 	 */
 	IConstantValueAttribute getConstantValueAttribute();
 
 	/**
 	 * Answer back the access flag of this field info.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the access flag of this field info
 	 */
 	int getAccessFlags();
 	
@@ -37,14 +40,15 @@ public interface IFieldInfo {
 	 * Answer back the name of this field info. The name is returned as
 	 * specified in the JVM specifications.
 	 * 
-	 * @return char[]
+	 * @return the name of this field info. The name is returned as
+	 * specified in the JVM specifications
 	 */
 	char[] getName();
 
 	/**
 	 * Answer back the name index of this field info.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the name index of this field info
 	 */
 	int getNameIndex();
 	
@@ -52,42 +56,43 @@ public interface IFieldInfo {
 	 * Answer back the descriptor of this field info. The descriptor is returned as
 	 * specified in the JVM specifications.
 	 * 
-	 * @return char[]
+	 * @return the descriptor of this field info. The descriptor is returned as
+	 * specified in the JVM specifications
 	 */
 	char[] getDescriptor();
 
 	/**
 	 * Answer back the descriptor index of this field info.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the descriptor index of this field info
 	 */
 	int getDescriptorIndex();
 
 	/**
 	 * Return true if the field info has a constant value attribute, false otherwise.
 	 * 
-	 * @return boolean
+	 * @return true if the field info has a constant value attribute, false otherwise
 	 */
 	boolean hasConstantValueAttribute();
 
 	/**
 	 * Return true if the field info has a synthetic attribute, false otherwise.
 	 * 
-	 * @return boolean
+	 * @return true if the field info has a synthetic attribute, false otherwise
 	 */
 	boolean isSynthetic();
 
 	/**
 	 * Return true if the field info has a deprecated attribute, false otherwise.
 	 * 
-	 * @return boolean
+	 * @return true if the field info has a deprecated attribute, false otherwise
 	 */
 	boolean isDeprecated();
 	
 	/**
 	 * Answer back the attribute number of the field info.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the attribute number of the field info
 	 */
 	int getAttributeCount();
 
@@ -97,7 +102,9 @@ public interface IFieldInfo {
 	 * includes SyntheticAttribute, ConstantValueAttributes, etc.
 	 * Returns an empty collection if none.
 	 * 
-	 * @return IClassFileAttribute[]
+	 * @return the collection of all attributes of the field info. It 
+	 * includes SyntheticAttribute, ConstantValueAttributes, etc.
+	 * Returns an empty collection if none
 	 */
 	IClassFileAttribute[] getAttributes();
 }

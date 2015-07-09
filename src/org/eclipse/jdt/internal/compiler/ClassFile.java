@@ -1,19 +1,29 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import java.io.*;
-import java.util.*;
+import java.util.StringTokenizer;
 
-import org.eclipse.jdt.internal.compiler.impl.*;
-import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
+import org.eclipse.jdt.internal.compiler.impl.StringConstant;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfType;
+import org.eclipse.jdt.internal.compiler.util.Util;
 
 /**
  * Represents a class file wrapper on bytes, it is aware of its actual
@@ -868,20 +878,21 @@ public class ClassFile
 				switch (accessMethodBinding.accessType) {
 					case SyntheticAccessMethodBinding.FieldReadAccess :
 						// generate a method info to emulate an reading access to
-						// a private field
+						// a non-accessible field
 						addSyntheticFieldReadAccessMethod(syntheticAccessMethods[i]);
 						break;
 					case SyntheticAccessMethodBinding.FieldWriteAccess :
 						// generate a method info to emulate an writing access to
-						// a private field
+						// a non-accessible field
 						addSyntheticFieldWriteAccessMethod(syntheticAccessMethods[i]);
 						break;
 					case SyntheticAccessMethodBinding.MethodAccess :
-						// generate a method info to emulate an access to a private method
+					case SyntheticAccessMethodBinding.SuperMethodAccess :
+						// generate a method info to emulate an access to a non-accessible method / super-method
 						addSyntheticMethodAccessMethod(syntheticAccessMethods[i]);
 						break;
 					case SyntheticAccessMethodBinding.ConstructorAccess :
-						// generate a method info to emulate an access to a private method
+						// generate a method info to emulate an access to a non-accessible constructor
 						addSyntheticConstructorAccessMethod(syntheticAccessMethods[i]);
 				}
 			}
@@ -1453,7 +1464,8 @@ public class ClassFile
 						0,
 						contentsLength);
 				}
-				localContentsOffset += 2; // the startPC for this is always 0
+				localContents[localContentsOffset++] = 0; // the startPC for this is always 0
+				localContents[localContentsOffset++] = 0;
 				localContents[localContentsOffset++] = (byte) (code_length >> 8);
 				localContents[localContentsOffset++] = (byte) code_length;
 				nameIndex = constantPool.literalIndex(QualifiedNamesConstants.This);
@@ -1464,7 +1476,8 @@ public class ClassFile
 						codeStream.methodDeclaration.binding.declaringClass.signature());
 				localContents[localContentsOffset++] = (byte) (descriptorIndex >> 8);
 				localContents[localContentsOffset++] = (byte) descriptorIndex;
-				localContentsOffset += 2; // the resolved position for this is always 0
+				localContents[localContentsOffset++] = 0;// the resolved position for this is always 0
+				localContents[localContentsOffset++] = 0;
 			}
 			for (int i = 0; i < codeStream.allLocalsCounter; i++) {
 				LocalVariableBinding localVariable = codeStream.locals[i];
@@ -1615,7 +1628,8 @@ public class ClassFile
 			localContents[localContentsOffset++] = (byte) handlerPC;
 			if (exceptionHandler.exceptionType == null) {
 				// any exception handler
-				localContentsOffset += 2;
+				localContents[localContentsOffset++] = 0;
+				localContents[localContentsOffset++] = 0;
 			} else {
 				int nameIndex;
 				if (exceptionHandler.exceptionType == TypeBinding.NullBinding) {
@@ -2222,7 +2236,8 @@ public class ClassFile
 		}
 		// there is no exception table, so we need to offset by 2 the current offset and move 
 		// on the attribute generation
-		localContentsOffset += 2;
+		contents[localContentsOffset++] = 0;
+		contents[localContentsOffset++] = 0;
 		// debug attributes
 		int codeAttributeAttributeOffset = localContentsOffset;
 		int attributeNumber = 0;
@@ -2458,7 +2473,7 @@ public class ClassFile
 		AbstractMethodDeclaration[] methodDeclarations = typeDeclaration.methods;
 		int maxMethodDecl = methodDeclarations == null ? 0 : methodDeclarations.length;
 		int problemsLength;
-		IProblem[] problems = unitResult.getProblems();
+		IProblem[] problems = unitResult.getErrors();
 		if (problems == null) {
 			problems = new IProblem[0];
 		}

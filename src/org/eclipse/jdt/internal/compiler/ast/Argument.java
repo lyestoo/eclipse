@@ -1,11 +1,16 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
-import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public class Argument extends LocalDeclaration {
@@ -21,7 +26,7 @@ public class Argument extends LocalDeclaration {
 	public void bind(MethodScope scope, TypeBinding typeBinding, boolean used) {
 
 		if (this.type != null)
-			this.type.binding = typeBinding;
+			this.type.resolvedType = typeBinding;
 		// record the resolved type into the type reference
 		int modifierFlag = this.modifiers;
 		if ((this.binding = scope.duplicateName(this.name)) != null) {
@@ -35,7 +40,7 @@ public class Argument extends LocalDeclaration {
 			if (typeBinding != null && isTypeUseDeprecated(typeBinding, scope))
 				scope.problemReporter().deprecatedType(typeBinding, this.type);
 			this.binding.declaration = this;
-			this.binding.used = used;
+			this.binding.useFlag = used ? LocalVariableBinding.USED : LocalVariableBinding.UNUSED;
 		}
 	}
 

@@ -59,6 +59,7 @@ public class CatchClause extends ASTNode {
 	 */
 	ASTNode clone(AST target) {
 		CatchClause result = new CatchClause(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setBody((Block) getBody().clone(target));
 		result.setException(
 			(SingleVariableDeclaration) ASTNode.copySubtree(target, getException()));
@@ -94,7 +95,9 @@ public class CatchClause extends ASTNode {
 	public SingleVariableDeclaration getException() {
 		if (exceptionDecl == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setException(new SingleVariableDeclaration(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return exceptionDecl;
 	}
@@ -103,9 +106,12 @@ public class CatchClause extends ASTNode {
 	 * Sets the variable declaration of this catch clause.
 	 * 
 	 * @param decl the exception variable declaration node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setException(SingleVariableDeclaration exception) {
 		if (exception == null) {
@@ -125,7 +131,9 @@ public class CatchClause extends ASTNode {
 	public Block getBody() {
 		if (body == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setBody(new Block(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return body;
 	}
@@ -134,9 +142,12 @@ public class CatchClause extends ASTNode {
 	 * Sets the body of this catch clause.
 	 * 
 	 * @param body the catch clause block node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setBody(Block body) {
 		if (body == null) {

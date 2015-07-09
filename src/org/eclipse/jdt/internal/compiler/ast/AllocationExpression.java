@@ -1,11 +1,16 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
-import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -156,7 +161,7 @@ public class AllocationExpression
 				// constructor will not be dumped as private, no emulation required thus
 			} else {
 				syntheticAccessor =
-					((SourceTypeBinding) binding.declaringClass).addSyntheticMethod(binding);
+					((SourceTypeBinding) binding.declaringClass).addSyntheticMethod(binding, isSuperAccess());
 				currentScope.problemReporter().needToEmulateMethodAccess(binding, this);
 			}
 		}
@@ -166,7 +171,7 @@ public class AllocationExpression
 
 		// Propagate the type checking to the arguments, and check if the constructor is defined.
 		constant = NotAConstant;
-		TypeBinding typeBinding = type.resolveType(scope);
+		this.resolvedType = type.resolveType(scope);
 		// will check for null after args are resolved
 
 		// buffering the arguments' types
@@ -179,22 +184,22 @@ public class AllocationExpression
 				if ((argumentTypes[i] = arguments[i].resolveType(scope)) == null)
 					argHasError = true;
 			if (argHasError)
-				return typeBinding;
+				return this.resolvedType;
 		}
-		if (typeBinding == null)
+		if (this.resolvedType == null)
 			return null;
 
-		if (!typeBinding.canBeInstantiated()) {
-			scope.problemReporter().cannotInstantiate(type, typeBinding);
-			return typeBinding;
+		if (!this.resolvedType.canBeInstantiated()) {
+			scope.problemReporter().cannotInstantiate(type, this.resolvedType);
+			return this.resolvedType;
 		}
-		ReferenceBinding allocatedType = (ReferenceBinding) typeBinding;
+		ReferenceBinding allocatedType = (ReferenceBinding) this.resolvedType;
 		if (!(binding = scope.getConstructor(allocatedType, argumentTypes, this))
 			.isValidBinding()) {
 			if (binding.declaringClass == null)
 				binding.declaringClass = allocatedType;
 			scope.problemReporter().invalidConstructor(this, binding);
-			return typeBinding;
+			return this.resolvedType;
 		}
 		if (isMethodUseDeprecated(binding, scope))
 			scope.problemReporter().deprecatedMethod(binding, this);

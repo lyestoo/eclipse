@@ -41,15 +41,15 @@ public class PrimitiveType extends Type {
 	/**
  	 * Primitive type codes (typesafe enumeration).
 	 * <pre>
-	 *    <b>byte</b>  BYTE
-	 *    <b>short</b>  SHORT
-	 *    <b>char</b>  CHAR
-	 *    <b>int</b>  INT
-	 *    <b>long</b>  LONG
-	 *    <b>float</b>  FLOAT
-	 *    <b>double</b>  DOUBLE
-	 *    <b>boolean</b>  BOOLEAN
-	 *    <b>void</b>  VOID
+	 *    <b>byte</b> 	BYTE
+	 *    <b>short</b> 	SHORT
+	 *    <b>char</b> 	CHAR
+	 *    <b>int</b>  	INT
+	 *    <b>long</b>  	LONG
+	 *    <b>float</b>  	FLOAT
+	 *    <b>double</b> 	DOUBLE
+	 *    <b>boolean</b>	BOOLEAN
+	 *    <b>void</b>  	VOID
 	 * </pre>
 	 */
 	public static class Code {
@@ -176,6 +176,7 @@ public class PrimitiveType extends Type {
 	 */
 	ASTNode clone(AST target) {
 		PrimitiveType result = new PrimitiveType(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setPrimitiveTypeCode(getPrimitiveTypeCode());
 		return result;
 	}
@@ -192,7 +193,7 @@ public class PrimitiveType extends Type {
 	 * Method declared on ASTNode.
 	 */
 	void accept0(ASTVisitor visitor) {
-		boolean visitChildren = visitor.visit(this);
+		visitor.visit(this);
 		visitor.endVisit(this);
 	}
 	

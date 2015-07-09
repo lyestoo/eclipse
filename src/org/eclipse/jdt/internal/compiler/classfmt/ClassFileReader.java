@@ -1,18 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.classfmt;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.codegen.*;
+import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
+
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.codegen.AttributeNamesConstants;
 import org.eclipse.jdt.internal.compiler.env.*;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
 import org.eclipse.jdt.internal.compiler.impl.NullConstant;
 import org.eclipse.jdt.internal.compiler.lookup.TypeIds;
-import org.eclipse.jdt.internal.compiler.util.*;
-
-import java.io.*;
-import java.util.Arrays;
+import org.eclipse.jdt.internal.compiler.util.Util;
 
 public class ClassFileReader extends ClassFileStruct implements AttributeNamesConstants, IBinaryType {
 	private int constantPoolCount;
@@ -227,9 +235,6 @@ public int accessFlags() {
 	return this.accessFlags;
 }
 /**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- *
  * Answer the char array that corresponds to the class name of the constant class.
  * constantPoolIndex is the index in the constant pool that is a constant class entry.
  *
@@ -433,7 +438,10 @@ public boolean isInterface() {
  * @return <CODE>boolean</CODE>
  */
 public boolean isLocal() {
-	return this.innerInfo != null && this.innerInfo.getEnclosingTypeName() == null && this.innerInfo.getSourceName() != null;
+	return 
+		this.innerInfo != null 
+		&& this.innerInfo.getEnclosingTypeName() == null 
+		&& this.innerInfo.getSourceName() != null;
 }
 /**
  * Answer true if the receiver is a member type, false otherwise
@@ -451,28 +459,9 @@ public boolean isMember() {
 public boolean isNestedType() {
 	return this.innerInfo != null;
 }
-/**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- *
- * @param file java.io.File
- * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
- * @throws ClassFormatException
- * @throws IOException
- */
 public static ClassFileReader read(File file) throws ClassFormatException, IOException {
 	return read(file, false);
 }
-/**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- *
- * @param file java.io.File
- * @param fullyInitialize boolean
- * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
- * @throws ClassFormatException
- * @throws IOException
- */
 public static ClassFileReader read(File file, boolean fullyInitialize) throws ClassFormatException, IOException {
 	byte classFileBytes[] = Util.getFileByteContent(file);
 	ClassFileReader classFileReader = new ClassFileReader(classFileBytes, file.getAbsolutePath().toCharArray());
@@ -481,58 +470,18 @@ public static ClassFileReader read(File file, boolean fullyInitialize) throws Cl
 	}
 	return classFileReader;
 }
-/**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- *
- * @param fileName java.lang.String
- * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
- * @throws ClassFormatException
- * @throws IOException
- */
 public static ClassFileReader read(String fileName) throws ClassFormatException, java.io.IOException {
 	return read(fileName, false);
 }
-/**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- *
- * @param fileName java.lang.String
- * @param fullyInitialize boolean
- * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
- * @throws ClassFormatException
- * @throws IOException
- */
 public static ClassFileReader read(String fileName, boolean fullyInitialize) throws ClassFormatException, java.io.IOException {
 	return read(new File(fileName), fullyInitialize);
 }
-/**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- *
- * @param zip java.util.zip.ZipFile
- * @param filename java.lang.String
- * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
- * @throws ClassFormatException
- * @throws IOException
- */
 public static ClassFileReader read(
 	java.util.zip.ZipFile zip, 
 	String filename)
 	throws ClassFormatException, java.io.IOException {
 		return read(zip, filename, false);
 }
-/**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- *
- * @param zip java.util.zip.ZipFile
- * @param filename java.lang.String
- * @param fullyInitialize boolean
- * @return org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader
- * @throws ClassFormatException
- * @throws IOException
- */
 public static ClassFileReader read(
 	java.util.zip.ZipFile zip, 
 	String filename,
@@ -550,9 +499,6 @@ public static ClassFileReader read(
 }
 
 /**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- *
  * Answer the source file name attribute. Return null if there is no source file attribute for the receiver.
  * 
  * @return char[]
@@ -560,12 +506,6 @@ public static ClassFileReader read(
 public char[] sourceFileName() {
 	return this.sourceFileName;
 }
-/**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- * 
- * 
- */
 public String toString() {
 	java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
 	java.io.PrintWriter print = new java.io.PrintWriter(out);
@@ -594,7 +534,7 @@ public String toString() {
  * @return boolean Returns true is there is a structural change between the two .class files, false otherwise
  */
 public boolean hasStructuralChanges(byte[] newBytes) {
-	return hasStructuralChanges(newBytes, true, false);
+	return hasStructuralChanges(newBytes, true, true);
 }
 /**
  * Check if the receiver has structural changes compare to the byte array in argument.
@@ -660,6 +600,8 @@ public boolean hasStructuralChanges(byte[] newBytes, boolean orderRequired, bool
 				return true;
 		}
 		if (compareFields) {
+			if (this.fieldsCount != otherFieldInfosLength && !excludesSynthetic)
+				return true;
 			if (orderRequired) {
 				if (this.fieldsCount != 0)
 					Arrays.sort(this.fields);
@@ -670,8 +612,6 @@ public boolean hasStructuralChanges(byte[] newBytes, boolean orderRequired, bool
 				if (hasNonSyntheticFieldChanges(this.fields, otherFieldInfos))
 					return true;
 			} else {
-				if (this.fieldsCount != otherFieldInfosLength)
-					return true;
 				for (int i = 0; i < this.fieldsCount; i++)
 					if (hasStructuralFieldChanges(this.fields[i], otherFieldInfos[i]))
 						return true;
@@ -690,6 +630,8 @@ public boolean hasStructuralChanges(byte[] newBytes, boolean orderRequired, bool
 				return true;
 		}
 		if (compareMethods) {
+			if (this.methodsCount != otherMethodInfosLength && !excludesSynthetic)
+				return true;
 			if (orderRequired) {
 				if (this.methodsCount != 0)
 					Arrays.sort(this.methods);
@@ -700,8 +642,6 @@ public boolean hasStructuralChanges(byte[] newBytes, boolean orderRequired, bool
 				if (hasNonSyntheticMethodChanges(this.methods, otherMethodInfos))
 					return true;
 			} else {
-				if (this.methodsCount != otherMethodInfosLength)
-					return true;
 				for (int i = 0; i < this.methodsCount; i++)
 					if (hasStructuralMethodChanges(this.methods[i], otherMethodInfos[i]))
 						return true;
@@ -783,11 +723,12 @@ private boolean hasNonSyntheticMethodChanges(MethodInfo[] currentMethodInfos, Me
 	int index1 = 0;
 	int index2 = 0;
 
+	MethodInfo m;
 	end : while (index1 < length1 && index2 < length2) {
-		while (currentMethodInfos[index1].isSynthetic()) {
+		while ((m = currentMethodInfos[index1]).isSynthetic() || m.isClinit()) {
 			if (++index1 >= length1) break end;
 		}
-		while (otherMethodInfos[index2].isSynthetic()) {
+		while ((m = otherMethodInfos[index2]).isSynthetic() || m.isClinit()) {
 			if (++index2 >= length2) break end;
 		}
 		if (hasStructuralMethodChanges(currentMethodInfos[index1++], otherMethodInfos[index2++]))
@@ -795,10 +736,10 @@ private boolean hasNonSyntheticMethodChanges(MethodInfo[] currentMethodInfos, Me
 	}
 
 	while (index1 < length1) {
-		if (!currentMethodInfos[index1++].isSynthetic()) return true;
+		if (!((m = currentMethodInfos[index1++]).isSynthetic() || m.isClinit())) return true;
 	}
 	while (index2 < length2) {
-		if (!otherMethodInfos[index2++].isSynthetic()) return true;
+		if (!((m = otherMethodInfos[index2++]).isSynthetic() || m.isClinit())) return true;
 	}
 	return false;
 }

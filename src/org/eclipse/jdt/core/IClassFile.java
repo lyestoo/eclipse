@@ -1,10 +1,16 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
+
 import org.eclipse.core.runtime.IProgressMonitor;
-import org.eclipse.jdt.internal.core.*;
 
 /**
  * Represents an entire binary type (single <code>.class</code> file). 
@@ -15,7 +21,7 @@ import org.eclipse.jdt.internal.core.*;
  * case.
  * <p>
  * Note: <code>IClassFile</code> extends <code>ISourceReference</code>.
- * Source can be obtained for a class file iff source has been attached to this
+ * Source can be obtained for a class file if and only if source has been attached to this
  * class file. The source associated with a class file is the source code of
  * the compilation unit it was (nominally) generated from.
  * </p>

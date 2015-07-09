@@ -19,6 +19,12 @@ package org.eclipse.jdt.core.dom;
  *     [ ClassName <b>.</b> ] <b>super</b> <b>.</b> Identifier
  * </pre>
  * 
+ * <p>
+ * See <code>FieldAccess</code> for guidelines on handling other expressions
+ * that resemble qualified names.
+ * </p>
+ * 
+ * @see FieldAccess
  * @since 2.0
  */
 public class SuperFieldAccess extends Expression {
@@ -60,6 +66,7 @@ public class SuperFieldAccess extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		SuperFieldAccess result = new SuperFieldAccess(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setName((SimpleName) ASTNode.copySubtree(target, getName()));
 		result.setQualifier((Name) ASTNode.copySubtree(target, getQualifier()));
 		return result;
@@ -101,8 +108,11 @@ public class SuperFieldAccess extends Expression {
 	 * 
 	 * @param name the qualifier name node, or <code>null</code> if 
 	 *    there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setQualifier(Name name) {
 		// a SuperFieldAccess cannot occur inside a Name - no cycle check
@@ -118,7 +128,10 @@ public class SuperFieldAccess extends Expression {
 	 */ 
 	public SimpleName getName() {
 		if (fieldName == null) {
+			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return fieldName;
 	}
@@ -128,8 +141,11 @@ public class SuperFieldAccess extends Expression {
 	 * expression.
 	 * 
 	 * @param fieldName the field name
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setName(SimpleName fieldName) {
 		if (fieldName == null) {

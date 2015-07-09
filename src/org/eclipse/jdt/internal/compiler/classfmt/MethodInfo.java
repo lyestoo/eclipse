@@ -1,14 +1,18 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.classfmt;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.env.*;
-
-import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.codegen.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.codegen.AttributeNamesConstants;
+import org.eclipse.jdt.internal.compiler.env.IBinaryMethod;
 
 public class MethodInfo extends ClassFileStruct implements IBinaryMethod, AttributeNamesConstants, Comparable {
 	private char[][] exceptionNames;
@@ -20,7 +24,7 @@ public class MethodInfo extends ClassFileStruct implements IBinaryMethod, Attrib
 	private char[] signature;
 	private int attributesCount;
 	private int attributeBytes;
-	static private final char[][] noException = new char[0][0];
+	static private final char[][] noException = CharOperation.NO_CHAR_CHAR;
 	private int decodeIndex;
 /**
  * @param classFileBytes byte[]

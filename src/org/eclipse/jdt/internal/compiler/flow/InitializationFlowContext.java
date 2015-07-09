@@ -1,16 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
-
-import java.util.*;
+import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
+import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
+import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
 /**
  * Reflects the context of code analysis, keeping track of enclosing
@@ -22,7 +25,7 @@ public class InitializationFlowContext extends ExceptionHandlingFlowContext {
 	public TypeBinding[] thrownExceptions = new TypeBinding[5];
 	public AstNode[] exceptionThrowers = new AstNode[5];
 	public FlowInfo[] exceptionThrowerFlowInfos = new FlowInfo[5];
-
+	
 	public InitializationFlowContext(
 		FlowContext parent,
 		AstNode associatedNode,
@@ -30,9 +33,9 @@ public class InitializationFlowContext extends ExceptionHandlingFlowContext {
 		super(
 			parent,
 			associatedNode,
-			new ReferenceBinding[] { scope.getJavaLangThrowable()},
-		// tolerate any kind of exception, but record them
-		scope, FlowInfo.DeadEnd);
+			NoExceptions, // no exception allowed by default
+			scope, 
+			FlowInfo.DeadEnd);
 	}
 
 	public void checkInitializerExceptions(

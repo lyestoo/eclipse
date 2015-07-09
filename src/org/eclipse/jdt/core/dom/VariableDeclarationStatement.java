@@ -82,6 +82,7 @@ public class VariableDeclarationStatement extends Statement {
 	ASTNode clone(AST target) {
 		VariableDeclarationStatement result = 
 			new VariableDeclarationStatement(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.setModifiers(getModifiers());
 		result.setType((Type) getType().clone(target));
@@ -157,7 +158,9 @@ public class VariableDeclarationStatement extends Statement {
 	public Type getType() {
 		if (baseType == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setType(getAST().newPrimitiveType(PrimitiveType.INT));
+			getAST().setModificationCount(count);
 		}
 		return baseType;
 	}
@@ -167,8 +170,11 @@ public class VariableDeclarationStatement extends Statement {
 	 * the given type.
 	 * 
 	 * @param type the new base type
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setType(Type type) {
 		if (type == null) {

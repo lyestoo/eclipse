@@ -1,11 +1,16 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
-import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
@@ -14,7 +19,6 @@ public class Assignment extends Expression {
 
 	public Reference lhs;
 	public Expression expression;
-	public TypeBinding lhsType;
 	
 	public Assignment(Expression lhs, Expression expression, int sourceEnd) {
 		//lhs is always a reference by construction ,
@@ -60,23 +64,23 @@ public class Assignment extends Expression {
 
 		// due to syntax lhs may be only a NameReference, a FieldReference or an ArrayReference
 		constant = NotAConstant;
-		this.lhsType = lhs.resolveType(scope);
-		TypeBinding expressionTb = expression.resolveType(scope);
-		if (this.lhsType == null || expressionTb == null)
+		this.resolvedType = lhs.resolveType(scope); // expressionType contains the assignment type (lhs Type)
+		TypeBinding rhsType = expression.resolveType(scope);
+		if (this.resolvedType == null || rhsType == null)
 			return null;
 
 		// Compile-time conversion of base-types : implicit narrowing integer into byte/short/character
 		// may require to widen the rhs expression at runtime
-		if ((expression.isConstantValueOfTypeAssignableToType(expressionTb, this.lhsType)
-			|| (this.lhsType.isBaseType() && BaseTypeBinding.isWidening(this.lhsType.id, expressionTb.id)))
-			|| (scope.areTypesCompatible(expressionTb, this.lhsType))) {
-			expression.implicitWidening(this.lhsType, expressionTb);
-			return this.lhsType;
+		if ((expression.isConstantValueOfTypeAssignableToType(rhsType, this.resolvedType)
+			|| (this.resolvedType.isBaseType() && BaseTypeBinding.isWidening(this.resolvedType.id, rhsType.id)))
+			|| (Scope.areTypesCompatible(rhsType, this.resolvedType))) {
+			expression.implicitWidening(this.resolvedType, rhsType);
+			return this.resolvedType;
 		}
 		scope.problemReporter().typeMismatchErrorActualTypeExpectedType(
 			expression,
-			expressionTb,
-			this.lhsType);
+			rhsType,
+			this.resolvedType);
 		return null;
 	}
 

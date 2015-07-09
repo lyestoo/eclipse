@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved. 
- */
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.env.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
@@ -18,14 +24,14 @@ import java.util.*;
 
 public class Compiler implements ITypeRequestor, ProblemSeverities {
 	public Parser parser;
-	ICompilerRequestor requestor;
+	public ICompilerRequestor requestor;
 	public CompilerOptions options;
 	public ProblemReporter problemReporter;
 
 	// management of unit to be processed
 	//public CompilationUnitResult currentCompilationUnitResult;
-	CompilationUnitDeclaration[] unitsToProcess;
-	int totalUnits; // (totalUnits-1) gives the last unit in unitToProcess
+	public CompilationUnitDeclaration[] unitsToProcess;
+	public int totalUnits; // (totalUnits-1) gives the last unit in unitToProcess
 
 	// name lookup
 	public LookupEnvironment lookupEnvironment;
@@ -107,7 +113,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			new Parser(
 				problemReporter, 
 				this.options.parseLiteralExpressionsAsConstants, 
-				this.options.assertMode);
+				options.sourceLevel >= CompilerOptions.JDK1_4);
 	}
 	
 	/**
@@ -178,7 +184,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			new Parser(
 				problemReporter, 
 				parseLiteralExpressionsAsConstants, 
-				this.options.assertMode);
+				this.options.sourceLevel >= CompilerOptions.JDK1_4);
 	}
 	
 	/**
@@ -195,7 +201,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 	public void accept(ICompilationUnit sourceUnit) {
 		// Switch the current policy and compilation result for this unit to the requested one.
 		CompilationResult unitResult =
-			new CompilationResult(sourceUnit, totalUnits, totalUnits);
+			new CompilationResult(sourceUnit, totalUnits, totalUnits, this.options.maxProblemsPerUnit);
 		try {
 			// diet parsing for large collection of unit
 			CompilationUnitDeclaration parsedUnit;
@@ -273,7 +279,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 		for (int i = 0; i < maxUnits; i++) {
 			CompilationUnitDeclaration parsedUnit;
 			CompilationResult unitResult =
-				new CompilationResult(sourceUnits[i], i, maxUnits);
+				new CompilationResult(sourceUnits[i], i, maxUnits, this.options.maxProblemsPerUnit);
 			try {
 				// diet parsing for large collection of units
 				if (totalUnits < parseThreshold) {
@@ -410,21 +416,26 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			internalException.printStackTrace(writer);
 			StringBuffer buffer = stringWriter.getBuffer();
 
+			String[] pbArguments = new String[] {
+				Util.bind("compilation.internalError" ) //$NON-NLS-1$
+					+ "\n"  //$NON-NLS-1$
+					+ buffer.toString()};
+
 			result
 				.record(
 					problemReporter
 					.createProblem(
 						result.getFileName(),
 						IProblem.Unclassified,
-						new String[] {
-							Util.bind("compilation.internalError" ) //$NON-NLS-1$
-								+ "\n"  //$NON-NLS-1$
-								+ buffer.toString()},
-						Error,
-			// severity
-			0, // source start
-			0, // source end
-			0)); // line number		
+						pbArguments,
+						pbArguments,
+						Error, // severity
+						0, // source start
+						0, // source end
+						0, // line number		
+						unit,
+						result),
+					unit);
 
 			/* hand back the compilation result */
 			if (!result.hasBeenAccepted) {
@@ -469,11 +480,14 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 							result.getFileName(),
 							abortException.problemId,
 							abortException.problemArguments,
-							Error,
-				// severity
-				0, // source start
-				0, // source end
-				0)); // line number
+							abortException.messageArguments,
+							Error, // severity
+							0, // source start
+							0, // source end
+							0, // line number		
+							unit,
+							result),
+						unit);				
 			} else {
 				/* distant internal exception which could not be reported back there */
 				if (abortException.exception != null) {
@@ -507,7 +521,7 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 	/**
 	 * Process a compilation unit already parsed and build.
 	 */
-	private void process(CompilationUnitDeclaration unit, int i) {
+	public void process(CompilationUnitDeclaration unit, int i) {
 
 		getMethodBodies(unit, i);
 
@@ -543,9 +557,14 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 	}
 
 	/**
-	 * Internal API used to resolve a compilation unit minimally for code assist engine
+	 * Internal API used to resolve a given compilation unit. Can run a subset of the compilation process
 	 */
-	public CompilationUnitDeclaration resolve(ICompilationUnit sourceUnit) {
+	public CompilationUnitDeclaration resolve(
+			ICompilationUnit sourceUnit, 
+			boolean verifyMethods,
+			boolean analyzeCode,
+			boolean generateCode) {
+				
 		CompilationUnitDeclaration unit = null;
 		try {
 			// build and record parsed units
@@ -557,8 +576,19 @@ public class Compiler implements ITypeRequestor, ProblemSeverities {
 			if (unit.scope != null) {
 				// fault in fields & methods
 				unit.scope.faultInTypes();
+				if (unit.scope != null && verifyMethods) {
+					// http://dev.eclipse.org/bugs/show_bug.cgi?id=23117
+ 					// verify inherited methods
+					unit.scope.verifyMethods(lookupEnvironment.methodVerifier());
+				}
 				// type checking
-				unit.resolve();
+				unit.resolve();		
+
+				// flow analysis
+				if (analyzeCode) unit.analyseCode();
+		
+				// code generation
+				if (generateCode) unit.generateCode();
 			}
 			unitsToProcess[0] = null; // release reference to processed unit declaration
 			requestor.acceptResult(unit.compilationResult.tagAsAccepted());

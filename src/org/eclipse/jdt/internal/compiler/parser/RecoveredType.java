@@ -1,14 +1,28 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.parser;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-
-import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.core.compiler.ITerminalSymbols;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.AnonymousLocalTypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.Block;
+import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.Initializer;
+import org.eclipse.jdt.internal.compiler.ast.LocalTypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.MemberTypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.Statement;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeReference;
+import org.eclipse.jdt.internal.compiler.lookup.CompilerModifiers;
 
 /**
  * Internal type structure for parsing recovery 
@@ -402,10 +416,26 @@ public void updateFromParserState(){
 	if(this.bodyStartsAtHeaderEnd()){
 		Parser parser = this.parser();
 		/* might want to recover implemented interfaces */
-		if (parser.listLength > 0){ // awaiting interface type references
-			parser.consumeClassHeaderImplements(); 
-			// will reset typeListLength to zero
-			// thus this check will only be performed on first errorCheck after class X implements Y,Z,
+		// protection for bugs 15142
+		if (parser.listLength > 0 && parser.astLengthPtr > 0){ // awaiting interface type references
+			int length = parser.astLengthStack[parser.astLengthPtr];
+			int astPtr = parser.astPtr - length;
+			boolean canConsume = astPtr >= 0;
+			if(canConsume) {
+				if((!(parser.astStack[astPtr] instanceof TypeDeclaration))) {
+					canConsume = false;
+				}
+				for (int i = 1, max = length + 1; i < max; i++) {
+					if(!(parser.astStack[astPtr + i ] instanceof TypeReference)) {
+						canConsume = false;
+					}
+				}
+			}
+			if(canConsume) {
+				parser.consumeClassHeaderImplements(); 
+				// will reset typeListLength to zero
+				// thus this check will only be performed on first errorCheck after class X implements Y,Z,
+			}
 		}
 	}
 }

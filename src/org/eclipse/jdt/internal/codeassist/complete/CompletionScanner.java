@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.complete;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 /*
  * Scanner aware of a cursor location so as to discard trailing portions of identifiers
  * containing the cursor location.
@@ -16,7 +22,7 @@ package org.eclipse.jdt.internal.codeassist.complete;
  */
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
-import org.eclipse.jdt.internal.compiler.parser.*;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
 
 public class CompletionScanner extends Scanner {
 
@@ -32,7 +38,14 @@ public class CompletionScanner extends Scanner {
 
 	public static final char[] EmptyCompletionIdentifier = {};
 public CompletionScanner(boolean assertMode) {
-	super(false, false, false, assertMode);
+	super(
+		false /*comment*/, 
+		false /*whitespace*/, 
+		false /*nls*/, 
+		assertMode /*assert*/, 
+		false /*strict comment*/, // should never need to be on
+		null /*taskTags*/, 
+		null/*taskPriorities*/);
 }
 /* 
  * Truncate the current identifier if it is containing the cursor location. Since completion is performed
@@ -168,7 +181,7 @@ public int getNextToken() throws InvalidInputException {
 						&& ((currentCharacter == '\r') || (currentCharacter == '\n')))
 						pushLineSeparator();
 					isWhiteSpace = 
-						(currentCharacter == ' ') || Character.isWhitespace(currentCharacter); 
+						(currentCharacter == ' ') || CharOperation.isWhitespace(currentCharacter); 
 				}
 				/* completion requesting strictly inside blanks */
 				if ((whiteStart != currentPosition)
@@ -537,10 +550,17 @@ public int getNextToken() throws InvalidInputException {
 									currentPosition--; // reset one character behind
 									return TokenNameCOMMENT_LINE;
 								}
-							} catch (IndexOutOfBoundsException e) { //an eof will them be generated
-								if (tokenizeComments) {
-									currentPosition--; // reset one character behind
-									return TokenNameCOMMENT_LINE;
+							} catch (IndexOutOfBoundsException e) {
+								if (strictCommentMode) {
+									// a line comment needs to be followed by a line break to be valid
+									throw new InvalidInputException(UNTERMINATED_COMMENT);
+								} else {
+									recordComment(false);
+									if (this.taskTags != null) checkTaskTag(this.startPosition, this.currentPosition-1);
+									if (tokenizeComments) {
+										this.currentPosition--; // reset one character behind
+										return TokenNameCOMMENT_LINE;
+									}
 								}
 							}
 							break;

@@ -1,42 +1,81 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import java.util.Map;
 
 import org.eclipse.core.resources.*;
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.core.compiler.IProblem;
-import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
 import org.eclipse.jdt.internal.compiler.parser.*;
-import org.eclipse.jdt.internal.compiler.util.CharOperation;
 import org.eclipse.jdt.internal.core.*;
 
 /**
  * This class is the entry point for source corrections.
  * 
+ * This class is not intended to be subclassed by clients. This class is intended to be instantiated by clients.
+ * 
  * @since 2.0 
  */
 public class CorrectionEngine implements ProblemReasons {
 	
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected int correctionStart;
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected int correctionEnd;
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected int prefixLength;
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected ICompilationUnit unit;
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected ICorrectionRequestor requestor;
-	
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected static final int CLASSES = 0x00000001;
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected static final int INTERFACES = 0x00000002;
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected static final int IMPORT = 0x00000004;
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected static final int METHOD = 0x00000008;
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected static final int FIELD = 0x00000010;
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected static final int LOCAL = 0x00000020;
-	
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected int filter;
 		
 	/**
@@ -54,8 +93,7 @@ public class CorrectionEngine implements ProblemReasons {
 	 * Performs code correction for the given marker,
 	 * reporting results to the given correction requestor.
 	 * 
-	 * @return void
-	 *      correction results are answered through a requestor.
+	 * Correction results are answered through a requestor.
 	 * 
 	 * @param marker
 	 * 		the marker which describe the problem to correct.
@@ -67,6 +105,8 @@ public class CorrectionEngine implements ProblemReasons {
 	 * 		the offset of position given by the marker.
 	 *
 	 * @exception IllegalArgumentException if <code>requestor</code> is <code>null</code>
+	 * @exception JavaModelException currently this exception is never thrown, but the opportunity to thrown an exception
+	 * 	when the correction failed is kept for later. 
 	 * @since 2.0 
 	 */
 	public void computeCorrections(IMarker marker, ICompilationUnit targetUnit, int positionOffset, ICorrectionRequestor requestor) throws JavaModelException {
@@ -90,8 +130,7 @@ public class CorrectionEngine implements ProblemReasons {
 	 * Performs code correction for the given IProblem,
 	 * reporting results to the given correction requestor.
 	 * 
-	 * @return void
-	 *      correction results are answered through a requestor.
+	 * Correction results are answered through a requestor.
 	 * 
 	 * @param problem
 	 * 		the problem which describe the problem to correct.
@@ -100,6 +139,8 @@ public class CorrectionEngine implements ProblemReasons {
 	 * 		denote the compilation unit in which correction occurs. Cannot be null.
 	 * 
 	 * @exception IllegalArgumentException if <code>targetUnit</code> or <code>requestor</code> is <code>null</code>
+	 * @exception JavaModelException currently this exception is never thrown, but the opportunity to thrown an exception
+	 * 	when the correction failed is kept for later.
 	 * @since 2.0 
 	 */
 	public void computeCorrections(IProblem problem, ICompilationUnit targetUnit, ICorrectionRequestor requestor) throws JavaModelException {
@@ -117,9 +158,7 @@ public class CorrectionEngine implements ProblemReasons {
 	/**
 	 * Ask the engine to compute a correction for the specified problem
 	 * of the given compilation unit.
-	 *
-	 *  @return void
-	 *      correction results are answered through a requestor.
+	 * Correction results are answered through a requestor.
 	 *
 	 *  @param unit org.eclipse.jdt.internal.core.ICompilationUnit
 	 *      the compilation unit.
@@ -137,6 +176,8 @@ public class CorrectionEngine implements ProblemReasons {
 	 * 		arguments of the problem.
 	 * 
 	 * @exception IllegalArgumentException if <code>requestor</code> is <code>null</code>
+	 * @exception JavaModelException currently this exception is never thrown, but the opportunity to thrown an exception
+	 * 	when the correction failed is kept for later.
 	 * @since 2.0
 	 */
 	private void computeCorrections(ICompilationUnit unit, int id, int start, int end, String[] arguments, ICorrectionRequestor requestor) throws JavaModelException{
@@ -218,7 +259,7 @@ public class CorrectionEngine implements ProblemReasons {
 			
 			scanner.resetTo(correctionStart, correctionEnd);
 			int token = 0;
-			char[] argumentSource = new char[0];
+			char[] argumentSource = CharOperation.NO_CHAR;
 			
 			// search last segment position
 			while(true) {
@@ -265,6 +306,9 @@ public class CorrectionEngine implements ProblemReasons {
 		}
 	}
 
+	/**
+	 * This field is not intended to be used by client.
+	 */
 	protected ICompletionRequestor completionRequestor = new ICompletionRequestor() {
 		public void acceptAnonymousType(char[] superTypePackageName,char[] superTypeName,char[][] parameterPackageNames,char[][] parameterTypeNames,char[][] parameterNames,char[] completionName,int modifiers,int completionStart,int completionEnd, int relevance) {}
 		public void acceptClass(char[] packageName,char[] className,char[] completionName,int modifiers,int completionStart,int completionEnd, int relevance) {

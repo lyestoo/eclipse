@@ -1,16 +1,20 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
 
 public class FieldReference extends Reference implements InvocationSite {
 
@@ -334,10 +338,10 @@ public class FieldReference extends Reference implements InvocationSite {
 				: typeDecl.initializerScope;
 
 		if (implicitReceiver) { //Determine if the ref is legal in the current class of the field
-			//i.e. not a forward reference .... (they are allowed when the receiver is explicit ! ... Please don't ask me why !...yet another java mystery...)
+			//i.e. not a forward reference .... 
 			if (fieldScope.fieldDeclarationIndex == MethodScope.NotInFieldDecl) {
 				// no field is currently being analysed in typeDecl
-				fieldDecl.resolve(fieldScope); //side effect on binding :-) ... 
+				fieldDecl.resolve(fieldScope); //side effect on binding 
 				return binding.constant;
 			}
 			//We are re-entering the same class fields analysing
@@ -348,19 +352,19 @@ public class FieldReference extends Reference implements InvocationSite {
 				referenceScope.problemReporter().forwardReference(reference, indexInQualification, typeBinding);
 				return NotAConstant;
 			}
-			fieldDecl.resolve(fieldScope); //side effect on binding :-) ... 
+			fieldDecl.resolve(fieldScope); //side effect on binding 
 			return binding.constant;
 		}
 		//the field reference is explicity. It has to be a "simple" like field reference to get the
 		//constant propagation. For example in Packahe.Type.field1.field2 , field1 may have its
 		//constant having a propagation where field2 is always not propagating its
 		if (indexInQualification == 0) {
-			fieldDecl.resolve(fieldScope); //side effect on binding :-) ... 
+			fieldDecl.resolve(fieldScope); //side effect on binding ... 
 			return binding.constant;
 		}
 		// Side-effect on the field binding may not be propagated out for the qualified reference
 		// unless it occurs in first place of the name sequence
-		fieldDecl.resolve(fieldScope); //side effect on binding :-) ... 
+		fieldDecl.resolve(fieldScope); //side effect on binding ... 
 		//see previous comment for the cast that should always be valid
 		QualifiedNameReference qualifiedReference = (QualifiedNameReference) reference;
 		if (indexInQualification == (qualifiedReference.indexOfFirstFieldBinding - 1)) {
@@ -529,7 +533,16 @@ public class FieldReference extends Reference implements InvocationSite {
 		if (receiver != ThisReference.ThisImplicit)
 			constant = NotAConstant;
 
-		return binding.type;
+		if (binding.isStatic()) {
+			// static field accessed through receiver? legal but unoptimal (optional warning)
+			if (!(receiver == ThisReference.ThisImplicit
+					|| receiver.isSuper()
+					|| (receiver instanceof NameReference 
+						&& (((NameReference) receiver).bits & BindingIds.TYPE) != 0))) {
+				scope.problemReporter().unnecessaryReceiverForStaticField(this, binding);
+			}
+		}
+		return this.resolvedType = binding.type;
 	}
 
 	public void setActualReceiverType(ReferenceBinding receiverType) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -11,21 +11,14 @@
 
 package org.eclipse.jdt.core.dom;
 
-import java.util.Locale;
 import java.util.Map;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.internal.compiler.AbstractSyntaxTreeVisitorAdapter;
-import org.eclipse.jdt.internal.compiler.CompilationResult;
-import org.eclipse.jdt.internal.compiler.DefaultErrorHandlingPolicies;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
-import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
-import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
-import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
-import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 
 /**
  * Umbrella owner and abstract syntax tree node factory.
@@ -92,7 +85,7 @@ public final class AST {
 	 *    indicates source compatibility mode (as per <code>JavaCore</code>);
 	 *    <code>"1.3"</code> means the source code is as per JDK 1.3;
 	 *    <code>"1.4"</code> means the source code is as per JDK 1.4
-	 *    (<code>assert<code> is a keyword);
+	 *    (<code>assert</code> is a keyword);
 	 *    additional legal values may be added later. </li>
 	 * </ul>
 	 * Options other than the above are ignored.
@@ -103,14 +96,14 @@ public final class AST {
 	 * @see JavaCore#getDefaultOptions
 	 */
 	public AST(Map options) {
-		Object value = options.get("org.eclipse.jdt.core.compiler.source"); //$NON-NLS-1$
-		if ("1.3".equals(value)) { //$NON-NLS-1$
-			// use a 1.3 scanner - treats assert as an identifier
-			this.scanner = new Scanner();
-		} else {
-			// use a 1.4 scanner - treats assert as an keyword
-			this.scanner = new Scanner(false, false, false, true);
-		}
+		this.scanner = new Scanner(
+			false /*comment*/, 
+			false /*whitespace*/, 
+			false /*nls*/, 
+			JavaCore.VERSION_1_4.equals(options.get(JavaCore.COMPILER_SOURCE)) /*assert*/, 
+			JavaCore.VERSION_1_4.equals(options.get(JavaCore.COMPILER_COMPLIANCE)) /*strict comment*/, 
+			null/*taskTag*/, 
+			null/*taskPriorities*/);
 	}
 		
 	/**
@@ -141,7 +134,16 @@ public final class AST {
 	public long modificationCount() {
 		return modCount;
 	}
-	
+
+	/**
+	 * Set the modification count to the new value
+	 * 
+	 * @param value the new value
+	 */
+	void setModificationCount(long value) {
+		this.modCount = value;
+	}
+		
 	/**
 	 * Indicates that this AST is about to be modified.
 	 * <p>
@@ -171,9 +173,12 @@ public final class AST {
 	 * The returned compilation unit node is the root node of a new AST.
 	 * Each node in the subtree carries source range(s) information relating back
 	 * to positions in the given source string (the given source string itself
-	 * is not remembered with the AST). If a syntax error is detected while
-	 * parsing, the relevant node(s) of the tree will be flagged as 
-	 * <code>MALFORMED</code>.
+	 * is not remembered with the AST).
+	 * Source ranges nest properly: the source range for a child is always
+	 * within the source range of its parent, and the source ranges of sibling
+	 * nodes never overlap.
+	 * If a syntax error is detected while parsing, the relevant node(s) of the
+	 * tree will be flagged as <code>MALFORMED</code>.
 	 * </p>
 	 * <p>
 	 * If <code>resolveBindings</code> is <code>true</code>, the various names
@@ -183,12 +188,14 @@ public final class AST {
 	 * generally afford a more powerful vantage point for clients who wish to
 	 * analyze a program's structure more deeply. These bindings come at a 
 	 * considerable cost in both time and space, however, and should not be
-	 * requested frivilously. The additional space is not reclaimed until the 
+	 * requested frivolously. The additional space is not reclaimed until the 
 	 * AST, all its nodes, and all its bindings become garbage. So it is very
 	 * important to not retain any of these objects longer than absolutely
-	 * necessary. Note that bindings can only be resolved while the AST remains
-	 * in its original unmodified state. Once the AST is modified, all 
-	 * <code>resolveBinding</code> methods return <code>null</code>.
+	 * necessary. Bindings are resolved at the time the AST is created. Subsequent
+	 * modifications to the AST do not affect the bindings returned by
+	 * <code>resolveBinding</code> methods in any way; these methods return the
+	 * same binding as before the AST was modified (including modifications
+	 * that rearrange subtrees by reparenting nodes).
 	 * If <code>resolveBindings</code> is <code>false</code>, the analysis 
 	 * does not go beyond parsing and building the tree, and all 
 	 * <code>resolveBinding</code> methods return <code>null</code> from the 
@@ -225,7 +232,7 @@ public final class AST {
 				CompilationUnitDeclaration compilationUnitDeclaration = CompilationUnitResolver.resolve(
 					unit,
 					new AbstractSyntaxTreeVisitorAdapter());
-				ASTConverter converter = new ASTConverter(true);
+				ASTConverter converter = new ASTConverter(unit.getJavaProject().getOptions(true), true);
 				AST ast = new AST();
 				BindingResolver resolver = new DefaultBindingResolver(compilationUnitDeclaration.scope);
 				ast.setBindingResolver(resolver);
@@ -248,15 +255,18 @@ public final class AST {
 	}
 
 	/**
-	 * Parses the given string as the hypothethetical contents of the named
+	 * Parses the given string as the hypothetical contents of the named
 	 * compilation unit and creates and returns a corresponding abstract syntax tree.
 	 * <p>
 	 * The returned compilation unit node is the root node of a new AST.
 	 * Each node in the subtree carries source range(s) information relating back
 	 * to positions in the given source string (the given source string itself
-	 * is not remembered with the AST). If a syntax error is detected while
-	 * parsing, the relevant node(s) of the tree will be flagged as 
-	 * <code>MALFORMED</code>.
+	 * is not remembered with the AST).
+	 * Source ranges nest properly: the source range for a child is always
+	 * within the source range of its parent, and the source ranges of sibling
+	 * nodes never overlap.
+	 * If a syntax error is detected while parsing, the relevant node(s) of the
+	 * tree will be flagged as <code>MALFORMED</code>.
 	 * </p>
 	 * <p>
 	 * If the given project is not <code>null</code>, the various names
@@ -266,12 +276,14 @@ public final class AST {
 	 * generally afford a more powerful vantage point for clients who wish to
 	 * analyze a program's structure more deeply. These bindings come at a 
 	 * considerable cost in both time and space, however, and should not be
-	 * requested frivilously. The additional space is not reclaimed until the 
+	 * requested frivolously. The additional space is not reclaimed until the 
 	 * AST, all its nodes, and all its bindings become garbage. So it is very
 	 * important to not retain any of these objects longer than absolutely
-	 * necessary. Note that bindings can only be resolved while the AST remains
-	 * in its original unmodified state. Once the AST is modified, all 
-	 * <code>resolveBinding</code> methods return <code>null</code>.
+	 * necessary. Bindings are resolved at the time the AST is created. Subsequent
+	 * modifications to the AST do not affect the bindings returned by
+	 * <code>resolveBinding</code> methods in any way; these methods return the
+	 * same binding as before the AST was modified (including modifications
+	 * that rearrange subtrees by reparenting nodes).
 	 * If the given project is <code>null</code>, the analysis 
 	 * does not go beyond parsing and building the tree, and all 
 	 * <code>resolveBinding</code> methods return <code>null</code> from the 
@@ -310,7 +322,7 @@ public final class AST {
 			throw new IllegalArgumentException();
 		}
 		if (project == null) {
-			// this just reuces to the other simplest case
+			// this just reduces to the other simplest case
 			return parseCompilationUnit(source);
 		}
 	
@@ -321,7 +333,7 @@ public final class AST {
 					unitName,
 					project,
 					new AbstractSyntaxTreeVisitorAdapter());
-			ASTConverter converter = new ASTConverter(true);
+			ASTConverter converter = new ASTConverter(project.getOptions(true), true);
 			AST ast = new AST();
 			BindingResolver resolver = new DefaultBindingResolver(compilationUnitDeclaration.scope);
 			ast.setBindingResolver(resolver);
@@ -347,9 +359,16 @@ public final class AST {
 	 * The returned compilation unit node is the root node of a new AST.
 	 * Each node in the subtree carries source range(s) information relating back
 	 * to positions in the given source string (the given source string itself
-	 * is not remembered with the AST). If a syntax error is detected while
-	 * parsing, the relevant node(s) of the tree will be flagged as 
-	 * <code>MALFORMED</code>.
+	 * is not remembered with the AST). 
+	 * Source ranges nest properly: the source range for a child is always
+	 * within the source range of its parent, and the source ranges of sibling
+	 * nodes never overlap.
+	 * If a syntax error is detected while parsing, the relevant node(s) of the
+	 * tree will be flagged as <code>MALFORMED</code>.
+	 * </p>
+	 * <p>
+	 * This method does not compute binding information; all <code>resolveBinding</code>
+	 * methods applied to nodes of the resulting AST return <code>null</code>.
 	 * </p>
 	 * 
 	 * @param source the string to be parsed as a Java compilation unit
@@ -363,9 +382,9 @@ public final class AST {
 			throw new IllegalArgumentException();
 		}
 		CompilationUnitDeclaration compilationUnitDeclaration = 
-			CompilationUnitResolver.parse(source);
+			CompilationUnitResolver.parse(source, JavaCore.getOptions()); // no better custom options
 
-		ASTConverter converter = new ASTConverter(false);
+		ASTConverter converter = new ASTConverter(JavaCore.getOptions(), false);
 		AST ast = new AST();
 		ast.setBindingResolver(new BindingResolver());
 		converter.setAST(ast);
@@ -422,7 +441,7 @@ public final class AST {
 	 * </p>
 	 * 
 	 * @param name the name of a well known type
-	 * @return the corresponding type binding, or <code>null<code> if the 
+	 * @return the corresponding type binding, or <code>null</code> if the 
 	 *   named type is not considered well known or if no binding can be found
 	 *   for it
 	 */
@@ -471,8 +490,11 @@ public final class AST {
 	 * @param qualifier the qualifier name node
 	 * @param name the simple name being qualified
 	 * @return a new unparented qualified name node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */
 	public QualifiedName newQualifiedName(
 		Name qualifier,
@@ -494,8 +516,11 @@ public final class AST {
 	 * @param identifiers a list of 1 or more name segments, each of which
 	 *    is a legal Java identifier
 	 * @return a new unparented name node
-	 * @exception IllegalArgumentException if the identifier is invalid
-	 * @exception IllegalArgumentException if the list of identifiers is empty
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the identifier is invalid</li>
+	 * <li>the list of identifiers is empty</li>
+	 * </ul>
 	 */
 	public Name newName(String[] identifiers) {
 		int count = identifiers.length;
@@ -521,8 +546,11 @@ public final class AST {
 	 * 
 	 * @param typeName the name of the class or interface
 	 * @return a new unparented simple type node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */
 	public SimpleType newSimpleType(Name typeName) {
 		SimpleType result = new SimpleType(this);
@@ -536,9 +564,12 @@ public final class AST {
 	 * 
 	 * @param componentType the component type (possibly another array type)
 	 * @return a new unparented array type node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */
 	public ArrayType newArrayType(Type componentType) {
 		ArrayType result = new ArrayType(this);
@@ -557,9 +588,12 @@ public final class AST {
 	 * @param elementType the element type (never an array type)
 	 * @param dimensions the number of dimensions, a positive number
 	 * @return a new unparented array type node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */
 	public ArrayType newArrayType(Type elementType, int dimensions) {
 		if (elementType == null || elementType.isArrayType()) {
@@ -616,8 +650,11 @@ public final class AST {
 	 * unspecified name.
 	 * 
 	 * @return the new unparented package declaration node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */
 	public PackageDeclaration newPackageDeclaration() {
 		PackageDeclaration result = new PackageDeclaration(this);
@@ -630,8 +667,11 @@ public final class AST {
 	 * of a type with an unspecified name.
 	 * 
 	 * @return the new unparented import declaration node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */
 	public ImportDeclaration newImportDeclaration() {
 		ImportDeclaration result = new ImportDeclaration(this);
@@ -660,8 +700,8 @@ public final class AST {
 	 * Creates an unparented method declaration node owned by this AST.
 	 * By default, the declaration is for a method of an unspecified, but 
 	 * legal, name; no modifiers; no Javadoc comment; no parameters; return
-	 * type void; no thrown exceptions; and no body (as opposed to an empty
-	 * body).
+	 * type void; no extra array dimensions; no thrown exceptions; and no
+	 * body (as opposed to an empty body).
 	 * <p>
 	 * To create a constructor, use this method and then call
 	 * <code>MethodDeclaration.setConstructor(true)</code> and
@@ -679,7 +719,8 @@ public final class AST {
 	/**
 	 * Creates an unparented single variable declaration node owned by this AST.
 	 * By default, the declaration is for a variable with an unspecified, but 
-	 * legal, name and type; no modifiers; and no initializer.
+	 * legal, name and type; no modifiers; no array dimensions after the
+	 * variable; and no initializer.
 	 * 
 	 * @return a new unparented single variable declaration node
 	 */
@@ -738,9 +779,12 @@ public final class AST {
 	 * 
 	 * @param fragment the variable declaration fragment
 	 * @return a new unparented variable declaration statement node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */
 	public VariableDeclarationStatement
 			newVariableDeclarationStatement(VariableDeclarationFragment fragment) {
@@ -764,9 +808,12 @@ public final class AST {
 	 * 
 	 * @param decl the type declaration
 	 * @return a new unparented local type declaration statement node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */
 	public TypeDeclarationStatement 
 			newTypeDeclarationStatement(TypeDeclaration decl) {
@@ -818,9 +865,12 @@ public final class AST {
 	 * 
 	 * @param expression the expression
 	 * @return a new unparented statement node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */
 	public ExpressionStatement newExpressionStatement(Expression expression) {
 		ExpressionStatement result = new ExpressionStatement(this);
@@ -830,7 +880,7 @@ public final class AST {
 	
 	/**
 	 * Creates a new unparented if statement node owned by this AST.
-	 * By default, the expresssion is unspecified (but legal), 
+	 * By default, the expression is unspecified (but legal), 
 	 * the then statement is an empty block, and there is no else statement.
 	 * 
 	 * @return a new unparented if statement node
@@ -841,7 +891,7 @@ public final class AST {
 
 	/**
 	 * Creates a new unparented while statement node owned by this AST.
-	 * By default, the expresssion is unspecified (but legal), and
+	 * By default, the expression is unspecified (but legal), and
 	 * the body statement is an empty block.
 	 * 
 	 * @return a new unparented while statement node
@@ -852,7 +902,7 @@ public final class AST {
 
 	/**
 	 * Creates a new unparented do statement node owned by this AST.
-	 * By default, the expresssion is unspecified (but legal), and
+	 * By default, the expression is unspecified (but legal), and
 	 * the body statement is an empty block.
 	 * 
 	 * @return a new unparented do statement node
@@ -1144,9 +1194,12 @@ public final class AST {
 	 * 
 	 * @param fragment the first variable declaration fragment
 	 * @return a new unparented variable declaration expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */
 	public VariableDeclarationExpression
 			newVariableDeclarationExpression(VariableDeclarationFragment fragment) {
@@ -1174,9 +1227,12 @@ public final class AST {
 	 * 
 	 * @param fragment the variable declaration fragment
 	 * @return a new unparented field declaration node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */
 	public FieldDeclaration newFieldDeclaration(VariableDeclarationFragment fragment) {
 		if (fragment == null) {

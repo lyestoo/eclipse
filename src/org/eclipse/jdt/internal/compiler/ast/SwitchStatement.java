@@ -1,15 +1,20 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.util.*;
 
 public class SwitchStatement extends Statement {
 	public Expression testExpression;
@@ -121,23 +126,32 @@ public class SwitchStatement extends Statement {
 		// generate expression testes
 		testExpression.generateCode(currentScope, codeStream, needSwitch);
 
-		// generate the appropriate switch table
+		// generate the appropriate switch table/lookup bytecode
 		if (needSwitch) {
 			int max = localKeysCopy[caseCount - 1];
 			int min = localKeysCopy[0];
 			if ((long) (caseCount * 2.5) > ((long) max - (long) min)) {
-				codeStream.tableswitch(
-					defaultLabel,
-					min,
-					max,
-					constants,
-					sortedIndexes,
-					caseLabels);
+				
+				// work-around 1.3 VM bug, if max>0x7FFF0000, must use lookup bytecode
+				// see http://dev.eclipse.org/bugs/show_bug.cgi?id=21557
+				if (max > 0x7FFF0000 && currentScope.environment().options.complianceLevel < CompilerOptions.JDK1_4) {
+					codeStream.lookupswitch(defaultLabel, constants, sortedIndexes, caseLabels);
+
+				} else {
+					codeStream.tableswitch(
+						defaultLabel,
+						min,
+						max,
+						constants,
+						sortedIndexes,
+						caseLabels);
+				}
 			} else {
 				codeStream.lookupswitch(defaultLabel, constants, sortedIndexes, caseLabels);
 			}
 			codeStream.updateLastRecordedEndPC(codeStream.position);
 		}
+		
 		// generate the switch block statements
 		int caseIndex = 0;
 		if (statements != null) {
@@ -195,7 +209,7 @@ public class SwitchStatement extends Statement {
 		testExpression.implicitWidening(testType, testType);
 		if (!(testExpression
 			.isConstantValueOfTypeAssignableToType(testType, IntBinding))) {
-			if (!upperScope.areTypesCompatible(testType, IntBinding)) {
+			if (!Scope.areTypesCompatible(testType, IntBinding)) {
 				upperScope.problemReporter().incorrectSwitchType(testExpression, testType);
 				return;
 			}

@@ -11,11 +11,11 @@
 
 package org.eclipse.jdt.core.dom;
 
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
 import org.eclipse.jdt.internal.compiler.lookup.BaseTypes;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
-import org.eclipse.jdt.internal.compiler.util.CharOperation;
 
 /**
  * Internal implementation of type bindings.
@@ -324,9 +324,16 @@ class TypeBinding implements ITypeBinding {
 			ReferenceBinding referenceBinding = (ReferenceBinding) this.binding;
 			org.eclipse.jdt.internal.compiler.lookup.MethodBinding[] methods = referenceBinding.methods();
 			int length = methods.length;
+			int removeSyntheticsCounter = 0;
 			IMethodBinding[] newMethods = new IMethodBinding[length];
 			for (int i = 0; i < length; i++) {
-				newMethods[i] = this.resolver.getMethodBinding(methods[i]);
+				org.eclipse.jdt.internal.compiler.lookup.MethodBinding methodBinding = methods[i];
+				if (!shouldBeRemoved(methodBinding)) { 
+					newMethods[removeSyntheticsCounter++] = this.resolver.getMethodBinding(methodBinding);
+				}
+			}
+			if (removeSyntheticsCounter != length) {
+				System.arraycopy(newMethods, 0, (newMethods = new IMethodBinding[removeSyntheticsCounter]), 0, removeSyntheticsCounter);
 			}
 			return newMethods;
 		} else {
@@ -334,6 +341,10 @@ class TypeBinding implements ITypeBinding {
 		}
 	}
 
+	private boolean shouldBeRemoved(org.eclipse.jdt.internal.compiler.lookup.MethodBinding methodBinding) {
+		return methodBinding.isDefaultAbstract() || methodBinding.isSynthetic() || (methodBinding.isConstructor() && isInterface());
+	}
+	
 	/*
 	 * @see ITypeBinding#isFromSource()
 	 */
@@ -398,4 +409,52 @@ class TypeBinding implements ITypeBinding {
 		return this.binding == BaseTypes.NullBinding;
 	}
 
+	/**
+	 * @see org.eclipse.jdt.core.dom.ITypeBinding#getQualifiedName()
+	 */
+	public String getQualifiedName() {
+		if (isAnonymous() || isLocal()) {
+			return NO_NAME;
+		}
+		
+		if (isPrimitive() || isNullType()) {
+			return getName();
+		}
+		
+		if (isArray()) {
+			ITypeBinding elementType = getElementType();
+			String elementTypeQualifiedName = elementType.getQualifiedName();
+			if (elementTypeQualifiedName.length() != 0) {
+				int dimensions = getDimensions();
+				char[] brackets = new char[dimensions * 2];
+				for (int i = dimensions * 2 - 1; i >= 0; i -= 2) {
+					brackets[i] = ']';
+					brackets[i - 1] = '[';
+				}
+				StringBuffer stringBuffer = new StringBuffer(elementTypeQualifiedName);
+				stringBuffer.append(brackets);
+				return stringBuffer.toString();
+			} else {
+				return NO_NAME;
+			}
+		}
+		
+		if (isTopLevel() || isMember()) {
+			StringBuffer stringBuffer = new StringBuffer();
+			stringBuffer
+				.append(this.binding.qualifiedPackageName())
+				.append('.')
+				.append(this.binding.qualifiedSourceName());
+			return stringBuffer.toString();
+		}
+		return NO_NAME;
+	}
+	
+	/* 
+	 * For debugging purpose only.
+	 * @see java.lang.Object#toString()
+	 */
+	public String toString() {
+		return this.binding.toString();
+	}
 }

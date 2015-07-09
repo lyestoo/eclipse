@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -14,12 +14,12 @@ package org.eclipse.jdt.core.dom;
 import java.util.List;
 
 /**
- * Super constructor invocation expression AST node type.
+ * Super constructor invocation statement AST node type.
  *
  * <pre>
  * SuperConstructorInvocation:
  *		[ Expression <b>.</b> ] <b>super</b>
- * 				<b>(</b> [ Expression { <b>,</b> Expression } ] <b>)</b>
+ * 				<b>(</b> [ Expression { <b>,</b> Expression } ] <b>)</b> <b>;</b>
  * </pre>
  * 
  * @since 2.0
@@ -60,6 +60,7 @@ public class SuperConstructorInvocation extends Statement {
 	 */
 	ASTNode clone(AST target) {
 		SuperConstructorInvocation result = new SuperConstructorInvocation(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.setExpression(
 			(Expression) ASTNode.copySubtree(target, getExpression()));
@@ -104,9 +105,12 @@ public class SuperConstructorInvocation extends Statement {
 	 * 
 	 * @param expression the expression node, or <code>null</code> if 
 	 *    there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		// a SuperConstructorInvocation may occur inside an Expression

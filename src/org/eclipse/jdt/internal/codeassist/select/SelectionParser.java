@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.select;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 /*
  * Parser able to build specific completion parse nodes, given a cursorLocation.
  *
@@ -17,13 +23,13 @@ package org.eclipse.jdt.internal.codeassist.select;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.env.*;
 
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.codeassist.impl.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 import org.eclipse.jdt.internal.compiler.parser.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.CharOperation;
 
 public class SelectionParser extends AssistParser {
 
@@ -165,7 +171,7 @@ protected void consumeEnterAnonymousClassBody() {
 		new AnonymousLocalTypeDeclaration(this.compilationUnit.compilationResult); 
 	alloc = 
 		anonymousType.allocation = new SelectionOnQualifiedAllocationExpression(anonymousType); 
-	markCurrentMethodWithLocalType();
+	markEnclosingMemberWithLocalType();
 	pushOnAstStack(anonymousType);
 
 	alloc.sourceEnd = rParenPos; //the position has been stored explicitly
@@ -299,6 +305,16 @@ protected void consumeFormalParameter() {
 			indicating that some arguments are available on the stack */
 		listLength++;
 	} 	
+}
+protected void consumeInstanceOfExpression(int op) {
+	if (indexOfAssistIdentifier() < 0) {
+		super.consumeInstanceOfExpression(op);
+	} else {
+		getTypeReference(intStack[intPtr--]);
+		this.isOrphanCompletionNode = true;
+		this.restartRecovery = true;
+		this.lastIgnoredToken = -1;
+	}
 }
 protected void consumeMethodInvocationName() {
 	// MethodInvocation ::= Name '(' ArgumentListopt ')'
@@ -523,12 +539,12 @@ protected NameReference getUnspecifiedReference() {
 		pushOnAstStack(reference);
 		this.assistNode = reference;	
 		this.lastCheckPoint = reference.sourceEnd + 1;
-		if (!diet){
+		if (!diet || dietInt != 0){
 			this.restartRecovery	= true;	// force to restart in recovery mode
 			this.lastIgnoredToken = -1;		
 		}
 		this.isOrphanCompletionNode = true;
-		return new SingleNameReference(new char[0], 0); // dummy reference
+		return new SingleNameReference(CharOperation.NO_CHAR, 0); // dummy reference
 	}
 	NameReference nameReference;
 	/* retrieve identifiers subset and whole positions, the completion node positions

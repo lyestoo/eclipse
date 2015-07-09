@@ -1,15 +1,30 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */ 
-import java.util.*;
+import java.util.Enumeration;
+import java.util.Hashtable;
 
-import org.eclipse.jdt.internal.compiler.impl.*;
-import org.eclipse.jdt.internal.compiler.ast.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.Argument;
+import org.eclipse.jdt.internal.compiler.ast.AssertStatement;
+import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeReference;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
 import org.eclipse.jdt.internal.compiler.problem.AbortCompilation;
-import org.eclipse.jdt.internal.compiler.util.*;
 
 public class SourceTypeBinding extends ReferenceBinding {
 	public ReferenceBinding superclass;
@@ -20,13 +35,14 @@ public class SourceTypeBinding extends ReferenceBinding {
 
 	public ClassScope scope;
 
-	// Synthetics are separated into 4 categories: methods, fields, class literals and changed declaring class bindings
+	// Synthetics are separated into 4 categories: methods, super methods, fields, class literals and changed declaring class bindings
 	public final static int METHOD = 0;
 	public final static int FIELD = 1;
 	public final static int CLASS_LITERAL = 2;
 	public final static int CHANGED_DECLARING_CLASS = 3;
 	
 	Hashtable[] synthetics;
+	
 protected SourceTypeBinding() {
 }
 public SourceTypeBinding(char[][] compoundName, PackageBinding fPackage, ClassScope scope) {
@@ -290,10 +306,11 @@ public SyntheticAccessMethodBinding addSyntheticMethod(FieldBinding targetField,
 	return accessMethod;
 }
 /* Add a new synthetic access method for access to <targetMethod>.
+ * Must distinguish access method used for super access from others (need to use invokespecial bytecode)
 	Answer the new method or the existing method if one already existed.
 */
 
-public SyntheticAccessMethodBinding addSyntheticMethod(MethodBinding targetMethod) {
+public SyntheticAccessMethodBinding addSyntheticMethod(MethodBinding targetMethod, boolean isSuperAccess) {
 
 	if (synthetics == null) {
 		synthetics = new Hashtable[4];
@@ -302,10 +319,17 @@ public SyntheticAccessMethodBinding addSyntheticMethod(MethodBinding targetMetho
 		synthetics[METHOD] = new Hashtable(5);
 	}
 
-	SyntheticAccessMethodBinding accessMethod = (SyntheticAccessMethodBinding) synthetics[METHOD].get(targetMethod);
-	if (accessMethod == null) {
-		accessMethod = new SyntheticAccessMethodBinding(targetMethod, this);
-		synthetics[METHOD].put(targetMethod, accessMethod);
+	SyntheticAccessMethodBinding accessMethod = null;
+	SyntheticAccessMethodBinding[] accessors = (SyntheticAccessMethodBinding[]) synthetics[METHOD].get(targetMethod);
+	if (accessors == null) {
+		accessMethod = new SyntheticAccessMethodBinding(targetMethod, isSuperAccess, this);
+		synthetics[METHOD].put(targetMethod, accessors = new SyntheticAccessMethodBinding[2]);
+		accessors[isSuperAccess ? 0 : 1] = accessMethod;		
+	} else {
+		if ((accessMethod = accessors[isSuperAccess ? 0 : 1]) == null) {
+			accessMethod = new SyntheticAccessMethodBinding(targetMethod, isSuperAccess, this);
+			accessors[isSuperAccess ? 0 : 1] = accessMethod;
+		}
 	}
 	return accessMethod;
 }
@@ -329,7 +353,7 @@ public FieldBinding[] fields() {
 	
 	try {
 		int failed = 0;
-		for (int f = fields.length; --f >= 0;) {
+		for (int f = 0, max = fields.length; f < max; f++) {
 			if (resolveTypeFor(fields[f]) == null) {
 				fields[f] = null;
 				failed++;
@@ -659,7 +683,7 @@ public MethodBinding[] methods() {
 			return methods;
 	
 		int failed = 0;
-		for (int m = methods.length; --m >= 0;) {
+		for (int m = 0, max = methods.length; m < max; m++) {
 			if (resolveTypesFor(methods[m]) == null) {
 				methods[m] = null; // unable to resolve parameters
 				failed++;
@@ -744,6 +768,7 @@ private FieldBinding resolveTypeFor(FieldBinding field) {
 		field.type = fieldDecls[f].getTypeBinding(scope);
 		if (!field.type.isValidBinding()) {
 			scope.problemReporter().fieldTypeProblem(this, fieldDecls[f], field.type);
+			//scope.problemReporter().invalidType(fieldDecls[f].type, field.type);
 			fieldDecls[f].binding = null;
 			return null;
 		}
@@ -777,6 +802,7 @@ private MethodBinding resolveTypesFor(MethodBinding method) {
 			resolvedExceptionType = (ReferenceBinding) exceptionTypes[i].getTypeBinding(scope);
 			if (!resolvedExceptionType.isValidBinding()) {
 				methodDecl.scope.problemReporter().exceptionTypeProblem(this, methodDecl, exceptionTypes[i], resolvedExceptionType);
+				//methodDecl.scope.problemReporter().invalidType(exceptionTypes[i], resolvedExceptionType);
 				continue;
 			}
 			if (throwable != resolvedExceptionType && !throwable.isSuperclassOf(resolvedExceptionType)) {
@@ -799,6 +825,7 @@ private MethodBinding resolveTypesFor(MethodBinding method) {
 			method.parameters[i] = arg.type.getTypeBinding(scope);
 			if (!method.parameters[i].isValidBinding()) {
 				methodDecl.scope.problemReporter().argumentTypeProblem(this, methodDecl, arg, method.parameters[i]);
+				//methodDecl.scope.problemReporter().invalidType(arg, method.parameters[i]);
 				foundArgProblem = true;
 			} else if (method.parameters[i] == VoidBinding) {
 				methodDecl.scope.problemReporter().argumentTypeCannotBeVoid(this, methodDecl, arg);
@@ -821,6 +848,7 @@ private MethodBinding resolveTypesFor(MethodBinding method) {
 			method.returnType = returnType.getTypeBinding(scope);
 			if (!method.returnType.isValidBinding()) {
 				methodDecl.scope.problemReporter().returnTypeProblem(this, (MethodDeclaration) methodDecl, method.returnType);
+				//methodDecl.scope.problemReporter().invalidType(returnType, method.returnType);
 				method.returnType = null;
 				foundReturnTypeProblem = true;
 			} else if (method.returnType.isArrayType() && ((ArrayBinding) method.returnType).leafComponentType == VoidBinding) {
@@ -861,12 +889,24 @@ public SyntheticAccessMethodBinding[] syntheticAccessMethods() {
 	SyntheticAccessMethodBinding[] bindings = new SyntheticAccessMethodBinding[1];
 	Enumeration fieldsOrMethods = synthetics[METHOD].keys();
 	while (fieldsOrMethods.hasMoreElements()) {
+
 		Object fieldOrMethod = fieldsOrMethods.nextElement();
+
 		if (fieldOrMethod instanceof MethodBinding) {
-			if (index + 1 > bindings.length)
-				System.arraycopy(bindings, 0, (bindings = new SyntheticAccessMethodBinding[index + 1]), 0, index);
-			bindings[index++] = (SyntheticAccessMethodBinding) synthetics[METHOD].get(fieldOrMethod);
+
+			SyntheticAccessMethodBinding[] methodAccessors = (SyntheticAccessMethodBinding[]) synthetics[METHOD].get(fieldOrMethod);
+			int numberOfAccessors = 0;
+			if (methodAccessors[0] != null) numberOfAccessors++;
+			if (methodAccessors[1] != null) numberOfAccessors++;
+			if (index + numberOfAccessors > bindings.length)
+				System.arraycopy(bindings, 0, (bindings = new SyntheticAccessMethodBinding[index + numberOfAccessors]), 0, index);
+			if (methodAccessors[0] != null) 
+				bindings[index++] = methodAccessors[0]; // super access 
+			if (methodAccessors[1] != null) 
+				bindings[index++] = methodAccessors[1]; // normal access
+
 		} else {
+
 			SyntheticAccessMethodBinding[] fieldAccessors = (SyntheticAccessMethodBinding[]) synthetics[METHOD].get(fieldOrMethod);
 			int numberOfAccessors = 0;
 			if (fieldAccessors[0] != null) numberOfAccessors++;
@@ -874,9 +914,9 @@ public SyntheticAccessMethodBinding[] syntheticAccessMethods() {
 			if (index + numberOfAccessors > bindings.length)
 				System.arraycopy(bindings, 0, (bindings = new SyntheticAccessMethodBinding[index + numberOfAccessors]), 0, index);
 			if (fieldAccessors[0] != null) 
-				bindings[index++] = fieldAccessors[0];
+				bindings[index++] = fieldAccessors[0]; // read access
 			if (fieldAccessors[1] != null) 
-				bindings[index++] = fieldAccessors[1];
+				bindings[index++] = fieldAccessors[1]; // write access
 		}
 	}
 

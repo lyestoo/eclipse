@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
@@ -45,7 +51,7 @@ public FlowInfo analyseAssignment(BlockScope currentScope, FlowContext flowConte
 					currentScope.problemReporter().uninitializedLocalVariable(localBinding, this);
 					// we could improve error msg here telling "cannot use compound assignment on final local variable"
 				}
-				if (!flowInfo.isFakeReachable()) localBinding.used = true;
+				localBinding.useFlag = flowInfo.isFakeReachable() ? LocalVariableBinding.FAKE_USED : LocalVariableBinding.USED;
 		}
 	}
 	if (assignment.expression != null) {
@@ -115,7 +121,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 			if (!flowInfo.isDefinitelyAssigned(localBinding = (LocalVariableBinding) binding)) {
 				currentScope.problemReporter().uninitializedLocalVariable(localBinding, this);
 			}
-			if (!flowInfo.isFakeReachable()) localBinding.used = true;			
+			localBinding.useFlag = flowInfo.isFakeReachable() ? LocalVariableBinding.FAKE_USED : LocalVariableBinding.USED;
 	}
 	if (valueRequired) {
 		manageEnclosingInstanceAccessIfNecessary(currentScope);
@@ -166,7 +172,7 @@ public TypeBinding checkFieldAccess(BlockScope scope) {
 
 	MethodScope ms = scope.methodScope();
 	if (ms.enclosingSourceType() == fieldBinding.declaringClass
-		&& ms.fieldDeclarationIndex != ms.NotInFieldDecl
+		&& ms.fieldDeclarationIndex != MethodScope.NotInFieldDecl
 		&& fieldBinding.id >= ms.fieldDeclarationIndex) {
 		//if the field is static and ms is not .... then it is valid
 		if (!fieldBinding.isStatic() || ms.isStatic)
@@ -653,10 +659,10 @@ public TypeBinding resolveType(BlockScope scope) {
 						constant = vb.constant;
 						if ((!vb.isFinal()) && ((bits & DepthMASK) != 0))
 							scope.problemReporter().cannotReferToNonFinalOuterLocal((LocalVariableBinding)vb, this);
-						return vb.type;
+						return this.resolvedType = vb.type;
 					}
 					// a field
-					return checkFieldAccess(scope);
+					return this.resolvedType = checkFieldAccess(scope);
 				}
 
 				// thus it was a type
@@ -667,12 +673,12 @@ public TypeBinding resolveType(BlockScope scope) {
 				//deprecated test
 				if (isTypeUseDeprecated((TypeBinding) binding, scope))
 					scope.problemReporter().deprecatedType((TypeBinding) binding, this);
-				return (TypeBinding) binding;
+				return this.resolvedType = (TypeBinding) binding;
 		}
 	}
 
 	// error scenarii
-	return this.reportError(scope);
+	return this.resolvedType = this.reportError(scope);
 }
 public String toStringExpression(){
 

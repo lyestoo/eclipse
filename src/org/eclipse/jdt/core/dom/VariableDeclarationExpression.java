@@ -84,6 +84,7 @@ public class VariableDeclarationExpression extends Expression {
 	ASTNode clone(AST target) {
 		VariableDeclarationExpression result = 
 			new VariableDeclarationExpression(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setModifiers(getModifiers());
 		result.setType((Type) getType().clone(target));
 		result.fragments().addAll(
@@ -159,7 +160,9 @@ public class VariableDeclarationExpression extends Expression {
 	public Type getType() {
 		if (baseType == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setType(getAST().newPrimitiveType(PrimitiveType.INT));
+			getAST().setModificationCount(count);
 		}
 		return baseType;
 	}
@@ -169,8 +172,11 @@ public class VariableDeclarationExpression extends Expression {
 	 * type.
 	 * 
 	 * @param type the new base type
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setType(Type type) {
 		if (type == null) {

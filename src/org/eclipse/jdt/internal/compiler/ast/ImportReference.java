@@ -1,20 +1,27 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
-import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public class ImportReference extends AstNode {
+	
 	public char[][] tokens;
 	public long[] sourcePositions; //each entry is using the code : (start<<32) + end
 	public boolean onDemand = true; //most of the time
 	public int declarationEnd;// doesn't include an potential trailing comment
 	public int declarationSourceStart;
 	public int declarationSourceEnd;
+	public boolean used;
 
 public ImportReference(char[][] sources , long[] poss , boolean d) {
 	tokens = sources ;
@@ -31,7 +38,8 @@ public char[][] getImportName() {
 }
 public String toString(int tab ){
 
-	return toString(tab,true);}
+	return toString(tab,true);
+}
 public String toString(int tab, boolean withOnDemand) {
 	/* when withOnDemand is false, only the name is printed */
 	StringBuffer buffer = new StringBuffer();

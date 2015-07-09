@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 /*
  * A document element parser extracts structural information
  * from a piece of source, providing detailed source positions info.
@@ -26,10 +32,7 @@ import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
 
-import java.util.Locale;
- 
 public class DocumentElementParser extends Parser {
 	IDocumentElementRequestor requestor;
 	private int localIntPtr;
@@ -44,6 +47,9 @@ public class DocumentElementParser extends Parser {
 	/* int[] stack for storing javadoc positions */
 	int[][] intArrayStack;
 	int intArrayPtr;
+	
+	CompilerOptions options;
+	
 public DocumentElementParser(
 	final IDocumentElementRequestor requestor, 
 	IProblemFactory problemFactory,
@@ -57,9 +63,10 @@ public DocumentElementParser(
 		}
 	},
 	false,
-	options.assertMode);
+	options.sourceLevel >= CompilerOptions.JDK1_4);
 	this.requestor = requestor;
 	intArrayStack = new int[30][];
+	this.options = options;
 }
 
 /**
@@ -241,7 +248,7 @@ protected void consumeClassHeaderName() {
 	} else {
 		// Record that the block has a declaration for local types
 		typeDecl = new LocalTypeDeclaration(this.compilationUnit.compilationResult);
-		markCurrentMethodWithLocalType();
+		markEnclosingMemberWithLocalType();
 		blockReal();
 	}
 
@@ -644,7 +651,7 @@ protected void consumeInterfaceHeaderName() {
 	} else {
 		// Record that the block has a declaration for local types
 		typeDecl = new LocalTypeDeclaration(this.compilationUnit.compilationResult);
-		markCurrentMethodWithLocalType();
+		markEnclosingMemberWithLocalType();
 		blockReal();
 	}
 
@@ -1042,7 +1049,7 @@ public void parseCompilationUnit(ICompilationUnit unit) {
 				compilationUnit = 
 					new CompilationUnitDeclaration(
 						problemReporter(), 
-						new CompilationResult(unit, 0, 0), 
+						new CompilationResult(unit, 0, 0, this.options.maxProblemsPerUnit), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
 		scanner.setSource(regionSource);
@@ -1062,7 +1069,7 @@ public void parseConstructor(char[] regionSource) {
 				compilationUnit = 
 					new CompilationUnitDeclaration(
 						problemReporter(), 
-						new CompilationResult(regionSource, 0, 0), 
+						new CompilationResult(regionSource, 0, 0, this.options.maxProblemsPerUnit), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
 		scanner.setSource(regionSource);
@@ -1082,7 +1089,7 @@ public void parseField(char[] regionSource) {
 				compilationUnit = 
 					new CompilationUnitDeclaration(
 						problemReporter(), 
-						new CompilationResult(regionSource, 0, 0), 
+						new CompilationResult(regionSource, 0, 0, this.options.maxProblemsPerUnit), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
 		scanner.setSource(regionSource);
@@ -1103,7 +1110,7 @@ public void parseImport(char[] regionSource) {
 				compilationUnit = 
 					new CompilationUnitDeclaration(
 						problemReporter(), 
-						new CompilationResult(regionSource, 0, 0), 
+						new CompilationResult(regionSource, 0, 0, this.options.maxProblemsPerUnit), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
 		scanner.setSource(regionSource);
@@ -1127,7 +1134,7 @@ public void parseInitializer(char[] regionSource) {
 				compilationUnit = 
 					new CompilationUnitDeclaration(
 						problemReporter(), 
-						new CompilationResult(regionSource, 0, 0), 
+						new CompilationResult(regionSource, 0, 0, this.options.maxProblemsPerUnit), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
 		scanner.setSource(regionSource);
@@ -1148,7 +1155,7 @@ public void parseMethod(char[] regionSource) {
 				compilationUnit = 
 					new CompilationUnitDeclaration(
 						problemReporter(), 
-						new CompilationResult(regionSource, 0, 0), 
+						new CompilationResult(regionSource, 0, 0, this.options.maxProblemsPerUnit), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
 		scanner.setSource(regionSource);
@@ -1169,7 +1176,7 @@ public void parsePackage(char[] regionSource) {
 				compilationUnit = 
 					new CompilationUnitDeclaration(
 						problemReporter(), 
-						new CompilationResult(regionSource, 0, 0), 
+						new CompilationResult(regionSource, 0, 0, this.options.maxProblemsPerUnit), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
 		scanner.setSource(regionSource);
@@ -1190,7 +1197,7 @@ public void parseType(char[] regionSource) {
 				compilationUnit = 
 					new CompilationUnitDeclaration(
 						problemReporter(), 
-						new CompilationResult(regionSource, 0, 0), 
+						new CompilationResult(regionSource, 0, 0, this.options.maxProblemsPerUnit), 
 						regionSource.length); 
 		scanner.resetTo(0, regionSource.length);
 		scanner.setSource(regionSource);

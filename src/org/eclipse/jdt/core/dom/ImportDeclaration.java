@@ -61,6 +61,7 @@ public class ImportDeclaration extends ASTNode {
 	 */
 	ASTNode clone(AST target) {
 		ImportDeclaration result = new ImportDeclaration(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setOnDemand(isOnDemand());
 		result.setName((Name) getName().clone(target));
 		return result;
@@ -97,8 +98,10 @@ public class ImportDeclaration extends ASTNode {
 	public Name getName()  {
 		if (importName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(getAST().newQualifiedName(
 				new SimpleName(getAST()), new SimpleName(getAST())));
+			getAST().setModificationCount(count);
 		}
 		return importName;
 	}
@@ -111,8 +114,11 @@ public class ImportDeclaration extends ASTNode {
 	 * </p>
 	 * 
 	 * @param name the new import name
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setName(Name name) {
 		if (name == null) {

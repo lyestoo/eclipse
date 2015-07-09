@@ -1,14 +1,32 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.parser;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-
 import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.core.compiler.ITerminalSymbols;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.Argument;
+import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.Block;
+import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.ExplicitConstructorCall;
+import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.LocalDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.LocalTypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.Statement;
+import org.eclipse.jdt.internal.compiler.ast.SuperReference;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeReference;
+import org.eclipse.jdt.internal.compiler.lookup.BaseTypes;
+import org.eclipse.jdt.internal.compiler.lookup.CompilerModifiers;
 
 /**
  * Internal method structure for parsing recovery 
@@ -297,10 +315,25 @@ public void updateFromParserState(){
 	if(this.bodyStartsAtHeaderEnd()){
 		Parser parser = this.parser();
 		/* might want to recover arguments or thrown exceptions */
-		if (parser.listLength > 0){ // awaiting interface type references
+		if (parser.listLength > 0 && parser.astLengthPtr > 0){ // awaiting interface type references
 			/* has consumed the arguments - listed elements must be thrown exceptions */
 			if (methodDeclaration.sourceEnd == parser.rParenPos) {
-				if (parser.astStack[parser.astPtr] instanceof TypeReference){
+				
+				// protection for bugs 15142
+				int length = parser.astLengthStack[parser.astLengthPtr];
+				int astPtr = parser.astPtr - length;
+				boolean canConsume = astPtr >= 0;
+				if(canConsume) {
+					if((!(parser.astStack[astPtr] instanceof AbstractMethodDeclaration))) {
+						canConsume = false;
+					}
+					for (int i = 1, max = length + 1; i < max; i++) {
+						if(!(parser.astStack[astPtr + i ] instanceof TypeReference)) {
+							canConsume = false;
+						}
+					}
+				}
+				if (canConsume){
 					parser.consumeMethodHeaderThrowsClause(); 
 					// will reset typeListLength to zero
 					// thus this check will only be performed on first errorCheck after void foo() throws X, Y,
@@ -336,13 +369,30 @@ public void updateFromParserState(){
 					}
 					if (needUpdateRParenPos) parser.rParenPos = argument.sourceEnd + 1;
 				}
-				if (parser.listLength > 0){
-					parser.consumeMethodHeaderParameters();
-					/* fix-up positions, given they were updated against rParenPos, which did not get set */
-					if (parser.currentElement == this){ // parameter addition might have added an awaiting (no return type) method - see 1FVXQZ4 */
-						methodDeclaration.sourceEnd = methodDeclaration.arguments[methodDeclaration.arguments.length-1].sourceEnd;
-						methodDeclaration.bodyStart = methodDeclaration.sourceEnd+1;
-						parser.lastCheckPoint = methodDeclaration.bodyStart;
+				if (parser.listLength > 0 && parser.astLengthPtr > 0){
+					
+					// protection for bugs 15142
+					int length = parser.astLengthStack[parser.astLengthPtr];
+					int astPtr = parser.astPtr - length;
+					boolean canConsume = astPtr >= 0;
+					if(canConsume) {
+						if((!(parser.astStack[astPtr] instanceof AbstractMethodDeclaration))) {
+							canConsume = false;
+						}
+						for (int i = 1, max = length + 1; i < max; i++) {
+							if(!(parser.astStack[astPtr + i ] instanceof Argument)) {
+								canConsume = false;
+							}
+						}
+					}
+					if(canConsume) {
+						parser.consumeMethodHeaderParameters();
+						/* fix-up positions, given they were updated against rParenPos, which did not get set */
+						if (parser.currentElement == this){ // parameter addition might have added an awaiting (no return type) method - see 1FVXQZ4 */
+							methodDeclaration.sourceEnd = methodDeclaration.arguments[methodDeclaration.arguments.length-1].sourceEnd;
+							methodDeclaration.bodyStart = methodDeclaration.sourceEnd+1;
+							parser.lastCheckPoint = methodDeclaration.bodyStart;
+						}
 					}
 				}
 			}

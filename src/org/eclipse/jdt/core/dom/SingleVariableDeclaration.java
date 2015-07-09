@@ -1,43 +1,26 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added getExtraDimensions() and setExtraDimensions(int)
  ******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
 /**
- * VariableDeclaration declaration AST node type. Union of field declaration,
- * local variable declaration, and formal parameter declaration.
+ * Single variable declaration AST node type. Single variable
+ * declaration nodes are used in a limited number of places, including formal
+ * parameter lists and catch clauses. They are not used for field declarations
+ * and regular variable declaration statements.
  *
  * <pre>
- * FieldDeclaration:
- *    { Modifier } Type Identifier { <b>[</b><b>]</b> } [ <b>=</b> Expression ]
- *        { <b>,</b> Identifier { <b>[</b><b>]</b> } [ <b>=</b> Expression] }
- *        <b>;</b>
- * LocalVariableDeclaration:
- *    { <b>final</b> } Type
- * 		Identifier { <b>[</b><b>]</b> } [ <b>=</b> Expression ]
- *      { <b>,</b> Identifier { <b>[</b><b>]</b> } [ <b>=</b> Expression] }
- *      <b>;</b>
- * FormalParameter:
- *    { <b>final</b> } Type Identifier { <b>[</b><b>]</b> }
- * </pre>
- * Simplified normalized form:
- * <pre>
  * SingleVariableDeclaration:
- *    { Modifier } Type Identifier [ <b>=</b> Expression ]
- * FieldDeclaration:
- *    SingleVariableDeclaration <b>;</b>
- * LocalVariableDeclaration:
- *    SingleVariableDeclaration <b>;</b>
- * FormalParameter:
- *    SingleVariableDeclaration
+ *    { Modifier } Type Identifier { <b>[</b><b>]</b> } [ <b>=</b> Expression ]
  * </pre>
  * 
  * @since 2.0
@@ -71,6 +54,14 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	private Type type = null;
 
 	/**
+	 * The number of extra array dimensions that appear after the variable;
+	 * defaults to 0.
+	 * 
+	 * @since 2.1
+	 */
+	private int extraArrayDimensions = 0;
+
+	/**
 	 * The initializer expression, or <code>null</code> if none;
 	 * defaults to none.
 	 */
@@ -80,7 +71,7 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 * Creates a new AST node for a variable declaration owned by the given 
 	 * AST. By default, the variable declaration has: no modifiers, an 
 	 * unspecified (but legal) type, an unspecified (but legal) variable name, 
-	 * no initializer.
+	 * 0 dimensions after the variable; no initializer.
 	 * <p>
 	 * N.B. This constructor is package-private.
 	 * </p>
@@ -103,8 +94,10 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 */
 	ASTNode clone(AST target) {
 		SingleVariableDeclaration result = new SingleVariableDeclaration(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setModifiers(getModifiers());
 		result.setType((Type) getType().clone(target));
+		result.setExtraDimensions(getExtraDimensions());
 		result.setName((SimpleName) getName().clone(target));
 		result.setInitializer(
 			(Expression) ASTNode.copySubtree(target, getInitializer()));
@@ -173,7 +166,9 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	public SimpleName getName() {
 		if (variableName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return variableName;
 	}
@@ -190,25 +185,31 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	}
 
 	/**
-	 * Returns the type of the variable declared in this variable declaration.
+	 * Returns the type of the variable declared in this variable declaration,
+	 * exclusive of any extra array dimensions.
 	 * 
 	 * @return the type
 	 */ 
 	public Type getType() {
 		if (type == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setType(getAST().newPrimitiveType(PrimitiveType.INT));
+			getAST().setModificationCount(count);
 		}
 		return type;
 	}
 
 	/**
 	 * Sets the type of the variable declared in this variable declaration to 
-	 * the given type.
+	 * the given type, exclusive of any extra array dimensions.
 	 * 
 	 * @param type the new type
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setType(Type type) {
 		if (type == null) {
@@ -216,6 +217,26 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 		}
 		replaceChild(this.type, type, false);
 		this.type = type;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on VariableDeclaration.
+	 * @since 2.1
+	 */ 
+	public int getExtraDimensions() {
+		return extraArrayDimensions;
+	}
+
+	/* (omit javadoc for this method)
+	 * Method declared on VariableDeclaration.
+	 * @since 2.1
+	 */ 
+	public void setExtraDimensions(int dimensions) {
+		if (dimensions < 0) {
+			throw new IllegalArgumentException();
+		}
+		modifying();
+		this.extraArrayDimensions = dimensions;
 	}
 
 	/* (omit javadoc for this method)
@@ -240,7 +261,7 @@ public class SingleVariableDeclaration extends VariableDeclaration {
 	 */
 	int memSize() {
 		// treat Operator as free
-		return BASE_NODE_SIZE + 4 * 4;
+		return BASE_NODE_SIZE + 5 * 4;
 	}
 	
 	/* (omit javadoc for this method)

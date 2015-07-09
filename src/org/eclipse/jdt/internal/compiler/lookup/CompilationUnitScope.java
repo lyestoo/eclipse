@@ -1,13 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.ast.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.ImportReference;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
+import org.eclipse.jdt.internal.compiler.util.CompoundNameVector;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfType;
+import org.eclipse.jdt.internal.compiler.util.ObjectVector;
+import org.eclipse.jdt.internal.compiler.util.SimpleNameVector;
 
 public class CompilationUnitScope extends Scope {
 	public LookupEnvironment environment;
@@ -15,6 +27,7 @@ public class CompilationUnitScope extends Scope {
 	public char[][] currentPackageName;
 	public PackageBinding fPackage;
 	public ImportBinding[] imports;
+	
 	public SourceTypeBinding[] topLevelTypes;
 
 	private CompoundNameVector qualifiedReferences;
@@ -26,7 +39,7 @@ public CompilationUnitScope(CompilationUnitDeclaration unit, LookupEnvironment e
 	this.environment = environment;
 	this.referenceContext = unit;
 	unit.scope = this;
-	this.currentPackageName = unit.currentPackage == null ? NoCharChar : unit.currentPackage.tokens;
+	this.currentPackageName = unit.currentPackage == null ? CharOperation.NO_CHAR_CHAR : unit.currentPackage.tokens;
 
 	if (environment.options.produceReferenceInfo) {
 		this.qualifiedReferences = new CompoundNameVector();
@@ -46,12 +59,19 @@ void buildTypeBindings() {
 	topLevelTypes = new SourceTypeBinding[0]; // want it initialized if the package cannot be resolved
 	if (referenceContext.compilationResult.compilationUnit != null) {
 		char[][] expectedPackageName = referenceContext.compilationResult.compilationUnit.getPackageName();
-		if (expectedPackageName != null && !CharOperation.equals(currentPackageName, expectedPackageName)) {
-			problemReporter().packageIsNotExpectedPackage(referenceContext);
-			currentPackageName = expectedPackageName.length == 0 ? NoCharChar : expectedPackageName;
+		if (expectedPackageName != null 
+				&& !CharOperation.equals(currentPackageName, expectedPackageName)) {
+
+			// only report if the unit isn't structurally empty
+			if (referenceContext.currentPackage != null 
+					|| referenceContext.types != null 
+					|| referenceContext.imports != null) {
+				problemReporter().packageIsNotExpectedPackage(referenceContext);
+			}
+			currentPackageName = expectedPackageName.length == 0 ? CharOperation.NO_CHAR_CHAR : expectedPackageName;
 		}
 	}
-	if (currentPackageName == NoCharChar) {
+	if (currentPackageName == CharOperation.NO_CHAR_CHAR) {
 		if ((fPackage = environment.defaultPackage) == null) {
 			problemReporter().mustSpecifyPackage(referenceContext);
 			return;
@@ -79,7 +99,7 @@ void buildTypeBindings() {
 			problemReporter().duplicateTypes(referenceContext, typeDecl);
 			continue nextType;
 		}
-		boolean packageExists = currentPackageName == NoCharChar
+		boolean packageExists = currentPackageName == CharOperation.NO_CHAR_CHAR
 			? environment.getTopLevelPackage(typeDecl.name) != null
 			: (fPackage.getPackage(typeDecl.name)) != null;
 		if (packageExists) {
@@ -116,7 +136,7 @@ void checkAndSetImports() {
 		if (importBinding == null || !importBinding.isValidBinding())
 			problemReporter().isClassPathCorrect(JAVA_LANG_OBJECT, referenceCompilationUnit());
 
-		environment.defaultImports = new ImportBinding[] {new ImportBinding(JAVA_LANG, true, importBinding)};
+		environment.defaultImports = new ImportBinding[] {new ImportBinding(JAVA_LANG, true, importBinding, null)};
 	}
 	if (referenceContext.imports == null) {
 		imports = environment.defaultImports;
@@ -154,9 +174,9 @@ void checkAndSetImports() {
 			Binding importBinding = findOnDemandImport(compoundName);
 			if (!importBinding.isValidBinding())
 				continue nextImport;	// we report all problems in faultInImports()
-			resolvedImports[index++] = new ImportBinding(compoundName, true, importBinding);
+			resolvedImports[index++] = new ImportBinding(compoundName, true, importBinding, importReference);
 		} else {
-			resolvedImports[index++] = new ImportBinding(compoundName, false, null);
+			resolvedImports[index++] = new ImportBinding(compoundName, false, null, importReference);
 		}
 	}
 
@@ -205,19 +225,20 @@ void faultInImports() {
 		// skip duplicates or imports of the current package
 		for (int j = 0; j < index; j++)
 			if (resolvedImports[j].onDemand == importReference.onDemand)
-				if (CharOperation.equals(compoundName, resolvedImports[j].compoundName))
+				if (CharOperation.equals(compoundName, resolvedImports[j].compoundName)) {
 					continue nextImport;
+				}
 		if (importReference.onDemand == true)
-			if (CharOperation.equals(compoundName, currentPackageName))
+			if (CharOperation.equals(compoundName, currentPackageName)) {
 				continue nextImport;
-
+			}
 		if (importReference.onDemand) {
 			Binding importBinding = findOnDemandImport(compoundName);
 			if (!importBinding.isValidBinding()) {
 				problemReporter().importProblem(importReference, importBinding);
 				continue nextImport;
 			}
-			resolvedImports[index++] = new ImportBinding(compoundName, true, importBinding);
+			resolvedImports[index++] = new ImportBinding(compoundName, true, importBinding, importReference);
 		} else {
 			Binding typeBinding = findSingleTypeImport(compoundName);
 			if (!typeBinding.isValidBinding()) {
@@ -231,9 +252,9 @@ void faultInImports() {
 			ReferenceBinding existingType = typesBySimpleNames.get(compoundName[compoundName.length - 1]);
 			if (existingType != null) {
 				// duplicate test above should have caught this case, but make sure
-				if (existingType == typeBinding)
+				if (existingType == typeBinding) {
 					continue nextImport;
-
+				}
 				// either the type collides with a top level type or another imported type
 				for (int j = 0, length = topLevelTypes.length; j < length; j++) {
 					if (CharOperation.equals(topLevelTypes[j].sourceName, existingType.sourceName)) {
@@ -244,7 +265,7 @@ void faultInImports() {
 				problemReporter().duplicateImport(importReference);
 				continue nextImport;
 			}
-			resolvedImports[index++] = new ImportBinding(compoundName, false, typeBinding);
+			resolvedImports[index++] = new ImportBinding(compoundName, false, typeBinding, importReference);
 			typesBySimpleNames.put(compoundName[compoundName.length - 1], (ReferenceBinding) typeBinding);
 		}
 	}
@@ -436,11 +457,14 @@ Binding resolveSingleTypeImport(ImportBinding importBinding) {
 	if (importBinding.resolvedImport == null) {
 		importBinding.resolvedImport = findSingleTypeImport(importBinding.compoundName);
 		if (!importBinding.resolvedImport.isValidBinding() || importBinding.resolvedImport instanceof PackageBinding) {
-			ImportBinding[] newImports = new ImportBinding[imports.length - 1];
-			for (int i = 0, n = 0, max = imports.length; i < max; i++)
-				if (imports[i] != importBinding)
-					newImports[n++] = imports[i];
-			imports = newImports;
+			if (this.imports != null){
+				ImportBinding[] newImports = new ImportBinding[imports.length - 1];
+				for (int i = 0, n = 0, max = this.imports.length; i < max; i++)
+					if (this.imports[i] != importBinding){
+						newImports[n++] = this.imports[i];
+					}
+				this.imports = newImports;
+			}
 			return null;
 		}
 	}

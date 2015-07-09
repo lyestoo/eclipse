@@ -53,6 +53,7 @@ public class BooleanLiteral extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		BooleanLiteral result = new BooleanLiteral(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setBooleanValue(booleanValue());
 		return result;
 	}
@@ -69,7 +70,7 @@ public class BooleanLiteral extends Expression {
 	 * Method declared on ASTNode.
 	 */
 	void accept0(ASTVisitor visitor) {
-		boolean visitChildren = visitor.visit(this);
+		visitor.visit(this);
 		visitor.endVisit(this);
 	}
 	

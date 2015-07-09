@@ -18,6 +18,38 @@ package org.eclipse.jdt.core.dom;
  * FieldAccess: 
  * 		Expression <b>.</b> Identifier
  * </pre>
+ * 
+ * <p>
+ * Note that there are several kinds of expressions that resemble field access
+ * expressions: qualified names, this expressions, and super field access
+ * expressions. The following guidelines help with correct usage:
+ * <ul>
+ *   <li>An expression like "foo.this" can only be represented as a this
+ *   expression (<code>ThisExpression</code>) containing a simple name.
+ *   "this" is a keyword, and therefore invalid as an identifier.</li>
+ *   <li>An expression like "this.foo" can only be represented as a field
+ *   access expression (<code>FieldAccess</code>) containing a this expression
+ *   and a simple name. Again, this is because "this" is a keyword, and
+ *   therefore invalid as an identifier.</li>
+ *   <li>An expression with "super" can only be represented as a super field
+ *   access expression (<code>SuperFieldAccess</code>). "super" is a also
+ *   keyword, and therefore invalid as an identifier.</li>
+ *   <li>An expression like "foo.bar" can be represented either as a
+ *   qualified name (<code>QualifiedName</code>) or as a field access
+ *   expression (<code>FieldAccess</code>) containing simple names. Either
+ *   is acceptable, and there is no way to choose between them without
+ *   information about what the names resolve to
+ *   (<code>AST.parseCompilationUnit</code> may return either).</li>
+ *   <li>Other expressions ending in an identifier, such as "foo().bar" can
+ *   only be represented as field access expressions
+ *   (<code>FieldAccess</code>).</li>
+ * </ul>
+ * </p>
+ * 
+ * @see QualifiedName
+ * @see ThisExpression
+ * @see SuperFieldAccess
+ * @since 2.0
  */
 public class FieldAccess extends Expression {
 	
@@ -59,6 +91,7 @@ public class FieldAccess extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		FieldAccess result = new FieldAccess(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setExpression((Expression) getExpression().clone(target));
 		result.setName((SimpleName) getName().clone(target));
 		return result;
@@ -93,7 +126,9 @@ public class FieldAccess extends Expression {
 	public Expression getExpression() {
 		if (expression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setExpression(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return expression;
 	}
@@ -102,9 +137,12 @@ public class FieldAccess extends Expression {
 	 * Sets the expression of this field access expression.
 	 * 
 	 * @param expression the new expression
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		if (expression == null) {
@@ -122,7 +160,10 @@ public class FieldAccess extends Expression {
 	 */ 
 	public SimpleName getName() {
 		if (fieldName == null) {
+			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return fieldName;
 	}
@@ -131,8 +172,11 @@ public class FieldAccess extends Expression {
 	 * Sets the name of the field accessed in this field access expression.
 	 * 
 	 * @param fieldName the field name
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setName(SimpleName fieldName) {
 		if (fieldName == null) {

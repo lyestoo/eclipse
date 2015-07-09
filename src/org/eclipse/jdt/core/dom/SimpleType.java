@@ -52,6 +52,7 @@ public class SimpleType extends Type {
 	 */
 	ASTNode clone(AST target) {
 		SimpleType result = new SimpleType(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setName((Name) ((ASTNode) getName()).clone(target));
 		return result;
 	}
@@ -83,7 +84,9 @@ public class SimpleType extends Type {
 	public Name getName() {
 		if (typeName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return typeName;
 	}
@@ -92,8 +95,11 @@ public class SimpleType extends Type {
 	 * Sets the name of this simple type to the given name.
 	 * 
 	 * @param typeName the new name of this simple type
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setName(Name typeName) {
 		if (typeName == null) {

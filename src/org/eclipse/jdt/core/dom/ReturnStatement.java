@@ -50,6 +50,7 @@ public class ReturnStatement extends Statement {
 	 */
 	ASTNode clone(AST target) {
 		ReturnStatement result = new ReturnStatement(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.setExpression(
 			(Expression) ASTNode.copySubtree(target, getExpression()));
@@ -90,9 +91,12 @@ public class ReturnStatement extends Statement {
 	 * 
 	 * @param expression the expression node, or <code>null</code> if 
 	 *    there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		// a ReturnStatement may occur inside an Expression - must check cycles

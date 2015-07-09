@@ -1,10 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
@@ -20,7 +25,8 @@ public abstract class Expression extends Statement {
 	//Expression is a subclass of Statement. See the message isValidJavaStatement()
 
 	public int implicitConversion;
-
+	public TypeBinding resolvedType;
+	
 	public Constant constant;
 
 	public Expression() {
@@ -433,7 +439,7 @@ public abstract class Expression extends Statement {
 		TypeBinding thisTb = this.resolveType(scope);
 		if (thisTb == null)
 			return null;
-		if (!scope.areTypesCompatible(thisTb, expectedTb)) {
+		if (!Scope.areTypesCompatible(thisTb, expectedTb)) {
 			scope.problemReporter().typeMismatchError(thisTb, expectedTb, this);
 			return null;
 		}

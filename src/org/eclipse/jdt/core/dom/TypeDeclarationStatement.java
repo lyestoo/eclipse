@@ -60,6 +60,7 @@ public class TypeDeclarationStatement extends Statement {
 	ASTNode clone(AST target) {
 		TypeDeclarationStatement result = 
 			new TypeDeclarationStatement(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.setTypeDeclaration(
 			(TypeDeclaration) getTypeDeclaration().clone(target));
@@ -94,7 +95,9 @@ public class TypeDeclarationStatement extends Statement {
 	public TypeDeclaration getTypeDeclaration() {
 		if (typeDecl == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setTypeDeclaration(new TypeDeclaration(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return typeDecl;
 	}
@@ -104,9 +107,12 @@ public class TypeDeclarationStatement extends Statement {
 	 * statement.
 	 * 
 	 * @param decl the type declaration node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setTypeDeclaration(TypeDeclaration decl) {
 		if (decl == null) {

@@ -1,23 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
 
 public class CastExpression extends Expression {
 
 	public Expression expression;
 	public Expression type;
 	public boolean needRuntimeCheckcast;
-	public TypeBinding castTb;
 
 	//expression.implicitConversion holds the cast for baseType casting 
 	public CastExpression(Expression e, Expression t) {
@@ -68,10 +71,11 @@ public class CastExpression extends Expression {
 		if (castTb.isBaseType()) {
 			if (expressionTb.isBaseType()) {
 				if (expressionTb == castTb) {
+					expression.implicitWidening(castTb, expressionTb);
 					constant = expression.constant; //use the same constant
 					return;
 				}
-				if (scope.areTypesCompatible(expressionTb, castTb)
+				if (Scope.areTypesCompatible(expressionTb, castTb)
 					|| BaseTypeBinding.isNarrowing(castTb.id, expressionTb.id)) {
 					expression.implicitConversion = (castTb.id << 4) + expressionTb.id;
 					if (expression.constant != Constant.NotAConstant)
@@ -134,9 +138,9 @@ public class CastExpression extends Expression {
 				}
 			} else if (
 				castTb.isClass()) { // ----- (castTb.isClass) expressionTb.isClass ------
-				if (scope.areTypesCompatible(expressionTb, castTb)) // no runtime error
+				if (Scope.areTypesCompatible(expressionTb, castTb)) // no runtime error
 					return;
-				if (scope.areTypesCompatible(castTb, expressionTb)) {
+				if (Scope.areTypesCompatible(castTb, expressionTb)) {
 					// potential runtime  error
 					needRuntimeCheckcast = true;
 					return;
@@ -144,7 +148,7 @@ public class CastExpression extends Expression {
 			} else { // ----- (castTb.isInterface) expressionTb.isClass -------  
 				if (((ReferenceBinding) expressionTb).isFinal()) {
 					// no subclass for expressionTb, thus compile-time check is valid
-					if (scope.areTypesCompatible(expressionTb, castTb))
+					if (Scope.areTypesCompatible(expressionTb, castTb))
 						return;
 				} else { // a subclass may implement the interface ==> no check at compile time
 					needRuntimeCheckcast = true;
@@ -170,7 +174,7 @@ public class CastExpression extends Expression {
 				return;
 			if (((ReferenceBinding) castTb).isFinal()) {
 				// no subclass for castTb, thus compile-time check is valid
-				if (!scope.areTypesCompatible(castTb, expressionTb)) {
+				if (!Scope.areTypesCompatible(castTb, expressionTb)) {
 					// potential runtime error
 					scope.problemReporter().typeCastError(this, castTb, expressionTb);
 					return;
@@ -215,7 +219,7 @@ public class CastExpression extends Expression {
 				|| needRuntimeCheckcast) { // Added for: 1F1W9IG: IVJCOM:WINNT - Compiler omits casting check
 				codeStream.generateConstant(constant, implicitConversion);
 				if (needRuntimeCheckcast) {
-					codeStream.checkcast(castTb);
+					codeStream.checkcast(this.resolvedType);
 					if (!valueRequired)
 						codeStream.pop();
 				}
@@ -228,7 +232,7 @@ public class CastExpression extends Expression {
 			codeStream,
 			valueRequired || needRuntimeCheckcast);
 		if (needRuntimeCheckcast) {
-			codeStream.checkcast(castTb);
+			codeStream.checkcast(this.resolvedType);
 			if (!valueRequired)
 				codeStream.pop();
 		} else {
@@ -247,16 +251,16 @@ public class CastExpression extends Expression {
 
 		constant = Constant.NotAConstant;
 		implicitConversion = T_undefined;
-		TypeBinding expressionTb = expression.resolveType(scope);
-		if (expressionTb == null)
-			return null;
-
 		if ((type instanceof TypeReference) || (type instanceof NameReference)) {
-			if ((castTb = type.resolveType(scope)) == null)
-				return null;
-			areTypesCastCompatible(scope, castTb, expressionTb);
-			return castTb;
-		} else { // expression as a cast !!!!!!!! 
+			this.resolvedType = type.resolveType(scope);
+			TypeBinding castedExpressionType = expression.resolveType(scope);
+			if (this.resolvedType != null && castedExpressionType != null) {
+				areTypesCastCompatible(scope, this.resolvedType, castedExpressionType);
+			}
+			return this.resolvedType;
+		} else { // expression as a cast !!!!!!!!
+			TypeBinding castedExpressionType = expression.resolveType(scope);
+			if (castedExpressionType == null) return null;
 			scope.problemReporter().invalidTypeReference(type);
 			return null;
 		}

@@ -60,6 +60,7 @@ public class SwitchCase extends Statement {
 	 */
 	ASTNode clone(AST target) {
 		SwitchCase result = new SwitchCase(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.setExpression(
 			(Expression) ASTNode.copySubtree(target, getExpression()));
@@ -94,7 +95,9 @@ public class SwitchCase extends Statement {
 	public Expression getExpression() {
 		if (!expressionInitialized) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setExpression(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return optionalExpression;
 	}
@@ -105,9 +108,12 @@ public class SwitchCase extends Statement {
 	 * 
 	 * @param expression the expression node, or <code>null</code> to 
 	 *    turn it into the  "default:" case
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		// a ReturnStatement may occur inside an Expression - must check cycles

@@ -61,6 +61,7 @@ public class LabeledStatement extends Statement {
 	 */
 	ASTNode clone(AST target) {
 		LabeledStatement result = new LabeledStatement(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLabel(
 			(SimpleName) ASTNode.copySubtree(target, getLabel()));
 		result.setBody(
@@ -97,7 +98,9 @@ public class LabeledStatement extends Statement {
 	public SimpleName getLabel() {
 		if (labelName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setLabel(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return labelName;
 	}
@@ -106,8 +109,11 @@ public class LabeledStatement extends Statement {
 	 * Sets the label of this labeled statement.
 	 * 
 	 * @param label the new label
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setLabel(SimpleName label) {
 		if (label == null) {
@@ -125,7 +131,9 @@ public class LabeledStatement extends Statement {
 	public Statement getBody() {
 		if (body == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setBody(new EmptyStatement(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return body;
 	}
@@ -134,9 +142,12 @@ public class LabeledStatement extends Statement {
 	 * Sets the body of this labeled statement.
 	 * 
 	 * @param statement the body statement node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setBody(Statement statement) {
 		if (statement == null) {

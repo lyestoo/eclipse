@@ -1,9 +1,9 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
@@ -29,7 +29,7 @@ import java.util.Map;
  * Each AST node belongs to a unique AST instance, called the owning AST.
  * The children of an AST node always have the same owner as their parent node.
  * If a node from one AST is to be added to a different AST, the subtree must
- * be cloned first to ensures that the added nodes have the correct owning AST.
+ * be cloned first to ensure that the added nodes have the correct owning AST.
  * </p>
  * <p>
  * When an AST node is part of an AST, it has a unique parent node.
@@ -77,12 +77,12 @@ import java.util.Map;
  * as a whole.
  * </p>
  * <p>
- * Each AST node carries bit flags which may convey additional information about
+ * Each AST node carries bit flags, which may convey additional information about
  * the node. For instance, the parser uses a flag to indicate a syntax error.
  * Newly created nodes have no flags set.
  * </p>
  * <p>
- * Each AST node is capable of carraying an open-ended collection of
+ * Each AST node is capable of carrying an open-ended collection of
  * client-defined properties. Newly created nodes have none. 
  * <code>getProperty</code> and <code>setProperty</code> are used to access
  * these properties.
@@ -323,7 +323,7 @@ public abstract class ASTNode {
 
 	/**
 	 * Node type constant indicating a node of type 
-	 * <code>MethodInvocation<code>.
+	 * <code>MethodInvocation</code>.
 	 * @see MethodInvocation
 	 */
 	public static final int METHOD_INVOCATION = 32;
@@ -620,8 +620,13 @@ public abstract class ASTNode {
 		 * <p>
 		 * Be stingy on storage - assume that list will be empty.
 		 * </p>
+		 * <p>
+		 * This field declared default visibility (rather than private)
+		 * so that accesses from <code>NodeList.Cursor</code> do not require
+		 * a synthetic accessor method.
+		 * </p>
 		 */
-		private ArrayList store = new ArrayList(0);
+		ArrayList store = new ArrayList(0);
 		
 		/**
 		 * Indicated whether cycles are a risk. A cycle is possible
@@ -974,9 +979,12 @@ public abstract class ASTNode {
 	 * @param cycleCheck <code>true</code> if cycles are possible and need to
 	 *   be checked, <code>false</code> if cycles are impossible and do not
 	 *   need to be checked
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	void replaceChild(ASTNode oldChild, ASTNode newChild, boolean cycleCheck) {
 		if (newChild != null) {
@@ -1007,11 +1015,14 @@ public abstract class ASTNode {
 	 *   not need to be checked
 	 * @param nodeType a type constraint on child nodes, or <code>null</code>
 	 *   if no special check is required
-	 * @exception IllegalArgumentException if the child is null
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the child has the incorrect node type
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the child is null</li>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the child has the incorrect node type</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	static void checkNewChild(ASTNode node, ASTNode newChild,
 			boolean cycleCheck, Class nodeType) {
@@ -1076,7 +1087,7 @@ public abstract class ASTNode {
 	 * Note that modifying a property is not considered a modification to the 
 	 * AST itself. This is to allow clients to decorate existing nodes with 
 	 * their own properties without jeopardizing certain things (like the 
-	 * validity of bindings) which rely on the underlying tree remaining static.
+	 * validity of bindings), which rely on the underlying tree remaining static.
 	 * </p>
 	 * 
 	 * @param propertyName the property name
@@ -1174,7 +1185,7 @@ public abstract class ASTNode {
 	/**
 	 * Returns the flags associated with this node.
 	 * <p>
-	 * No flags are associated with newly-created nodes.
+	 * No flags are associated with newly created nodes.
 	 * </p>
 	 * <p>
 	 * The flags are the bitwise-or of individual flags.
@@ -1256,7 +1267,8 @@ public abstract class ASTNode {
 	 * which may be different from the ASTs of the given node. 
 	 * Even if the given node has a parent, the result node will be unparented.
 	 * <p>
-	 * Note that client properties are not carried over to the new nodes.
+	 * Source range information on the original nodes is automatically copied to the new
+	 * nodes. Client properties (<code>properties</code>) are not carried over.
 	 * </p>
 	 * 
 	 * @param target the AST that is to own the nodes in the result
@@ -1279,7 +1291,8 @@ public abstract class ASTNode {
 	 * Even if the nodes in the list have parents, the nodes in the result
 	 * will be unparented.
 	 * <p>
-	 * Note that client properties are not carried over to the new nodes.
+	 * Source range information on the original nodes is automatically copied to the new
+	 * nodes. Client properties (<code>properties</code>) are not carried over.
 	 * </p>
 	 * 
 	 * @param target the AST that is to own the nodes in the result

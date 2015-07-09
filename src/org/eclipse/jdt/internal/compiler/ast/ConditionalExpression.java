@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
@@ -296,7 +302,7 @@ public class ConditionalExpression extends OperatorExpression {
 			if (valueIfTrueType == LongBinding || valueIfTrueType == DoubleBinding) {
 				returnTypeSlotSize = 2;
 			}
-			this.typeBinding = valueIfTrueType;
+			this.resolvedType = valueIfTrueType;
 			return valueIfTrueType;
 		}
 		// Determine the return type depending on argument types
@@ -307,7 +313,7 @@ public class ConditionalExpression extends OperatorExpression {
 				|| (valueIfTrueType == ShortBinding && valueIfFalseType == ByteBinding)) {
 				valueIfTrue.implicitWidening(ShortBinding, valueIfTrueType);
 				valueIfFalse.implicitWidening(ShortBinding, valueIfFalseType);
-				this.typeBinding = ShortBinding;
+				this.resolvedType = ShortBinding;
 				return ShortBinding;
 			}
 			// <Byte|Short|Char> x constant(Int)  ---> <Byte|Short|Char>   and reciprocally
@@ -316,7 +322,7 @@ public class ConditionalExpression extends OperatorExpression {
 					&& valueIfFalse.isConstantValueOfTypeAssignableToType(valueIfFalseType, valueIfTrueType))) {
 				valueIfTrue.implicitWidening(valueIfTrueType, valueIfTrueType);
 				valueIfFalse.implicitWidening(valueIfTrueType, valueIfFalseType);
-				this.typeBinding = valueIfTrueType;
+				this.resolvedType = valueIfTrueType;
 				return valueIfTrueType;
 			}
 			if ((valueIfFalseType == ByteBinding
@@ -326,7 +332,7 @@ public class ConditionalExpression extends OperatorExpression {
 					&& valueIfTrue.isConstantValueOfTypeAssignableToType(valueIfTrueType, valueIfFalseType))) {
 				valueIfTrue.implicitWidening(valueIfFalseType, valueIfTrueType);
 				valueIfFalse.implicitWidening(valueIfFalseType, valueIfFalseType);
-				this.typeBinding = valueIfFalseType;
+				this.resolvedType = valueIfFalseType;
 				return valueIfFalseType;
 			}
 			// Manual binary numeric promotion
@@ -335,7 +341,7 @@ public class ConditionalExpression extends OperatorExpression {
 				&& BaseTypeBinding.isNarrowing(valueIfFalseType.id, T_int)) {
 				valueIfTrue.implicitWidening(IntBinding, valueIfTrueType);
 				valueIfFalse.implicitWidening(IntBinding, valueIfFalseType);
-				this.typeBinding = IntBinding;
+				this.resolvedType = IntBinding;
 				return IntBinding;
 			}
 			// long
@@ -344,7 +350,7 @@ public class ConditionalExpression extends OperatorExpression {
 				valueIfTrue.implicitWidening(LongBinding, valueIfTrueType);
 				valueIfFalse.implicitWidening(LongBinding, valueIfFalseType);
 				returnTypeSlotSize = 2;
-				this.typeBinding = LongBinding;
+				this.resolvedType = LongBinding;
 				return LongBinding;
 			}
 			// float
@@ -352,14 +358,14 @@ public class ConditionalExpression extends OperatorExpression {
 				&& BaseTypeBinding.isNarrowing(valueIfFalseType.id, T_float)) {
 				valueIfTrue.implicitWidening(FloatBinding, valueIfTrueType);
 				valueIfFalse.implicitWidening(FloatBinding, valueIfFalseType);
-				this.typeBinding = FloatBinding;
+				this.resolvedType = FloatBinding;
 				return FloatBinding;
 			}
 			// double
 			valueIfTrue.implicitWidening(DoubleBinding, valueIfTrueType);
 			valueIfFalse.implicitWidening(DoubleBinding, valueIfFalseType);
 			returnTypeSlotSize = 2;
-			this.typeBinding = DoubleBinding;
+			this.resolvedType = DoubleBinding;
 			return DoubleBinding;
 		}
 		// Type references (null null is already tested)
@@ -371,16 +377,16 @@ public class ConditionalExpression extends OperatorExpression {
 				valueIfFalseType);
 			return null;
 		}
-		if (scope.areTypesCompatible(valueIfFalseType, valueIfTrueType)) {
+		if (Scope.areTypesCompatible(valueIfFalseType, valueIfTrueType)) {
 			valueIfTrue.implicitWidening(valueIfTrueType, valueIfTrueType);
 			valueIfFalse.implicitWidening(valueIfTrueType, valueIfFalseType);
-			this.typeBinding = valueIfTrueType;
+			this.resolvedType = valueIfTrueType;
 			return valueIfTrueType;
 		}
-		if (scope.areTypesCompatible(valueIfTrueType, valueIfFalseType)) {
+		if (Scope.areTypesCompatible(valueIfTrueType, valueIfFalseType)) {
 			valueIfTrue.implicitWidening(valueIfFalseType, valueIfTrueType);
 			valueIfFalse.implicitWidening(valueIfFalseType, valueIfFalseType);
-			this.typeBinding = valueIfFalseType;
+			this.resolvedType = valueIfFalseType;
 			return valueIfFalseType;
 		}
 		scope.problemReporter().conditionalArgumentsIncompatibleTypes(

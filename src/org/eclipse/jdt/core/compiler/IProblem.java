@@ -1,17 +1,20 @@
 /**********************************************************************
 Copyright (c) 2002 IBM Corp. and others.
 All rights reserved.   This program and the accompanying materials
-are made available under the terms of the Common Public License v0.5
+are made available under the terms of the Common Public License v1.0
 which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/cpl-v05.html
+http://www.eclipse.org/legal/cpl-v10.html
  
 Contributors:
      IBM Corporation - initial API and implementation
+     IBM Corporation - added the following constants
+                                 NonStaticAccessToStaticField
+                                 NonStaticAccessToStaticMethod
+                                 Task
 **********************************************************************/
 
 package org.eclipse.jdt.core.compiler;
  
-import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
 
 /**
@@ -36,63 +39,86 @@ public interface IProblem {
 	
 	/**
 	 * Answer back the original arguments recorded into the problem.
+	 * @return the original arguments recorded into the problem
 	 */
 	String[] getArguments();
 
 	/**
+	 * Returns the problem id
 	 * 
-	 * @return int
+	 * @return the problem id
 	 */
 	int getID();
 
 	/**
 	 * Answer a localized, human-readable message string which describes the problem.
+	 * 
+	 * @return a localized, human-readable message string which describes the problem
 	 */
 	String getMessage();
+
 	/**
 	 * Answer the file name in which the problem was found.
+	 * 
+	 * @return the file name in which the problem was found
 	 */
 	char[] getOriginatingFileName();
 	
 	/**
 	 * Answer the end position of the problem (inclusive), or -1 if unknown.
+	 * 
+	 * @return the end position of the problem (inclusive), or -1 if unknown
 	 */
 	int getSourceEnd();
 
 	/**
 	 * Answer the line number in source where the problem begins.
+	 * 
+	 * @return the line number in source where the problem begins
 	 */
 	int getSourceLineNumber();
 
 	/**
 	 * Answer the start position of the problem (inclusive), or -1 if unknown.
+	 * 
+	 * @return the start position of the problem (inclusive), or -1 if unknown
 	 */
 	int getSourceStart();
 
 	/**
 	 * Checks the severity to see if the Error bit is set.
+	 * 
+	 * @return true if the Error bit is set for the severity, false otherwise
 	 */
 	boolean isError();
 
 	/**
 	 * Checks the severity to see if the Error bit is not set.
+	 * 
+	 * @return true if the Error bit is not set for the severity, false otherwise
 	 */
 	boolean isWarning();
 
 	/**
 	 * Set the end position of the problem (inclusive), or -1 if unknown.
 	 * Used for shifting problem positions.
+	 * 
+	 * @param sourceEnd the given end position
 	 */
 	void setSourceEnd(int sourceEnd);
 
 	/**
 	 * Set the line number in source where the problem begins.
+	 * 
+	 * @param lineNumber the given line number
 	 */
 	void setSourceLineNumber(int lineNumber);
 
 	/**
 	 * Set the start position of the problem (inclusive), or -1 if unknown.
 	 * Used for shifting problem positions.
+	 * 
+	 * @param the given start position
 	 */
 	void setSourceStart(int sourceStart);
 	
@@ -184,7 +210,9 @@ public interface IProblem {
 	int UsingDeprecatedField = FieldRelated + 73;
 	int NonStaticFieldFromStaticInvocation = FieldRelated + 74;
 	int ReferenceToForwardField = FieldRelated + Internal + 75;
-
+	/** @since 2.1 */
+	int NonStaticAccessToStaticField = Internal + FieldRelated + 76;
+	
 	// blank final fields
 	int FinalFieldAssignment = FieldRelated + 80;
 	int UninitializedBlankFinalField = FieldRelated + 81;
@@ -207,6 +235,8 @@ public interface IProblem {
 	int NoMessageSendOnBaseType = MethodRelated + 114;
 	int ParameterMismatch = MethodRelated + 115;
 	int NoMessageSendOnArrayType = MethodRelated + 116;
+	/** @since 2.1 */
+    int NonStaticAccessToStaticMethod = Internal + MethodRelated + 117;
     
 	// constructors
 	int UndefinedConstructor = ConstructorRelated + 130;
@@ -414,6 +444,7 @@ public interface IProblem {
 	int ConflictingImport = ImportRelated + 385;
 	int DuplicateImport = ImportRelated + 386;
 	int CannotImportPackage = ImportRelated + 387;
+	int UnusedImport = ImportRelated + 388;
 
 	//	int ImportProblemBase = ImportRelated + 389;
 	int ImportNotFound =  ImportRelated + 389 + ProblemReasons.NotFound; // ImportRelated + 390
@@ -421,7 +452,8 @@ public interface IProblem {
 	int ImportAmbiguous =  ImportRelated + 389 + ProblemReasons.Ambiguous; // ImportRelated + 392
 	int ImportInternalNameProvided =  ImportRelated + 389 + ProblemReasons.InternalNameProvided; // ImportRelated + 393
 	int ImportInheritedNameHidesEnclosingName =  ImportRelated + 389 + ProblemReasons.InheritedNameHidesEnclosingName; // ImportRelated + 394
-		
+
+	
 	// local variable related problems
 	int DuplicateModifierForVariable = MethodRelated + 395;
 	int IllegalModifierForVariable = MethodRelated + 396;
@@ -453,4 +485,8 @@ public interface IProblem {
 	// 1.4 features
 	// assertion warning
 	int UseAssertAsAnIdentifier = Internal + 440;
+	
+	// detected task
+	/** @since 2.1 */
+	int Task = Internal + 450;
 }

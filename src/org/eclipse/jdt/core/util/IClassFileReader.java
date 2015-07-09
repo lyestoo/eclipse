@@ -1,19 +1,21 @@
-/**********************************************************************
-Copyright (c) 2002 IBM Corp. and others.
-All rights reserved.   This program and the accompanying materials
-are made available under the terms of the Common Public License v0.5
-which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/cpl-v05.html
- 
-Contributors:
-     IBM Corporation - initial API and implementation
-**********************************************************************/
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core.util;
 
 /**
  * Description of a .class file. This class reifies the internal structure of a .class
  * file following the JVM specifications.
  *  
+ * This interface may be implemented by clients. 
+ * 
  * @since 2.0
  */
 public interface IClassFileReader {
@@ -31,30 +33,42 @@ public interface IClassFileReader {
 	 * This value should be used to read the constant pool entries and 
 	 * the method infos of a .class file.
 	 */
-	int METHOD_INFOS 			= 0x0003;
+	int METHOD_INFOS 			= 0x0002 + CONSTANT_POOL;
 
 	/**
 	 * This value should be used to read the constant pool entries and 
 	 * the field infos of a .class file.
 	 */
-	int FIELD_INFOS 			= 0x0005;
+	int FIELD_INFOS 			= 0x0004 + CONSTANT_POOL;
 
 	/**
 	 * This value should be used to read the constant pool entries and 
 	 * the super interface names of a .class file.
 	 */
-	int SUPER_INTERFACES 		= 0x0009;
+	int SUPER_INTERFACES 		= 0x0008 + CONSTANT_POOL;
 
 	/**
 	 * This value should be used to read the constant pool entries and 
 	 * the attributes of a .class file.
 	 */
-	int CLASSFILE_ATTRIBUTES 	= 0x0011;
+	int CLASSFILE_ATTRIBUTES 	= 0x0010 + CONSTANT_POOL;
 
+	/**
+	 * This value should be used to read the method bodies.
+	 * It has to be used with METHOD_INFOS.
+	 */
+	int METHOD_BODIES 			= 0x0020;
+
+	/**
+	 * This value should be used to read the whole contents of the .class file except the
+	 * method bodies.
+	 */
+	int ALL_BUT_METHOD_BODIES   = ALL & ~METHOD_BODIES;
+	
 	/**
 	 * Answer back the access flag of the .class file.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the access flag of the .class file
 	 */
 	int getAccessFlags();
 	
@@ -62,7 +76,7 @@ public interface IClassFileReader {
 	 * Answer back the array of field infos of the .class file, 
 	 * an empty array if none.
 	 * 
-	 * @return org.eclipse.jdt.core.util.IIFieldInfo
+	 * @return the array of field infos of the .class file, an empty array if none
 	 */
 	IFieldInfo[] getFieldInfos();
 
@@ -71,7 +85,7 @@ public interface IClassFileReader {
 	 * an empty array if none. The names are returned as described in the 
 	 * JVM specifications.
 	 * 
-	 * @return char[][]
+	 * @return the names of interfaces implemented by this .class file, an empty array if none
 	 */
 	char[][] getInterfaceNames();
 
@@ -79,14 +93,15 @@ public interface IClassFileReader {
 	 * Answer back the indexes in the constant pool of interfaces implemented 
 	 * by this .class file, an empty array if none.
 	 * 
-	 * @return int[]
+	 * @return the indexes in the constant pool of interfaces implemented 
+	 * by this .class file, an empty array if none
 	 */
 	int[] getInterfaceIndexes();
 
 	/**
 	 * Answer back the inner classes attribute of this .class file, null if none.
 	 * 
-	 * @return org.eclipse.jdt.core.util.IInnerClassesAttribute
+	 * @return the inner classes attribute of this .class file, null if none
 	 */
 	IInnerClassesAttribute getInnerClassesAttribute();
 
@@ -94,7 +109,8 @@ public interface IClassFileReader {
 	 * Answer back the array of method infos of this .class file,
 	 * an empty array if none.
 	 * 
-	 * @return org.eclipse.jdt.core.util.IMethodInfo[]
+	 * @return the array of method infos of this .class file,
+	 * an empty array if none
 	 */
 	IMethodInfo[] getMethodInfos();
 
@@ -102,7 +118,7 @@ public interface IClassFileReader {
 	 * Answer back the qualified name of the .class file.
 	 * The name is returned as described in the JVM specifications.
 	 *  
-	 * @return char[]
+	 * @return the qualified name of the .class file
 	 */
 	char[] getClassName();
 
@@ -110,7 +126,7 @@ public interface IClassFileReader {
 	 * Answer back the index of the class name in the constant pool 
 	 * of the .class file.
 	 *  
-	 * @return <CODE>int</CODE>
+	 * @return the index of the class name in the constant pool 
 	 */
 	int getClassIndex();
 		
@@ -119,64 +135,65 @@ public interface IClassFileReader {
 	 * The name is returned as described in the JVM specifications. Answer null if 
 	 * getSuperclassIndex() is zero.
 	 * 
-	 * @return char[]
+	 * @return the qualified name of the superclass of this .class file, null if getSuperclassIndex() is zero
 	 */
 	char[] getSuperclassName();
 
 	/**
 	 * Answer back the index of the superclass name in the constant pool 
-	 * of the .class file. Answer 0  is this .class file represents java.lang.Object.
+	 * of the .class file. Answer 0 if this .class file represents java.lang.Object.
 	 *  
-	 * @return <CODE>int</CODE>
+	 * @return the index of the superclass name in the constant pool 
+	 * of the .class file, 0 if this .class file represents java.lang.Object.
 	 */
 	int getSuperclassIndex();
 
 	/**
 	 * Answer true if this .class file represents an class, false otherwise.
 	 * 
-	 * @return <CODE>boolean</CODE>
+	 * @return true if this .class file represents an class, false otherwise
 	 */
 	boolean isClass();
 
 	/**
 	 * Answer true if this .class file represents an interface, false otherwise.
 	 * 
-	 * @return <CODE>boolean</CODE>
+	 * @return true if this .class file represents an interface, false otherwise
 	 */
 	boolean isInterface();
 
 	/**
 	 * Answer the source file attribute, if it exists, null otherwise.
 	 * 
-	 * @return ISourceAttribute
+	 * @return the source file attribute, if it exists, null otherwise
 	 */
 	ISourceAttribute getSourceFileAttribute();
 
 	/**
 	 * Answer the constant pool of this .class file.
 	 * 
-	 * @return org.eclipse.jdt.core.util.IConstantPool
+	 * @return the constant pool of this .class file
 	 */
 	IConstantPool getConstantPool();
 	
 	/**
 	 * Answer the minor version of this .class file.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the minor version of this .class file
 	 */
 	int getMinorVersion();
 
 	/**
 	 * Answer the major version of this .class file.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the major version of this .class file
 	 */
 	int getMajorVersion();
 
 	/**
 	 * Answer back the attribute number of the .class file.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the attribute number of the .class file
 	 */
 	int getAttributeCount();
 	
@@ -185,28 +202,30 @@ public interface IClassFileReader {
 	 * includes SyntheticAttribute, ConstantValueAttributes, etc. Answers an empty
 	 * array if none.
 	 * 
-	 * @return IClassFileAttribute[]
+	 * @return the collection of all attributes of the field info. It 
+	 * includes SyntheticAttribute, ConstantValueAttributes, etc. Answers an empty
+	 * array if none
 	 */
 	IClassFileAttribute[] getAttributes();
 	
 	/**
 	 * Answer back the magic number.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the magic number
 	 */
 	int getMagic();
 	
 	/**
 	 * Answer back the number of field infos.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the number of field infos
 	 */
 	int getFieldsCount();
 
 	/**
 	 * Answer back the number of method infos.
 	 * 
-	 * @return <CODE>int</CODE>
+	 * @return the number of method infos
 	 */
 	int getMethodsCount();
 }

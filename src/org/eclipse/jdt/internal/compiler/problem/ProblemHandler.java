@@ -1,12 +1,21 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.problem;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.compiler.impl.*;
+import org.eclipse.jdt.core.compiler.IProblem;
+import org.eclipse.jdt.internal.compiler.CompilationResult;
+import org.eclipse.jdt.internal.compiler.IErrorHandlingPolicy;
+import org.eclipse.jdt.internal.compiler.IProblemFactory;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
 
 /*
  * Compiler error handler, responsible to determine whether
@@ -19,6 +28,8 @@ import org.eclipse.jdt.internal.compiler.impl.*;
 
 public class ProblemHandler implements ProblemSeverities {
 
+	public final static String[] NoArgument = new String[0];
+	
 	final public IErrorHandlingPolicy policy;
 	public final IProblemFactory problemFactory;
 	public final CompilerOptions options;
@@ -46,15 +57,19 @@ public IProblem createProblem(
 	char[] fileName, 
 	int problemId, 
 	String[] problemArguments, 
+	String[] messageArguments,
 	int severity, 
 	int problemStartPosition, 
 	int problemEndPosition, 
-	int lineNumber) {
+	int lineNumber,
+	ReferenceContext referenceContext,
+	CompilationResult unitResult) {
 
 	return problemFactory.createProblem(
 		fileName, 
 		problemId, 
 		problemArguments, 
+		messageArguments,
 		severity, 
 		problemStartPosition, 
 		problemEndPosition, 
@@ -63,6 +78,7 @@ public IProblem createProblem(
 public void handle(
 	int problemId, 
 	String[] problemArguments, 
+	String[] messageArguments,
 	int severity, 
 	int problemStartPosition, 
 	int problemEndPosition, 
@@ -75,7 +91,7 @@ public void handle(
 	// if no reference context, we need to abort from the current compilation process
 	if (referenceContext == null) {
 		if ((severity & Error) != 0) { // non reportable error is fatal
-			throw new AbortCompilation(problemId, problemArguments);
+			throw new AbortCompilation(problemId, problemArguments, messageArguments);
 		} else {
 			return; // ignore non reportable warning
 		}
@@ -86,17 +102,21 @@ public void handle(
 			unitResult.getFileName(), 
 			problemId, 
 			problemArguments, 
+			messageArguments,
 			severity, 
 			problemStartPosition, 
 			problemEndPosition, 
 			problemStartPosition >= 0
 				? searchLineNumber(unitResult.lineSeparatorPositions, problemStartPosition)
-				: 0); 
-
+				: 0,
+			referenceContext,
+			unitResult); 
+	if (problem == null) return; // problem couldn't be created, ignore
+	
 	switch (severity & Error) {
 		case Error :
+			this.record(problem, unitResult, referenceContext);
 			referenceContext.tagAsHavingErrors();
-			this.record(problem, unitResult);
 
 			// should abort ?
 			int abortLevel;
@@ -107,7 +127,7 @@ public void handle(
 			}
 			break;
 		case Warning :
-			this.record(problem, unitResult);
+			this.record(problem, unitResult, referenceContext);
 			break;
 	}
 }
@@ -118,6 +138,7 @@ public void handle(
 public void handle(
 	int problemId, 
 	String[] problemArguments, 
+	String[] messageArguments,
 	int problemStartPosition, 
 	int problemEndPosition, 
 	ReferenceContext referenceContext, 
@@ -126,14 +147,15 @@ public void handle(
 	this.handle(
 		problemId,
 		problemArguments,
+		messageArguments,
 		this.computeSeverity(problemId), // severity inferred using the ID
 		problemStartPosition,
 		problemEndPosition,
 		referenceContext,
 		unitResult);
 }
-public void record(IProblem problem, CompilationResult unitResult) {
-	unitResult.record(problem);
+public void record(IProblem problem, CompilationResult unitResult, ReferenceContext referenceContext) {
+	unitResult.record(problem, referenceContext);
 }
 /**
  * Search the line number corresponding to a specific position

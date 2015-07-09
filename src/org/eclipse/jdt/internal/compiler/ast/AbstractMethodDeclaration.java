@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
@@ -144,9 +150,34 @@ public abstract class AbstractMethodDeclaration
 		if (this.thrownExceptions != null
 			&& this.binding != null
 			&& this.binding.thrownExceptions != null) {
+			int thrownExceptionLength = this.thrownExceptions.length;
 			int length = this.binding.thrownExceptions.length;
-			for (int i = 0; i < length; i++) {
-				this.thrownExceptions[i].binding = this.binding.thrownExceptions[i];
+			if (length == thrownExceptionLength) {
+				for (int i = 0; i < length; i++) {
+					this.thrownExceptions[i].resolvedType = this.binding.thrownExceptions[i];
+				}
+			} else {
+				int bindingIndex = 0;
+				for (int i = 0; i < thrownExceptionLength && bindingIndex < length; i++) {
+					TypeReference thrownException = this.thrownExceptions[i];
+					ReferenceBinding thrownExceptionBinding = this.binding.thrownExceptions[bindingIndex];
+					char[][] bindingCompoundName = thrownExceptionBinding.compoundName;
+					if (thrownException instanceof SingleTypeReference) {
+						// single type reference
+						int lengthName = bindingCompoundName.length;
+						char[] thrownExceptionTypeName = thrownException.getTypeName()[0];
+						if (CharOperation.equals(thrownExceptionTypeName, bindingCompoundName[lengthName - 1])) {
+							thrownException.resolvedType = thrownExceptionBinding;
+							bindingIndex++;
+						}
+					} else {
+						// qualified type reference
+						if (CharOperation.equals(thrownException.getTypeName(), bindingCompoundName)) {
+							thrownException.resolvedType = thrownExceptionBinding;
+							bindingIndex++;
+						}						
+					}
+				}
 			}
 		}
 	}
@@ -239,7 +270,7 @@ public abstract class AbstractMethodDeclaration
 			}
 			// local variable attributes
 			codeStream.exitUserScope(scope);
-			codeStream.recordPositionsFrom(0, this.sourceStart);
+			codeStream.recordPositionsFrom(0, this.declarationSourceEnd);
 			classFile.completeCodeAttribute(codeAttributeOffset);
 			attributeNumber++;
 		}
@@ -249,6 +280,10 @@ public abstract class AbstractMethodDeclaration
 		if (ignoreFurtherInvestigation) {
 			throw new AbortMethod(scope.referenceCompilationUnit().compilationResult);
 		}
+	}
+
+	public boolean hasErrors() {
+		return this.ignoreFurtherInvestigation;
 	}
 
 	public boolean isAbstract() {

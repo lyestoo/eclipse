@@ -1,36 +1,48 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.flow;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.codegen.*;
-import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
-import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
-
-import java.util.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.Reference;
+import org.eclipse.jdt.internal.compiler.codegen.Label;
+import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
+import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
+import org.eclipse.jdt.internal.compiler.lookup.Scope;
+import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
+import org.eclipse.jdt.internal.compiler.lookup.VariableBinding;
 
 /**
  * Reflects the context of code analysis, keeping track of enclosing
  *	try statements, exception handlers, etc...
  */
 public class FlowContext implements TypeConstants {
+	
 	public AstNode associatedNode;
 	public FlowContext parent;
 
 	public final static FlowContext NotContinuableContext =
+
 		new FlowContext(null, null);
 		
 	public FlowContext(FlowContext parent, AstNode associatedNode) {
+
 		this.parent = parent;
 		this.associatedNode = associatedNode;
 	}
 	
 	public Label breakLabel() {
+
 		return null;
 	}
 	
@@ -60,6 +72,7 @@ public class FlowContext implements TypeConstants {
 			0,
 			raisedCount);
 		FlowContext traversedContext = this;
+
 		while (traversedContext != null) {
 			AstNode sub;
 			if (((sub = traversedContext.subRoutine()) != null) && sub.cannotReturn()) {
@@ -67,8 +80,8 @@ public class FlowContext implements TypeConstants {
 				// exceptions will actually never get sent...
 				return;
 			}
-			// filter exceptions that are locally caught from the most enclosing 
-			// try statement to the outer ones.
+			// filter exceptions that are locally caught from the innermost enclosing 
+			// try statement to the outermost ones.
 			if (traversedContext instanceof ExceptionHandlingFlowContext) {
 				ExceptionHandlingFlowContext exceptionContext =
 					(ExceptionHandlingFlowContext) traversedContext;
@@ -121,9 +134,8 @@ public class FlowContext implements TypeConstants {
 					for (int i = 0; i < raisedCount; i++) {
 						TypeBinding raisedException;
 						if ((raisedException = raisedExceptions[i]) != null) {
-							if (scope
-								.areTypesCompatible(raisedException, scope.getJavaLangRuntimeException())
-								|| scope.areTypesCompatible(raisedException, scope.getJavaLangError())) {
+							if (Scope.areTypesCompatible(raisedException, scope.getJavaLangRuntimeException())
+								|| Scope.areTypesCompatible(raisedException, scope.getJavaLangError())) {
 								remainingCount--;
 								raisedExceptions[i] = null;
 							}
@@ -152,9 +164,13 @@ public class FlowContext implements TypeConstants {
 			traversedContext = traversedContext.parent;
 		}
 		// if reaches this point, then there are some remaining unhandled exception types.	
-		for (int i = 0; i < raisedCount; i++) {
+		nextReport: for (int i = 0; i < raisedCount; i++) {
 			TypeBinding exception;
 			if ((exception = raisedExceptions[i]) != null) {
+				// only one complaint if same exception declared to be thrown more than once
+				for (int j = 0; j < i; j++) {
+					if (raisedExceptions[j] == exception) continue nextReport; // already reported 
+				}
 				scope.problemReporter().unhandledException(exception, location);
 			}
 		}
@@ -179,8 +195,8 @@ public class FlowContext implements TypeConstants {
 				// exceptions will actually never get sent...
 				return;
 			}
-			// filter exceptions that are locally caught from the most enclosing 
-			// try statement to the outer ones.
+			// filter exceptions that are locally caught from the innermost enclosing 
+			// try statement to the outermost ones.
 			if (traversedContext instanceof ExceptionHandlingFlowContext) {
 				ExceptionHandlingFlowContext exceptionContext =
 					(ExceptionHandlingFlowContext) traversedContext;
@@ -217,9 +233,8 @@ public class FlowContext implements TypeConstants {
 				}
 				// method treatment for unchecked exceptions
 				if (exceptionContext.isMethodContext) {
-					if (scope
-						.areTypesCompatible(raisedException, scope.getJavaLangRuntimeException())
-						|| scope.areTypesCompatible(raisedException, scope.getJavaLangError()))
+					if (Scope.areTypesCompatible(raisedException, scope.getJavaLangRuntimeException())
+						|| Scope.areTypesCompatible(raisedException, scope.getJavaLangError()))
 						return;
 						
 					// anonymous constructors are allowed to throw any exceptions (their thrown exceptions
@@ -242,6 +257,7 @@ public class FlowContext implements TypeConstants {
 	}
 
 	public Label continueLabel() {
+
 		return null;
 	}
 
@@ -249,6 +265,7 @@ public class FlowContext implements TypeConstants {
 	 * lookup through break labels
 	 */
 	public FlowContext getTargetContextForBreakLabel(char[] labelName) {
+
 		FlowContext current = this, lastNonReturningSubRoutine = null;
 		while (current != null) {
 			if (current.isNonReturningContext()) {
@@ -273,9 +290,11 @@ public class FlowContext implements TypeConstants {
 	 * lookup through continue labels
 	 */
 	public FlowContext getTargetContextForContinueLabel(char[] labelName) {
-		FlowContext current = this,
-			lastContinuable = null,
-			lastNonReturningSubRoutine = null;
+
+		FlowContext current = this;
+		FlowContext lastContinuable = null;
+		FlowContext lastNonReturningSubRoutine = null;
+
 		while (current != null) {
 			if (current.isNonReturningContext()) {
 				lastNonReturningSubRoutine = current;
@@ -284,12 +303,14 @@ public class FlowContext implements TypeConstants {
 					lastContinuable = current;
 				}
 			}
+			
 			char[] currentLabelName;
-			if (((currentLabelName = current.labelName()) != null)
-				&& CharOperation.equals(currentLabelName, labelName)) {
+			if ((currentLabelName = current.labelName()) != null && CharOperation.equals(currentLabelName, labelName)) {
+
+				// matching label found					
 				if ((lastContinuable != null)
-					&& (current.associatedNode.concreteStatement()
-						== lastContinuable.associatedNode)) {
+					&& (current.associatedNode.concreteStatement()	== lastContinuable.associatedNode)) {
+						
 					if (lastNonReturningSubRoutine == null) {
 						return lastContinuable;
 					} else {
@@ -310,6 +331,7 @@ public class FlowContext implements TypeConstants {
 	 * lookup a default break through breakable locations
 	 */
 	public FlowContext getTargetContextForDefaultBreak() {
+
 		FlowContext current = this, lastNonReturningSubRoutine = null;
 		while (current != null) {
 			if (current.isNonReturningContext()) {
@@ -332,6 +354,7 @@ public class FlowContext implements TypeConstants {
 	 * lookup a default continue amongst continuable locations
 	 */
 	public FlowContext getTargetContextForDefaultContinue() {
+
 		FlowContext current = this, lastNonReturningSubRoutine = null;
 		while (current != null) {
 			if (current.isNonReturningContext()) {
@@ -351,30 +374,37 @@ public class FlowContext implements TypeConstants {
 	}
 
 	public String individualToString() {
+
 		return "Flow context"; //$NON-NLS-1$
 	}
 
 	public FlowInfo initsOnBreak() {
+
 		return FlowInfo.DeadEnd;
 	}
 
 	public boolean isBreakable() {
+
 		return false;
 	}
 
 	public boolean isContinuable() {
+
 		return false;
 	}
 
 	public boolean isNonReturningContext() {
+
 		return false;
 	}
 
 	public boolean isSubRoutine() {
+
 		return false;
 	}
 
 	public char[] labelName() {
+
 		return null;
 	}
 
@@ -387,6 +417,7 @@ public class FlowContext implements TypeConstants {
 	boolean recordFinalAssignment(
 		VariableBinding variable,
 		Reference finalReference) {
+
 		return true; // keep going
 	}
 
@@ -396,6 +427,7 @@ public class FlowContext implements TypeConstants {
 	public void recordSettingFinal(
 		VariableBinding variable,
 		Reference finalReference) {
+
 		// for initialization inside looping statement that effectively loops
 		FlowContext context = this;
 		while (context != null) {
@@ -410,10 +442,12 @@ public class FlowContext implements TypeConstants {
 	}
 
 	public AstNode subRoutine() {
+
 		return null;
 	}
 
 	public String toString() {
+
 		StringBuffer buffer = new StringBuffer();
 		FlowContext current = this;
 		int parentsCount = 0;

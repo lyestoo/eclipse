@@ -55,6 +55,7 @@ public class ArrayType extends Type {
 	 */
 	ASTNode clone(AST target) {
 		ArrayType result = new ArrayType(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setComponentType((Type) getComponentType().clone(target));
 		return result;
 	}
@@ -87,7 +88,9 @@ public class ArrayType extends Type {
 	public Type getComponentType() {
 		if (componentType == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setComponentType(new SimpleType(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return componentType;
 	}
@@ -97,9 +100,12 @@ public class ArrayType extends Type {
 	 * may be another array type.
 	 * 
 	 * @param componentType the component type
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setComponentType(Type componentType) {
 		if (componentType == null) {

@@ -1,12 +1,13 @@
 /*******************************************************************************
  * Copyright (c) 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added getExtraDimensions() and setExtraDimensions(int)
  ******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
@@ -52,10 +53,49 @@ public abstract class VariableDeclaration extends ASTNode {
 	 * to the given name.
 	 * 
 	 * @param variableName the new variable name
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public abstract void setName(SimpleName variableName);
+
+	/**
+	 * Returns the number of extra array dimensions over and above the 
+	 * explicitly-specified type.
+	 * <p>
+	 * For example, <code>int x[][]</code> has a type of 
+	 * <code>int</code> and two extra array dimensions; 
+	 * <code>int[][] x</code> has a type of <code>int[][]</code>
+	 * and zero extra array dimensions. The two constructs have different
+	 * ASTs, even though there are really syntactic variants of the same
+	 * variable declaration.
+	 * </p>
+	 * 
+	 * @return the number of extra array dimensions
+	 * @since 2.1
+	 */ 
+	public abstract int getExtraDimensions();
+
+	/**
+	 * Sets the number of extra array dimensions over and above the 
+	 * explicitly-specified type.
+	 * <p>
+	 * For example, <code>int x[][]</code> has a type of 
+	 * <code>int</code> and two extra array dimensions; 
+	 * <code>int[][] x</code> has a type of <code>int[][]</code>
+	 * and zero extra array dimensions. The two constructs have different
+	 * ASTs, even though there are really syntactic variants of the same
+	 * variable declaration.
+	 * </p>
+	 * 
+	 * @param dimensions the number of array dimensions
+	 * @exception IllegalArgumentException if the number of dimensions is
+	 *    negative
+	 * @since 2.1
+	 */ 
+	public abstract void setExtraDimensions(int dimensions);
 
 	/**
 	 * Returns the initializer of this variable declaration, or 
@@ -71,9 +111,12 @@ public abstract class VariableDeclaration extends ASTNode {
 	 * 
 	 * @param initializer the initializer expression node, or <code>null</code>
 	 *    if there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public abstract void setInitializer(Expression initializer);
 

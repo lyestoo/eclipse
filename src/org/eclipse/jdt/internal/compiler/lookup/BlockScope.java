@@ -1,14 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.impl.*;
-import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.codegen.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.Argument;
+import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 
 public class BlockScope extends Scope {
 
@@ -19,8 +30,9 @@ public class BlockScope extends Scope {
 	public int offset; // for variable allocation throughout scopes
 	public int maxOffset; // for variable allocation throughout scopes
 
-	// finally scopes must be shifted behind respective try scope
-	public BlockScope shiftScope; 
+	// finally scopes must be shifted behind respective try&catch scope(s) so as to avoid
+	// collisions of secret variables (return address, save value).
+	public BlockScope[] shiftScopes; 
 
 	public final static VariableBinding[] EmulationPathToImplicitThis = {};
 
@@ -34,9 +46,14 @@ public class BlockScope extends Scope {
 
 	public BlockScope(BlockScope parent) {
 
+		this(parent, true);
+	}
+
+	public BlockScope(BlockScope parent, boolean addToParentScope) {
+
 		this(BLOCK_SCOPE, parent);
 		locals = new LocalVariableBinding[5];
-		parent.addSubscope(this);
+		if (addToParentScope) parent.addSubscope(this);
 		this.startIndex = parent.localIndex;
 	}
 
@@ -111,7 +128,7 @@ public class BlockScope extends Scope {
 		// share the outermost method scope analysisIndex
 	}
 
-	private void addSubscope(Scope childScope) {
+	public void addSubscope(Scope childScope) {
 		if (scopeIndex == subscopes.length)
 			System.arraycopy(
 				subscopes,
@@ -172,8 +189,8 @@ public class BlockScope extends Scope {
 	 * ignoring unused local variables.
 	 * 
 	 * Special treatment to have Try secret return address variables located at non
-	 * colliding positions. Return addresses are not allocated initially, but gathered
-	 * and allocated behind all other variables.
+	 * colliding positions. Return addresses are allocated inside finally block, which allocation
+	 * positions are shifted behind all of the try block and the catch blocks.
 	 */
 	public void computeLocalVariablePositions(
 		int initOffset,
@@ -201,8 +218,7 @@ public class BlockScope extends Scope {
 				// consider subscope first
 				if (subscopes[iscope] instanceof BlockScope) {
 					BlockScope subscope = (BlockScope) subscopes[iscope];
-					int subOffset =
-						subscope.shiftScope == null ? this.offset : subscope.shiftScope.maxOffset;
+					int subOffset = subscope.shiftScopes == null ? this.offset : subscope.maxShiftedOffset();
 					subscope.computeLocalVariablePositions(subOffset, codeStream);
 					if (subscope.maxOffset > this.maxOffset)
 						this.maxOffset = subscope.maxOffset;
@@ -214,52 +230,56 @@ public class BlockScope extends Scope {
 
 				// check if variable is actually used, and may force it to be preserved
 				boolean generatesLocal =
-					(local.used && (local.constant == Constant.NotAConstant)) || local.isArgument;
-				if (!local.used
+					(local.useFlag == LocalVariableBinding.USED && (local.constant == Constant.NotAConstant)) || local.isArgument;
+					
+				// do not report fake used variable
+				if (local.useFlag == LocalVariableBinding.UNUSED
 					&& (local.declaration != null) // unused (and non secret) local
 					&& ((local.declaration.bits & AstNode.IsLocalDeclarationReachableMASK) != 0)) { // declaration is reachable
+						
 					if (local.isArgument) // method argument
 						this.problemReporter().unusedArgument(local.declaration);
 					else if (!(local.declaration instanceof Argument))  // do not report unused catch arguments
 						this.problemReporter().unusedLocalVariable(local.declaration);
 				}
+				
+				// need to preserve unread variables ?
 				if (!generatesLocal) {
 					if (local.declaration != null
 						&& environment().options.preserveAllLocalVariables) {
+							
 						generatesLocal = true; // force it to be preserved in the generated code
-						local.used = true;
+						local.useFlag = LocalVariableBinding.USED;
 					}
 				}
+				
+				// allocate variable
 				if (generatesLocal) {
 
-					// Return addresses are managed separately afterwards.
-					if (local.name != TryStatement.SecretReturnName) {
+					if (local.declaration != null) {
+						codeStream.record(local); // record user-defined local variables for attribute generation
+					}
+					// assign variable position
+					local.resolvedPosition = this.offset;
 
-						if (local.declaration != null) {
-							codeStream.record(local);
-							// record user local variables for attribute generation
+					// check for too many arguments/local variables
+					if (local.isArgument) {
+						if (this.offset > 0xFF) { // no more than 255 words of arguments
+							this.problemReporter().noMoreAvailableSpaceForArgument(local, local.declaration);
 						}
-						// allocate variable position
-						local.resolvedPosition = this.offset;
+					} else {
+						if (this.offset > 0xFFFF) { // no more than 65535 words of locals
+							this.problemReporter().noMoreAvailableSpaceForLocal(
+								local, 
+								local.declaration == null ? (AstNode)this.methodScope().referenceContext : local.declaration);
+						}
+					}
 
-						// check for too many arguments/local variables
-						if (local.isArgument) {
-							if (this.offset > 0xFF) { // no more than 255 words of arguments
-								this.problemReporter().noMoreAvailableSpaceForArgument(local, local.declaration);
-							}
-						} else {
-							if (this.offset > 0xFFFF) { // no more than 65535 words of locals
-								this.problemReporter().noMoreAvailableSpaceForLocal(
-									local, local.declaration == null ? (AstNode)this.methodScope().referenceContext : local.declaration);
-							}
-						}
-
-						// increment offset
-						if ((local.type == LongBinding) || (local.type == DoubleBinding)) {
-							this.offset += 2;
-						} else {
-							this.offset++;
-						}
+					// increment offset
+					if ((local.type == LongBinding) || (local.type == DoubleBinding)) {
+						this.offset += 2;
+					} else {
+						this.offset++;
 					}
 				} else {
 					local.resolvedPosition = -1; // not generated
@@ -1347,6 +1367,17 @@ public class BlockScope extends Scope {
 		return methodBinding;
 	}
 
+	public int maxShiftedOffset() {
+		int max = -1;
+		if (this.shiftScopes != null){
+			for (int i = 0, length = this.shiftScopes.length; i < length; i++){
+				int subMaxOffset = this.shiftScopes[i].maxOffset;
+				if (subMaxOffset > max) max = subMaxOffset;
+			}
+		}
+		return max;
+	}
+	
 	/* Answer the problem reporter to use for raising new problems.
 	 *
 	 * Note that as a side-effect, this updates the current reference context

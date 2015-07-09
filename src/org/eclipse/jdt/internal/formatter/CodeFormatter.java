@@ -1,23 +1,30 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.formatter;
 
-/*
- * Licensed Materials - Property of IBM,
- * WebSphere Studio Workbench
- * (c) Copyright IBM Corp 2000
- */
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.Hashtable;
+import java.util.Locale;
+import java.util.Map;
+
 import org.eclipse.jdt.core.ICodeFormatter;
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.core.compiler.ITerminalSymbols;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.ConfigurableOption;
-import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
 import org.eclipse.jdt.internal.formatter.impl.FormatterOptions;
 import org.eclipse.jdt.internal.formatter.impl.SplitLine;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.StringReader;
-import java.util.*;
 
 /** <h2>How to format a piece of code ?</h2>
  * <ul><li>Create an instance of <code>CodeFormatter</code>
@@ -144,10 +151,11 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 		currentCommentOffset = -1;
 
 		// initialize primary and secondary scanners
-		scanner = new Scanner(true, true); // regular scanner for forming lines
+		scanner = new Scanner(true /*comment*/, true /*whitespace*/, false /*nls*/, false /*assert*/, false /*strict comment*/, null /*taskTags*/, null/*taskPriorities*/); // regular scanner for forming lines
 		scanner.recordLineSeparator = true;
+
 		// to remind of the position of the beginning of the line.
-		splitScanner = new Scanner(true, true);
+		splitScanner = new Scanner(true /*comment*/, true /*whitespace*/, false /*nls*/, false /*assert*/, false /*strict comment */, null /*taskTags*/, null/*taskPriorities*/);
 		// secondary scanner to split long lines formed by primary scanning
 
 		// initialize current line buffer
@@ -252,25 +260,35 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 		String currentString = currentLineBuffer.toString();
 		splitDelta = 0;
 		beginningOfLineIndex = formattedSource.length();
-		if (options.maxLineLength != 0) {
-			if (containsOpenCloseBraces) {
-				containsOpenCloseBraces = false;
-				outputLine(
-					currentString,
-					false,
-					indentationLevelForOpenCloseBraces,
-					0,
-					-1,
-					null,
-					0);
-				indentationLevelForOpenCloseBraces = currentLineIndentationLevel;
-			} else {
-				outputLine(currentString, false, currentLineIndentationLevel, 0, -1, null, 0);
-			}
+		if (containsOpenCloseBraces) {
+			containsOpenCloseBraces = false;
+			outputLine(
+				currentString,
+				false,
+				indentationLevelForOpenCloseBraces,
+				0,
+				-1,
+				null,
+				0);
+			indentationLevelForOpenCloseBraces = currentLineIndentationLevel;
 		} else {
-			formattedSource.append(currentString);
+			outputLine(currentString, false, currentLineIndentationLevel, 0, -1, null, 0);
 		}
-		updateMappedPositions(scanner.startPosition);	
+		int scannerSourceLength = scanner.source.length;
+		if (scannerSourceLength > 2) {
+			if (scanner.source[scannerSourceLength - 1] == '\n' && 
+				scanner.source[scannerSourceLength - 2] == '\r') {
+					formattedSource.append(options.lineSeparatorSequence);
+					increaseGlobalDelta(options.lineSeparatorSequence.length - 2);
+			} else if (scanner.source[scannerSourceLength - 1] == '\n') {
+				formattedSource.append(options.lineSeparatorSequence);
+				increaseGlobalDelta(options.lineSeparatorSequence.length - 1);
+			} else if (scanner.source[scannerSourceLength - 1] == '\r') {
+				formattedSource.append(options.lineSeparatorSequence);
+				increaseGlobalDelta(options.lineSeparatorSequence.length - 1);
+			}
+		}
+		updateMappedPositions(scanner.startPosition);
 	}
 
 	/** 
@@ -330,6 +348,22 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 				// exit the loop.
 				try {
 					token = scanner.getNextToken();
+					
+					// Patch for line comment
+					// See PR http://dev.eclipse.org/bugs/show_bug.cgi?id=23096
+					if (token == ITerminalSymbols.TokenNameCOMMENT_LINE) {
+						int length = scanner.currentPosition;
+						loop: for (int index = length - 1; index >= 0; index--) {
+							switch(scanner.source[index]) {
+								case '\r' :
+								case '\n' :
+									scanner.currentPosition--;
+									break;
+								default:
+									break loop;
+							}
+						}
+					}
 				} catch (InvalidInputException e) {
 					if (!handleInvalidToken(e)) {
 						throw e;
@@ -2460,7 +2494,7 @@ public class CodeFormatter implements ITerminalSymbols, ICodeFormatter {
 				indexToMap = positionsToMap.length; // no more mapping
 				return;
 			}
-			if (Character.isWhitespace(source[posToMap])) {
+			if (CharOperation.isWhitespace(source[posToMap])) {
 				mappedPositions[indexToMap] = startPosition + globalDelta + lineDelta;
 			} else {
 				if (posToMap == sourceLength - 1) {

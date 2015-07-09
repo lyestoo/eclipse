@@ -54,6 +54,7 @@ public class TypeLiteral extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		TypeLiteral result = new TypeLiteral(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setType((Type) getType().clone(target));
 		return result;
 	}
@@ -85,7 +86,9 @@ public class TypeLiteral extends Expression {
 	public Type getType() {
 		if (type == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setType(getAST().newPrimitiveType(PrimitiveType.INT));
+			getAST().setModificationCount(count);
 		}
 		return type;
 	}
@@ -94,8 +97,11 @@ public class TypeLiteral extends Expression {
 	 * Sets the type in this type literal expression to the given type.
 	 * 
 	 * @param type the new type
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setType(Type type) {
 		if (type == null) {

@@ -63,8 +63,8 @@ public class ASTMatcher {
 	 *    (element type: <code>ASTNode</code>)
 	 * @param list2 the second list of AST nodes
 	 *    (element type: <code>ASTNode</code>)
-	 * @return <code>true</code> if the list have the same number of elements
-	 *    and match pairwise according to <code>ASTNode.subtreeMatch</code> 
+	 * @return <code>true</code> if the lists have the same number of elements
+	 *    and match pair-wise according to <code>ASTNode.subtreeMatch</code> 
 	 * @see ASTNode#subtreeMatch(ASTMatcher matcher, Object other)
 	 */
 	public final boolean safeSubtreeListMatch(List list1, List list2) {
@@ -883,6 +883,14 @@ public class ASTMatcher {
 	 * other object is a node of the same type with structurally isomorphic
 	 * child subtrees. Subclasses may override this method as needed.
 	 * </p>
+	 * <p>
+	 * Note that extra array dimensions are compared since they are an
+	 * important part of the method declaration.
+	 * </p>
+	 * <p>
+	 * Note that the method return types are compared even for constructor
+	 * declarations.
+	 * </p>
 	 * 
 	 * @param node the node
 	 * @param other the other object, or <code>null</code>
@@ -899,9 +907,11 @@ public class ASTMatcher {
 			(node.getModifiers() == o.getModifiers())
 				&& (node.isConstructor() == o.isConstructor())
 				&& safeSubtreeMatch(node.getJavadoc(), o.getJavadoc())
+				// n.b. compare return type even for constructors
 				&& safeSubtreeMatch(node.getReturnType(), o.getReturnType())
 				&& safeSubtreeMatch(node.getName(), o.getName())
 				&& safeSubtreeListMatch(node.parameters(), o.parameters())
+	 			&& node.getExtraDimensions() == o.getExtraDimensions()
 				&& safeSubtreeListMatch(node.thrownExceptions(), o.thrownExceptions())
 				&& safeSubtreeMatch(node.getBody(), o.getBody()));
 	}
@@ -1185,6 +1195,10 @@ public class ASTMatcher {
 	 * other object is a node of the same type with structurally isomorphic
 	 * child subtrees. Subclasses may override this method as needed.
 	 * </p>
+	 * <p>
+	 * Note that extra array dimensions are compared since they are an
+	 * important part of the declaration.
+	 * </p>
 	 * 
 	 * @param node the node
 	 * @param other the other object, or <code>null</code>
@@ -1201,6 +1215,7 @@ public class ASTMatcher {
 			(node.getModifiers() == o.getModifiers())
 				&& safeSubtreeMatch(node.getType(), o.getType())
 				&& safeSubtreeMatch(node.getName(), o.getName())
+	 			&& node.getExtraDimensions() == o.getExtraDimensions()
 				&& safeSubtreeMatch(node.getInitializer(), o.getInitializer()));
 	}
 
@@ -1541,6 +1556,10 @@ public class ASTMatcher {
 	 * The default implementation provided by this class tests whether the
 	 * other object is a node of the same type with structurally isomorphic
 	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 * <p>
+	 * Note that extra array dimensions are compared since they are an
+	 * important part of the type of the variable.
 	 * </p>
 	 * 
 	 * @param node the node

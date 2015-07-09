@@ -1,27 +1,40 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.impl;
-
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
+import java.util.Map;
 
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.codeassist.ISearchableNameEnvironment;
-import org.eclipse.jdt.internal.compiler.Compiler;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.env.*;
-
+
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
-import org.eclipse.jdt.internal.compiler.util.CharOperation;
 import org.eclipse.jdt.internal.compiler.impl.*;
-
+
 public abstract class Engine implements ITypeRequestor {
 	public LookupEnvironment lookupEnvironment;
 	
 	protected CompilationUnitScope unitScope;
 	protected ISearchableNameEnvironment nameEnvironment;
 
+	public AssistOptions options;
+	public CompilerOptions compilerOptions; 
+	
+	public Engine(Map settings){
+		this.options = new AssistOptions(settings);
+		this.compilerOptions = new CompilerOptions(settings);
+	}
+	
 	/**
 	 * Add an additional binary type
 	 */
@@ -32,10 +45,10 @@ public abstract class Engine implements ITypeRequestor {
 	 * Add an additional compilation unit.
 	 */
 	public void accept(ICompilationUnit sourceUnit) {
-		CompilationResult result = new CompilationResult(sourceUnit, 1, 1);
+		CompilationResult result = new CompilationResult(sourceUnit, 1, 1, this.compilerOptions.maxProblemsPerUnit);
 		CompilationUnitDeclaration parsedUnit =
 			this.getParser().dietParse(sourceUnit, result);
-
+
 		lookupEnvironment.buildTypeBindings(parsedUnit);
 		lookupEnvironment.completeTypeBindings(parsedUnit, true);
 	}
@@ -45,12 +58,13 @@ public abstract class Engine implements ITypeRequestor {
 	 */
 	public void accept(ISourceType[] sourceTypes, PackageBinding packageBinding) {
 		CompilationResult result =
-			new CompilationResult(sourceTypes[0].getFileName(), 1, 1);
+			new CompilationResult(sourceTypes[0].getFileName(), 1, 1, this.compilerOptions.maxProblemsPerUnit);
 		CompilationUnitDeclaration unit =
 			SourceTypeConverter.buildCompilationUnit(
 				sourceTypes,
-				true,
-				true,
+				true, // need field and methods
+				true, // need member types
+				false, // no need for field initialization
 				lookupEnvironment.problemReporter,
 				result);
 		if (unit != null) {
@@ -75,32 +89,32 @@ public abstract class Engine implements ITypeRequestor {
 			return false;
 
 		ImportBinding[] imports = unitScope.imports;
-
-		for (int i = 0, length = imports.length; i < length; i++) {
-
-			if (imports[i].onDemand) {
-				if (CharOperation.equals(imports[i].compoundName, compoundPackageName)) {
-					for (int j = 0; j < imports.length; j++) {
-						if(i != j){
-							if(imports[j].onDemand) {
-								if(nameEnvironment.findType(typeName, imports[j].compoundName) != null){
-									return true;
-								}
-							} else {
-								if(CharOperation.equals(CharOperation.lastSegment(imports[j].readableName(), '.'), typeName)) {
-									return true;	
+		if (imports != null){
+			for (int i = 0, length = imports.length; i < length; i++) {
+				if (imports[i].onDemand) {
+					if (CharOperation.equals(imports[i].compoundName, compoundPackageName)) {
+						for (int j = 0; j < imports.length; j++) {
+							if(i != j){
+								if(imports[j].onDemand) {
+									if(nameEnvironment.findType(typeName, imports[j].compoundName) != null){
+										return true;
+									}
+								} else {
+									if(CharOperation.equals(CharOperation.lastSegment(imports[j].readableName(), '.'), typeName)) {
+										return true;	
+									}
 								}
 							}
 						}
+						return false; // how do you match p1.p2.A.* ?
 					}
-					return false; // how do you match p1.p2.A.* ?
-				}
-
-			} else
-
-				if (CharOperation.equals(imports[i].readableName(), readableTypeName)) {
-					return false;
-				}
+	
+				} else
+	
+					if (CharOperation.equals(imports[i].readableName(), readableTypeName)) {
+						return false;
+					}
+			}
 		}
 		return true;
 	}

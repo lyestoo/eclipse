@@ -30,8 +30,8 @@ public class PostfixExpression extends Expression {
  	 * Postfix operators (typesafe enumeration).
 	 * <pre>
 	 * PostfixOperator:
-	 *    <b><code>++</code></p>  <code>INCREMENT</code>
-	 *    <b><code>--</code></p>  <code>DECREMENT</code>
+	 *    <b><code>++</code></b>  <code>INCREMENT</code>
+	 *    <b><code>--</code></b>  <code>DECREMENT</code>
 	 * </pre>
 	 */
 	public static class Operator {
@@ -136,6 +136,7 @@ public class PostfixExpression extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		PostfixExpression result = new PostfixExpression(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setOperator(getOperator());
 		result.setOperand((Expression) getOperand().clone(target));
 		return result;
@@ -191,7 +192,9 @@ public class PostfixExpression extends Expression {
 	public Expression getOperand() {
 		if (operand  == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setOperand(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return operand;
 	}
@@ -200,9 +203,12 @@ public class PostfixExpression extends Expression {
 	 * Sets the operand of this postfix expression.
 	 * 
 	 * @param expression the operand expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setOperand(Expression expression) {
 		if (expression == null) {

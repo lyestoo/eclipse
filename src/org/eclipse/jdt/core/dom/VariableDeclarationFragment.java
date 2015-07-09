@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
  * are made available under the terms of the Common Public License v0.5 
  * which accompanies this distribution, and is available at
@@ -34,7 +34,7 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	private SimpleName variableName = null;
 
 	/**
-	 * The number of extra array dimensions that this variable;
+	 * The number of extra array dimensions that this variable has;
 	 * defaults to 0.
 	 */
 	private int extraArrayDimensions = 0;
@@ -71,6 +71,7 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	 */
 	ASTNode clone(AST target) {
 		VariableDeclarationFragment result = new VariableDeclarationFragment(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setName((SimpleName) getName().clone(target));
 		result.setExtraDimensions(getExtraDimensions());
 		result.setInitializer(
@@ -105,7 +106,9 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	public SimpleName getName() {
 		if (variableName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return variableName;
 	}
@@ -131,7 +134,7 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	 * dimensions, respectively.
 	 * </p>
 	 * 
-	 * @return the number of extra array dimensions
+	 * @since 2.0
 	 */ 
 	public int getExtraDimensions() {
 		return extraArrayDimensions;
@@ -140,10 +143,14 @@ public class VariableDeclarationFragment extends VariableDeclaration {
 	/**
 	 * Sets the number of extra array dimensions this variable has over
 	 * and above the type specified in the enclosing declaration.
+	 * <p>
+	 * For example, in the AST for <code>int[] i, j[], k[][]</code> the 
+	 * variable declaration fragments for the variables <code>i</code>,
+	 * <code>j</code>, and <code>k</code>, have 0, 1, and 2 extra array
+	 * dimensions, respectively.
+	 * </p>
 	 * 
-	 * @return the number of extra array dimensions
-	 * @see Modifier
-	 * @exception IllegalArgumentException if the number of dimensions is negative
+	 * @since 2.0
 	 */ 
 	public void setExtraDimensions(int dimensions) {
 		if (dimensions < 0) {

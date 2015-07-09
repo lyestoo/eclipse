@@ -142,7 +142,10 @@ class MethodBinding implements IMethodBinding {
 	 */
 	public String getKey() {
 		StringBuffer buffer = new StringBuffer();
-		buffer.append(getReturnType().getKey());
+		ITypeBinding returnType = getReturnType();
+		if (returnType != null) {
+			buffer.append(returnType.getKey());
+		}
 		if (!isConstructor()) {
 			buffer.append(this.getName());
 			buffer.append('/');
@@ -160,5 +163,10 @@ class MethodBinding implements IMethodBinding {
 		}
 		return buffer.toString();
 	}
-
+	
+	/* 
+	 * For debugging purpose only.	 * @see java.lang.Object#toString()	 */
+	public String toString() {
+		return this.binding.toString();
+	}
 }

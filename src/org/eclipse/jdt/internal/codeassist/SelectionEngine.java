@@ -1,14 +1,18 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.codeassist;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import java.util.*;
 
 import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.core.compiler.InvalidInputException;
-import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.codeassist.impl.*;
 import org.eclipse.jdt.internal.codeassist.select.*;
 import org.eclipse.jdt.internal.compiler.*;
@@ -17,7 +21,6 @@ import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
 
 /**
@@ -69,23 +72,25 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 		ISearchableNameEnvironment nameEnvironment,
 		ISelectionRequestor requestor,
 		Map settings) {
+
+		super(settings);
+
 		this.requestor = requestor;
 		this.nameEnvironment = nameEnvironment;
 
-		CompilerOptions options = new CompilerOptions(settings);
 		ProblemReporter problemReporter =
 			new ProblemReporter(
 				DefaultErrorHandlingPolicies.proceedWithAllProblems(),
-				options,
+				this.compilerOptions,
 				new DefaultProblemFactory(Locale.getDefault())) {
-			public void record(IProblem problem, CompilationResult unitResult) {
-				unitResult.record(problem);
+			public void record(IProblem problem, CompilationResult unitResult, ReferenceContext referenceContext) {
+				unitResult.record(problem, referenceContext);
 				SelectionEngine.this.requestor.acceptError(problem);
 			}
 		};
-		this.parser = new SelectionParser(problemReporter, options.assertMode);
+		this.parser = new SelectionParser(problemReporter, this.compilerOptions.sourceLevel >= CompilerOptions.JDK1_4);
 		this.lookupEnvironment =
-			new LookupEnvironment(this, options, problemReporter, nameEnvironment);
+			new LookupEnvironment(this, this.compilerOptions, problemReporter, nameEnvironment);
 	}
 
 	/**
@@ -250,7 +255,7 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 			int nextCharacterPosition = selectionStart;
 			char currentCharacter = ' ';
 			try {
-				while(currentPosition > 0 || currentCharacter == '\r' || currentCharacter == '\n'){
+				while(currentPosition > 0){
 					
 					if(source[currentPosition] == '\\' && source[currentPosition+1] == 'u') {
 						int pos = currentPosition + 2;
@@ -281,13 +286,12 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 					}
 					currentPosition--;
 				}
-			}
-			catch (ArrayIndexOutOfBoundsException e) {
+			} catch (ArrayIndexOutOfBoundsException e) {
 				return false;
 			}
 			
 			// compute start and end of the last token
-			scanner.resetTo(nextCharacterPosition, selectionEnd);
+			scanner.resetTo(nextCharacterPosition, selectionEnd + 1);
 			do {
 				try {
 					token = scanner.getNextToken();
@@ -395,7 +399,7 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 			return;
 		try {
 			acceptedAnswer = false;
-			CompilationResult result = new CompilationResult(sourceUnit, 1, 1);
+			CompilationResult result = new CompilationResult(sourceUnit, 1, 1, this.compilerOptions.maxProblemsPerUnit);
 			CompilationUnitDeclaration parsedUnit =
 				parser.dietParse(sourceUnit, result, actualSelectionStart, actualSelectionEnd);
 
@@ -569,8 +573,14 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 	 *  @param typeName char[]
 	 *      a type name which is to be resolved in the context of a compilation unit.
 	 *		NOTE: the type name is supposed to be correctly reduced (no whitespaces, no unicodes left)
+	 * 
+	 * @param topLevelTypes org.eclipse.jdt.internal.compiler.env.ISourceType[]
+	 *      a source form of the top level types of the compilation unit in which code assist is invoked.
+
+	 *  @param searchInEnvironment
+	 * 	if <code>true</code> and no selection could be found in context then search type in environment.
 	 */
-	public void selectType(ISourceType sourceType, char[] typeName) {
+	public void selectType(ISourceType sourceType, char[] typeName, ISourceType[] topLevelTypes, boolean searchInEnvironment) {
 		try {
 			acceptedAnswer = false;
 
@@ -582,15 +592,15 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 				parent = parent.getEnclosingType();
 			}
 			// compute parse tree for this most outer type
-			CompilationResult result = new CompilationResult(outerType.getFileName(), 1, 1);
+			CompilationResult result = new CompilationResult(outerType.getFileName(), 1, 1, this.compilerOptions.maxProblemsPerUnit);
 			CompilationUnitDeclaration parsedUnit =
-				SourceTypeConverter
-					.buildCompilationUnit(
-						new ISourceType[] { outerType },
-						false,
-			// don't need field and methods
-			true, // by default get member types
-			this.parser.problemReporter(), result);
+				SourceTypeConverter.buildCompilationUnit(
+						topLevelTypes,
+						false, // no need for field and methods
+						true, // need member types
+						false, // no need for field initialization
+						this.parser.problemReporter(), 
+						result);
 
 			if (parsedUnit != null && parsedUnit.types != null) {
 				if(DEBUG) {
@@ -662,7 +672,7 @@ public final class SelectionEngine extends Engine implements ISearchRequestor {
 			}
 			// only reaches here if no selection could be derived from the parsed tree
 			// thus use the selected source and perform a textual type search
-			if (!acceptedAnswer) {
+			if (!acceptedAnswer && searchInEnvironment) {
 				if (this.selectedIdentifier != null) {
 					nameEnvironment.findTypes(typeName, this);
 					

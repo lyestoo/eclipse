@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IProgressMonitor;
 
@@ -17,9 +23,9 @@ import org.eclipse.core.runtime.IProgressMonitor;
  * Note that java model operations that manipulate an <code>IBuffer</code> (e.g. 
  * <code>IType.createMethod(...)</code>) ensures that the same line delimiter 
  * (i.e. either <code>"\n"</code> or <code>"\r"</code> or <code>"\r\n"</code>) is 
- * used accross the whole buffer. Thus these operations may change the line delimiter(s) 
+ * used across the whole buffer. Thus these operations may change the line delimiter(s) 
  * included in the string to be append, or replaced.
- * However implementors of this interface should be aware that other clients of <code>IBuffer</code>
+ * However implementers of this interface should be aware that other clients of <code>IBuffer</code>
  * might not do such transformations beforehand.
  * <p>
  * This interface may be implemented by clients.
@@ -212,14 +218,14 @@ public void replace(int position, int length, String text);
  * <p>
  * A <code>RuntimeException</code> might be thrown if the buffer is closed.
  *
- * @param monitor the progress monitor to notify
+ * @param progress the progress monitor to notify
  * @param force a <code> boolean </code> flag indicating how to deal with resource
  *   inconsistencies.
  *
  * @exception JavaModelException if an error occurs writing the buffer
  *	to the underlying resource
  *
- * @see org.eclipse.core.resources.IFile#setContents(InputStream, boolean, boolean, IProgressMonitor)
+ * @see org.eclipse.core.resources.IFile#setContents(java.io.InputStream, boolean, boolean, org.eclipse.core.runtime.IProgressMonitor)
  */
 public void save(IProgressMonitor progress, boolean force) throws JavaModelException;
 /**

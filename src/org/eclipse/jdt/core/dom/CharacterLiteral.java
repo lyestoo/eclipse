@@ -11,7 +11,6 @@
 
 package org.eclipse.jdt.core.dom;
 
-import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
 
@@ -53,6 +52,7 @@ public class CharacterLiteral extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		CharacterLiteral result = new CharacterLiteral(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setEscapedValue(getEscapedValue());
 		return result;
 	}
@@ -69,7 +69,7 @@ public class CharacterLiteral extends Expression {
 	 * Method declared on ASTNode.
 	 */
 	void accept0(ASTVisitor visitor) {
-		boolean visitChildren = visitor.visit(this);
+		visitor.visit(this);
 		visitor.endVisit(this);
 	}
 	

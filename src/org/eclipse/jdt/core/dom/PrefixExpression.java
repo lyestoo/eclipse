@@ -30,12 +30,12 @@ public class PrefixExpression extends Expression {
  	 * Prefix operators (typesafe enumeration).
 	 * <pre>
 	 * PrefixOperator:
-	 *    <b><code>++</code></p>  <code>INCREMENT</code>
-	 *    <b><code>--</code></p>  <code>DECREMENT</code>
-	 *    <b><code>+</code></p>  <code>PLUS</code>
-	 *    <b><code>-</code></p>  <code>MINUS</code>
-	 *    <b><code>~</code></p>  <code>COMPLEMENT</code>
-	 *    <b><code>!</code></p>  <code>NOT</code>
+	 *    <b><code>++</code></b>  <code>INCREMENT</code>
+	 *    <b><code>--</code></b>  <code>DECREMENT</code>
+	 *    <b><code>+</code></b>  <code>PLUS</code>
+	 *    <b><code>-</code></b>  <code>MINUS</code>
+	 *    <b><code>~</code></b>  <code>COMPLEMENT</code>
+	 *    <b><code>!</code></b>  <code>NOT</code>
 	 * </pre>
 	 */
 	public static class Operator {
@@ -77,7 +77,7 @@ public class PrefixExpression extends Expression {
 		public static final Operator MINUS = new Operator("-");//$NON-NLS-1$
 		/** Bitwise complement "~" operator. */
 		public static final Operator COMPLEMENT = new Operator("~");//$NON-NLS-1$
-		/** Logical complement complement "!" operator. */
+		/** Logical complement "!" operator. */
 		public static final Operator NOT = new Operator("!");//$NON-NLS-1$
 		
 		/**
@@ -152,6 +152,7 @@ public class PrefixExpression extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		PrefixExpression result = new PrefixExpression(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setOperator(getOperator());
 		result.setOperand((Expression) getOperand().clone(target));
 		return result;
@@ -208,7 +209,9 @@ public class PrefixExpression extends Expression {
 	public Expression getOperand() {
 		if (operand  == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setOperand(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return operand;
 	}
@@ -217,9 +220,12 @@ public class PrefixExpression extends Expression {
 	 * Sets the operand of this prefix expression.
 	 * 
 	 * @param expression the operand expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setOperand(Expression expression) {
 		if (expression == null) {

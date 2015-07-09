@@ -124,6 +124,7 @@ public class TypeDeclaration extends BodyDeclaration {
 	 */
 	ASTNode clone(AST target) {
 		TypeDeclaration result = new TypeDeclaration(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setModifiers(getModifiers());
 		result.setJavadoc(
 			(Javadoc) ASTNode.copySubtree(target,(ASTNode) getJavadoc()));
@@ -230,7 +231,9 @@ public class TypeDeclaration extends BodyDeclaration {
 	public SimpleName getName() {
 		if (typeName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return typeName;
 	}
@@ -240,8 +243,11 @@ public class TypeDeclaration extends BodyDeclaration {
 	 * given name.
 	 * 
 	 * @param typeName the new type name
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setName(SimpleName typeName) {
 		if (typeName == null) {
@@ -281,8 +287,11 @@ public class TypeDeclaration extends BodyDeclaration {
 	 * 
 	 * @param superclassName the superclass name node, or <code>null</code> if 
 	 *    there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setSuperclass(Name superclassName) {
 		replaceChild(
@@ -308,7 +317,7 @@ public class TypeDeclaration extends BodyDeclaration {
 	 * Returns the live ordered list of body declarations of this type 
 	 * declaration. For a class declaration, these are the
 	 * initializer, field, method, constructor, and member type
-	 * declarations; for an interface declaration, these are the 
+	 * declarations; for an interface declaration, these are 
 	 * the constant, method, and member type declarations.
 	 * 
 	 * @return the live list of body declarations
@@ -321,7 +330,7 @@ public class TypeDeclaration extends BodyDeclaration {
 	/**
 	 * Returns the ordered list of field declarations of this type 
 	 * declaration. For a class declaration, these are the
-	 * field declarations; for an interface declaration, these are the 
+	 * field declarations; for an interface declaration, these are
 	 * the constant declarations.
 	 * <p>
 	 * This convenience method returns this node's body declarations

@@ -55,6 +55,7 @@ public class ThrowStatement extends Statement {
 	 */
 	ASTNode clone(AST target) {
 		ThrowStatement result = new ThrowStatement(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.setExpression((Expression) getExpression().clone(target));
 		return result;
@@ -87,7 +88,9 @@ public class ThrowStatement extends Statement {
 	public Expression getExpression() {
 		if (expression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setExpression(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return expression;
 	}
@@ -96,9 +99,12 @@ public class ThrowStatement extends Statement {
 	 * Sets the expression of this throw statement.
 	 * 
 	 * @param expression the new expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		if (expression == null) {
@@ -126,4 +132,3 @@ public class ThrowStatement extends Statement {
 			+ (expression == null ? 0 : getExpression().treeSize());
 	}
 }
-

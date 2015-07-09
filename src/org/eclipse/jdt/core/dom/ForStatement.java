@@ -24,8 +24,8 @@ import java.util.List;
  * 			[ ForUpdate ] <b>)</b>
  * 			Statement
  * ForInit:
- * 		( SingleVariableDeclaration | Expression )
- * 			{ <b>,</b> ( SingleVariableDeclaration | Expression ) }
+ * 		( VariableDeclarationExpression
+ * 			 | { Expression {<b>,</b> Expression } }
  * ForUpdate:
  * 		Expression { <b>,</b> Expression }
  * </pre>
@@ -82,6 +82,7 @@ public class ForStatement extends Statement {
 	 */
 	ASTNode clone(AST target) {
 		ForStatement result = new ForStatement(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.initializers().addAll(ASTNode.copySubtrees(target, initializers()));
 		result.setExpression(
@@ -120,9 +121,8 @@ public class ForStatement extends Statement {
 	 * statement.
 	 * <p>
 	 * The list should consist of either a list of so called statement 
-	 * expressions (JLS2, 14.8), or a list of variable declaration expressions
-	 * all with the same type. Otherwise, the for statement would have no Java
-	 * source equivalent.
+	 * expressions (JLS2, 14.8), or a single <code>VariableDeclarationExpression</code>. 
+	 * Otherwise, the for statement would have no Java source equivalent.
 	 * </p>
 	 * 
 	 * @return the live list of initializer expressions 
@@ -148,9 +148,12 @@ public class ForStatement extends Statement {
 	 * 
 	 * @param expression the condition expression node, or <code>null</code>
 	 *    if there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		// a ForStatement may occur inside an Expression - must check cycles
@@ -181,7 +184,9 @@ public class ForStatement extends Statement {
 	public Statement getBody() {
 		if (body == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setBody(new Block(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return body;
 	}
@@ -190,9 +195,12 @@ public class ForStatement extends Statement {
 	 * Sets the body of this for statement.
 	 * 
 	 * @param statement the body statement node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setBody(Statement statement) {
 		if (statement == null) {

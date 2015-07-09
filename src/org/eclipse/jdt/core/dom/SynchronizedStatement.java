@@ -60,6 +60,7 @@ public class SynchronizedStatement extends Statement {
 	 */
 	ASTNode clone(AST target) {
 		SynchronizedStatement result = new SynchronizedStatement(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.setExpression((Expression) getExpression().clone(target));
 		result.setBody((Block) getBody().clone(target));
@@ -95,7 +96,9 @@ public class SynchronizedStatement extends Statement {
 	public Expression getExpression() {
 		if (expression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setExpression(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return expression;
 	}
@@ -104,9 +107,12 @@ public class SynchronizedStatement extends Statement {
 	 * Sets the expression of this synchronized statement.
 	 * 
 	 * @param expression the expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		if (expression == null) {
@@ -126,7 +132,9 @@ public class SynchronizedStatement extends Statement {
 	public Block getBody() {
 		if (body == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setBody(new Block(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return body;
 	}
@@ -135,9 +143,12 @@ public class SynchronizedStatement extends Statement {
 	 * Sets the body of this synchronized statement.
 	 * 
 	 * @param block the body statement node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setBody(Block block) {
 		if (block == null) {

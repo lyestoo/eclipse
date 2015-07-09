@@ -1,13 +1,16 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.formatter.impl;
-
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.formatter.*;
-import java.util.*;
-
+import java.util.Map;
+
 public class FormatterOptions {	
 	/**
 	 * Option IDs
@@ -33,22 +36,22 @@ public class FormatterOptions {
 	
 	// by default, do not insert blank line before opening brace
 	public boolean newLineBeforeOpeningBraceMode = false;
-
+
 	// by default, do not insert blank line behind keywords (ELSE, CATCH, FINALLY,...) in control statements
 	public boolean newlineInControlStatementMode = false;
-
+
 	// by default, preserve one blank line per sequence of blank lines
 	public boolean clearAllBlankLinesMode = false;
 	
 	// line splitting will occur when line exceeds this length
 	public int maxLineLength = 80;
-
+
 	public boolean compactAssignmentMode = false; // if isTrue, assignments look like x= 12 (not like x = 12);
-
+
 	//number of consecutive spaces used to replace the tab char
 	public int tabSize = 4; // n spaces for one tab
 	public boolean indentWithTab = true;
-
+
 	public boolean compactElseIfMode = true; // if true, else and if are kept on the same line.
 	public boolean newLineInEmptyBlockMode = true; // if false, no new line in {} if it's empty.
 	

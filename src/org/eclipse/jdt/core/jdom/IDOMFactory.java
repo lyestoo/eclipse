@@ -1,9 +1,14 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core.jdom;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.core.*;
 
 /**
  * A factory used to create document fragment (DF) nodes. An 
@@ -21,7 +26,7 @@ import org.eclipse.jdt.internal.core.*;
  * </p>
  * <p>
  * Even if a DF is created successfully from source code, it does not guarantee
- * that the source code will compile error free. Similary, the contents of a DF
+ * that the source code will compile error free. Similarly, the contents of a DF
  * are not guaranteed to compile error free. However, syntactically correct 
  * source code is guaranteed to be recognized and successfully generate a DF.
  * Similarly, if all of the fragments of a JDOM are syntactically correct, the

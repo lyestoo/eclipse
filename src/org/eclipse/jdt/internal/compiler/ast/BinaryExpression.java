@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
@@ -1680,28 +1686,28 @@ public class BinaryExpression extends OperatorExpression {
 		switch (result & 0xF) { // record the current ReturnTypeID
 			// only switch on possible result type.....
 			case T_boolean :
-				this.typeBinding = BooleanBinding;
+				this.resolvedType = BooleanBinding;
 				break;
 			case T_byte :
-				this.typeBinding = ByteBinding;
+				this.resolvedType = ByteBinding;
 				break;
 			case T_char :
-				this.typeBinding = CharBinding;
+				this.resolvedType = CharBinding;
 				break;
 			case T_double :
-				this.typeBinding = DoubleBinding;
+				this.resolvedType = DoubleBinding;
 				break;
 			case T_float :
-				this.typeBinding = FloatBinding;
+				this.resolvedType = FloatBinding;
 				break;
 			case T_int :
-				this.typeBinding = IntBinding;
+				this.resolvedType = IntBinding;
 				break;
 			case T_long :
-				this.typeBinding = LongBinding;
+				this.resolvedType = LongBinding;
 				break;
 			case T_String :
-				this.typeBinding = scope.getJavaLangString();
+				this.resolvedType = scope.getJavaLangString();
 				break;
 			default : //error........
 				constant = Constant.NotAConstant;
@@ -1711,7 +1717,7 @@ public class BinaryExpression extends OperatorExpression {
 
 		// compute the constant when valid
 		computeConstant(scope, leftId, rightId);
-		return this.typeBinding;
+		return this.resolvedType;
 	}
 	
 	public String toStringExpressionNoParenthesis() {

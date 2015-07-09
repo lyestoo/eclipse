@@ -11,10 +11,6 @@
 
 package org.eclipse.jdt.core.dom;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
  * Instanceof expression AST node type.
  *
@@ -23,7 +19,7 @@ import java.util.Map;
  *
  * <pre>
  * InstanceofExpression:
- *    Expression instanceof Type
+ *    Expression <b>instanceof</b> Type
  * </pre>
  * 
  * @since 2.0
@@ -65,6 +61,7 @@ public class InstanceofExpression extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		InstanceofExpression result = new InstanceofExpression(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeftOperand((Expression) getLeftOperand().clone(target));
 		result.setRightOperand((Type) getRightOperand().clone(target));
 		return result;
@@ -99,7 +96,9 @@ public class InstanceofExpression extends Expression {
 	public Expression getLeftOperand() {
 		if (leftOperand  == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setLeftOperand(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return leftOperand;
 	}
@@ -108,9 +107,12 @@ public class InstanceofExpression extends Expression {
 	 * Sets the left operand of this instanceof expression.
 	 * 
 	 * @param expression the left operand node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setLeftOperand(Expression expression) {
 		if (expression == null) {
@@ -129,7 +131,9 @@ public class InstanceofExpression extends Expression {
 	public Type getRightOperand() {
 		if (rightOperand  == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setRightOperand(new SimpleType(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return rightOperand;
 	}
@@ -138,9 +142,12 @@ public class InstanceofExpression extends Expression {
 	 * Sets the right operand of this instanceof expression.
 	 * 
 	 * @param referenceType the right operand node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setRightOperand(Type referenceType) {
 		if (referenceType == null) {

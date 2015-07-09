@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 /**
  * A source element parser extracts structural and reference information
  * from a piece of source.
@@ -22,7 +28,6 @@ package org.eclipse.jdt.internal.compiler;
  *
  * Any (parsing) problem encountered is also provided.
  */
-import java.lang.reflect.Constructor;
 
 import org.eclipse.jdt.internal.compiler.env.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
@@ -31,24 +36,23 @@ import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
-import java.util.Locale;
 
 public class SourceElementParser extends Parser {
 	
 	ISourceElementRequestor requestor;
-	private int fieldCount;
-	private int localIntPtr;
-	private int lastFieldEndPosition;
-	private ISourceType sourceType;
-	private boolean reportReferenceInfo;
-	private char[][] typeNames;
-	private char[][] superTypeNames;
-	private int nestedTypeIndex;
-	private static final char[] JAVA_LANG_OBJECT = "java.lang.Object".toCharArray(); //$NON-NLS-1$
-	private NameReference[] unknownRefs;
-	private int unknownRefsCounter;
-	private LocalDeclarationVisitor localDeclarationVisitor = null;
+	int fieldCount;
+	int localIntPtr;
+	int lastFieldEndPosition;
+	ISourceType sourceType;
+	boolean reportReferenceInfo;
+	char[][] typeNames;
+	char[][] superTypeNames;
+	int nestedTypeIndex;
+	static final char[] JAVA_LANG_OBJECT = "java.lang.Object".toCharArray(); //$NON-NLS-1$
+	NameReference[] unknownRefs;
+	int unknownRefsCounter;
+	LocalDeclarationVisitor localDeclarationVisitor = null;
+	CompilerOptions options;
 	
 /**
  * An ast visitor that visits local type declarations.
@@ -81,17 +85,18 @@ public SourceElementParser(
 		DefaultErrorHandlingPolicies.exitAfterAllProblems(),
 		options, 
 		problemFactory) {
-		public void record(IProblem problem, CompilationResult unitResult) {
-			unitResult.record(problem);
+		public void record(IProblem problem, CompilationResult unitResult, ReferenceContext referenceContext) {
+			unitResult.record(problem, referenceContext);
 			requestor.acceptProblem(problem);
 		}
 	},
 	true,
-	options.assertMode);
+	options.sourceLevel >= CompilerOptions.JDK1_4);
 	this.requestor = requestor;
 	typeNames = new char[4][];
 	superTypeNames = new char[4][];
 	nestedTypeIndex = 0;
+	this.options = options;
 }
 
 /** @deprecated use SourceElementParser(ISourceElementRequestor, IProblemFactory, CompilerOptions) */
@@ -751,10 +756,12 @@ public void notifySourceElementRequestor(AbstractMethodDeclaration methodDeclara
 		selectorSourceEnd = 
 			((SourceMethodDeclaration) methodDeclaration).selectorSourceEnd; 
 	}
-	if (isInRange){
+	if (isInRange) {
+		int modifiers = methodDeclaration.modifiers;
+		boolean deprecated = (modifiers & AccDeprecated) != 0; // remember deprecation so as to not lose it below
 		requestor.enterMethod(
 			methodDeclaration.declarationSourceStart, 
-			methodDeclaration.modifiers & AccJustFlag, 
+			deprecated ? (modifiers & AccJustFlag) | AccDeprecated : modifiers & AccJustFlag, 
 			returnTypeName(((MethodDeclaration) methodDeclaration).returnType), 
 			methodDeclaration.selector, 
 			methodDeclaration.sourceStart, 
@@ -789,9 +796,11 @@ public void notifySourceElementRequestor(FieldDeclaration fieldDeclaration) {
 			}
 		}
 		if (isInRange) {
+			int modifiers = fieldDeclaration.modifiers;
+			boolean deprecated = (modifiers & AccDeprecated) != 0; // remember deprecation so as to not lose it below
 			requestor.enterField(
 				fieldDeclaration.declarationSourceStart, 
-				fieldDeclaration.modifiers & AccJustFlag, 
+				deprecated ? (modifiers & AccJustFlag) | AccDeprecated : modifiers & AccJustFlag, 
 				returnTypeName(fieldDeclaration.type), 
 				fieldDeclaration.name, 
 				fieldDeclaration.sourceStart, 
@@ -799,7 +808,20 @@ public void notifySourceElementRequestor(FieldDeclaration fieldDeclaration) {
 		}
 		this.visitIfNeeded(fieldDeclaration);
 		if (isInRange){
-			requestor.exitField(fieldEndPosition);
+			requestor.exitField(
+				// filter out initializations that are not a constant (simple check)
+				(fieldDeclaration.initialization == null 
+						|| fieldDeclaration.initialization instanceof ArrayInitializer
+						|| fieldDeclaration.initialization instanceof AllocationExpression
+						|| fieldDeclaration.initialization instanceof ArrayAllocationExpression
+						|| fieldDeclaration.initialization instanceof Assignment
+						|| fieldDeclaration.initialization instanceof ClassLiteralAccess
+						|| fieldDeclaration.initialization instanceof MessageSend
+						|| fieldDeclaration.initialization instanceof ArrayReference
+						|| fieldDeclaration.initialization instanceof ThisReference) ? 
+					-1 :  
+					fieldDeclaration.initialization.sourceStart, 
+				fieldEndPosition);
 		}
 
 	} else {
@@ -874,9 +896,11 @@ public void notifySourceElementRequestor(TypeDeclaration typeDeclaration, boolea
 		}
 		if (isInterface) {
 			if (isInRange){
+				int modifiers = typeDeclaration.modifiers;
+				boolean deprecated = (modifiers & AccDeprecated) != 0; // remember deprecation so as to not lose it below
 				requestor.enterInterface(
 					typeDeclaration.declarationSourceStart, 
-					typeDeclaration.modifiers & AccJustFlag, 
+					deprecated ? (modifiers & AccJustFlag) | AccDeprecated : modifiers & AccJustFlag, 
 					typeDeclaration.name, 
 					typeDeclaration.sourceStart, 
 					typeDeclaration.sourceEnd, 
@@ -992,7 +1016,7 @@ public void parseCompilationUnit(
 	}
 	try {
 		diet = true;
-		CompilationResult compilationUnitResult = new CompilationResult(unit, 0, 0);
+		CompilationResult compilationUnitResult = new CompilationResult(unit, 0, 0, this.options.maxProblemsPerUnit);
 		CompilationUnitDeclaration parsedUnit = parse(unit, compilationUnitResult, start, end);
 		if (needReferenceInfo){
 			diet = false;
@@ -1024,7 +1048,7 @@ public void parseCompilationUnit(
 		parse(unit, compilationUnitResult);		
 */		diet = true;
 		reportReferenceInfo = needReferenceInfo;
-		CompilationResult compilationUnitResult = new CompilationResult(unit, 0, 0);
+		CompilationResult compilationUnitResult = new CompilationResult(unit, 0, 0, this.options.maxProblemsPerUnit);
 		CompilationUnitDeclaration parsedUnit = parse(unit, compilationUnitResult);
 		int initialStart = this.scanner.initialPosition;
 		int initialEnd = this.scanner.eofPosition;
@@ -1058,12 +1082,13 @@ public void parseTypeMemberDeclarations(
 		diet = !needReferenceInfo;
 		reportReferenceInfo = needReferenceInfo;
 		CompilationResult compilationUnitResult = 
-			new CompilationResult(sourceUnit, 0, 0); 
+			new CompilationResult(sourceUnit, 0, 0, this.options.maxProblemsPerUnit); 
 		CompilationUnitDeclaration unit = 
 			SourceTypeConverter.buildCompilationUnit(
 				new ISourceType[]{sourceType}, 
-				false,
-				false, 
+				false, // no need for field and methods
+				false, // no need for member types
+				false, // no need for field initialization
 				problemReporter(), 
 				compilationUnitResult); 
 		if ((unit == null) || (unit.types == null) || (unit.types.length != 1))
@@ -1113,6 +1138,8 @@ public void parseTypeMemberDeclarations(
 		/* scanner initialization */
 		scanner.setSource(contents);
 		scanner.recordLineSeparator = false;
+		scanner.taskTags = null;
+		scanner.taskPriorities = null;
 		scanner.resetTo(start, end);
 
 		/* unit creation */

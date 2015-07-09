@@ -1,16 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
-import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
 
 public class InstanceOfExpression extends OperatorExpression {
 
@@ -115,10 +118,10 @@ public class InstanceOfExpression extends OperatorExpression {
 					}
 				}
 				if (castTb.isClass()) { // ----- (castTb.isClass) expressionTb.isClass ------ 
-					if (scope.areTypesCompatible(expressionTb, castTb))
+					if (Scope.areTypesCompatible(expressionTb, castTb))
 						return true;
 					else {
-						if (scope.areTypesCompatible(castTb, expressionTb)) {
+						if (Scope.areTypesCompatible(castTb, expressionTb)) {
 							return true;
 						}
 						return false;
@@ -128,7 +131,7 @@ public class InstanceOfExpression extends OperatorExpression {
 					// ----- (castTb.isInterface) expressionTb.isClass -------  
 					if (((ReferenceBinding) expressionTb).isFinal()) {
 						//no subclass for expressionTb, thus compile-time check is valid
-						if (scope.areTypesCompatible(expressionTb, castTb))
+						if (Scope.areTypesCompatible(expressionTb, castTb))
 							return true;
 						return false;
 					} else {
@@ -155,7 +158,7 @@ public class InstanceOfExpression extends OperatorExpression {
 						return true;
 					if (((ReferenceBinding) castTb).isFinal()) {
 						//no subclass for castTb, thus compile-time check is valid
-						if (scope.areTypesCompatible(castTb, expressionTb)) {
+						if (Scope.areTypesCompatible(castTb, expressionTb)) {
 							return true;
 						}
 						return false;
@@ -206,7 +209,7 @@ public class InstanceOfExpression extends OperatorExpression {
 
 		int pc = codeStream.position;
 		expression.generateCode(currentScope, codeStream, true);
-		codeStream.instance_of(type.binding);
+		codeStream.instance_of(type.resolvedType);
 		if (!valueRequired)
 			codeStream.pop();
 		codeStream.recordPositionsFrom(pc, this.sourceStart);
@@ -224,7 +227,7 @@ public class InstanceOfExpression extends OperatorExpression {
 			scope.problemReporter().notCompatibleTypesError(this, expressionTb, checkTb);
 			return null;
 		}
-		this.typeBinding = BooleanBinding;
+		this.resolvedType = BooleanBinding;
 		return BooleanBinding;
 	}
 

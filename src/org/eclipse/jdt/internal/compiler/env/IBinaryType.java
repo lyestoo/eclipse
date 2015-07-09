@@ -1,13 +1,20 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.env;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.*;
+
+import org.eclipse.jdt.core.compiler.CharOperation;
 
 public interface IBinaryType extends IGenericType {
 
-	char[][] NoInterface = new char[0][];
+	char[][] NoInterface = CharOperation.NO_CHAR_CHAR;
 	IBinaryNestedType[] NoNestedType = new IBinaryNestedType[0];
 	IBinaryField[] NoField = new IBinaryField[0];
 	IBinaryMethod[] NoMethod = new IBinaryMethod[0];
@@ -69,6 +76,24 @@ char[] getName();
 char[] getSuperclassName();
 
 /**
+ * Answer true if the receiver is an anonymous class.
+ * false otherwise
+ */
+boolean isAnonymous();
+
+/**
+ * Answer true if the receiver is a local class.
+ * false otherwise
+ */
+boolean isLocal();
+
+/**
+ * Answer true if the receiver is a member class.
+ * false otherwise
+ */
+boolean isMember(); 
+
+/**
  * Answer the source file attribute, or null if none.
  *
  * For example, "String.java"
@@ -76,9 +101,4 @@ char[] getSuperclassName();
 
 char[] sourceFileName();
 
-/**
- * Answer true if the receiver is an anonymous class.
- * false otherwise
- */
-boolean isAnonymous();
 }

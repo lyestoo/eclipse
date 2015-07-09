@@ -11,8 +11,8 @@
 
 package org.eclipse.jdt.core.dom;
 
-import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
-import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
+import org.eclipse.jdt.internal.compiler.ast.AstNode;
+import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 
 /**
  * A binding resolver is an internal mechanism for figuring out the binding
@@ -53,7 +53,7 @@ class BindingResolver {
 	 * @param newNode the new AST node
 	 * @param oldNode the old AST node
 	 */
-	void store(ASTNode newNode, org.eclipse.jdt.internal.compiler.ast.AstNode oldASTNode) {
+	void store(ASTNode newNode, AstNode oldASTNode) {
 	}
 
 	/**
@@ -399,6 +399,21 @@ class BindingResolver {
 	}
 
 	/**
+	 * Finds the corresponding AST node from which the given binding key originated.
+	 * 
+	 * The default implementation of this method returns <code>null</code>.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param bindingKey the binding key
+	 * @return the corresponding node where the bindings is declared, 
+	 *    or <code>null</code> if none
+	 */
+	ASTNode findDeclaringNode(String bindingKey) {
+		return null;
+	}
+	
+	/**
 	 * Returns the new type binding corresponding to the given old type binding.
 	 * <p>
 	 * The default implementation of this method returns <code>null</code>.
@@ -452,5 +467,40 @@ class BindingResolver {
 	 */
 	IVariableBinding getVariableBinding(org.eclipse.jdt.internal.compiler.lookup.VariableBinding binding) {
 		return null;
+	}
+	
+	/**
+	 * Allows the user to update information about the given old/new pair of
+	 * AST nodes.
+	 * <p>
+	 * The default implementation of this method does nothing.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * 
+	 * @param node the old AST node
+	 * @param newNode the new AST node
+	 */
+	void updateKey(ASTNode node, ASTNode newNode) {
+	}
+	
+	/**
+	 * Allows the user to get information about the given old/new pair of
+	 * AST nodes.
+	 * <p>
+	 * The default implementation of this method does nothing.
+	 * Subclasses may reimplement.
+	 * </p>
+	 *	 * @param currentNode the new node	 * @return AstNode	 */
+	AstNode getCorrespondingNode(ASTNode currentNode) {
+		return null;
+	} 
+
+	/**
+	 * This method is used to record the scope and its corresponding node.	 * <p>
+	 * The default implementation of this method does nothing.
+	 * Subclasses may reimplement.
+	 * </p>
+	 * @param astNode	 */	
+	void recordScope(ASTNode astNode, BlockScope blockScope) {
 	}
 }

@@ -67,6 +67,7 @@ public class MethodInvocation extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		MethodInvocation result = new MethodInvocation(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setName((SimpleName) getName().clone(target));
 		result.setExpression(
 			(Expression) ASTNode.copySubtree(target, getExpression()));
@@ -111,9 +112,12 @@ public class MethodInvocation extends Expression {
 	 * 
 	 * @param expression the expression node, or <code>null</code> if 
 	 *    there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		// a MethodInvocation may occur inside an Expression - must check cycles
@@ -129,7 +133,9 @@ public class MethodInvocation extends Expression {
 	public SimpleName getName() {
 		if (methodName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return methodName;
 	}
@@ -139,8 +145,11 @@ public class MethodInvocation extends Expression {
 	 * given name.
 	 * 
 	 * @param name the new method name
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setName(SimpleName name) {
 		if (name == null) {

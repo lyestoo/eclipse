@@ -1,14 +1,21 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.codegen.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
+import org.eclipse.jdt.internal.compiler.util.ObjectVector;
 
 public abstract class Scope
 	implements
@@ -418,6 +425,34 @@ public abstract class Scope
 		while (currentType != null) {
 			MethodBinding[] currentMethods = currentType.getMethods(selector);
 			int currentLength = currentMethods.length;
+			
+			/*
+			 * if 1.4 compliant, must filter out redundant protected methods from superclasses
+			 */
+			if (compilationUnitScope().environment.options.complianceLevel >= CompilerOptions.JDK1_4){			 
+				nextMethod: for (int i = 0; i < currentLength; i++){
+					MethodBinding currentMethod = currentMethods[i];
+					// protected method need to be checked only - default access is already dealt with in #canBeSeen implementation
+					// when checking that p.C -> q.B -> p.A cannot see default access members from A through B.
+					if ((currentMethod.modifiers & AccProtected) == 0) continue nextMethod;
+					if (matchingMethod != null){
+						if (currentMethod.areParametersEqual(matchingMethod)){
+							currentLength--;
+							currentMethods[i] = null; // discard this match
+							continue nextMethod;
+						}
+					} else {
+						for (int j = 0, max = found.size; j < max; j++) {
+							if (((MethodBinding)found.elementAt(j)).areParametersEqual(currentMethod)){
+								currentLength--;
+								currentMethods[i] = null;
+								continue nextMethod;
+							}
+						}
+					}
+				}
+			}
+			
 			if (currentLength == 1 && matchingMethod == null && found.size == 0) {
 				matchingMethod = currentMethods[0];
 			} else if (currentLength > 0) {
@@ -425,7 +460,16 @@ public abstract class Scope
 					found.add(matchingMethod);
 					matchingMethod = null;
 				}
-				found.addAll(currentMethods);
+				// append currentMethods, filtering out null entries
+				int maxMethod = currentMethods.length;
+				if (maxMethod == currentLength) { // no method was eliminated for 1.4 compliance (see above)
+					found.addAll(currentMethods);
+				} else {
+					for (int i = 0, max = currentMethods.length; i < max; i++) {
+						MethodBinding currentMethod = currentMethods[i];
+						if (currentMethod != null) found.add(currentMethod);
+					}
+				}
 			}
 			currentType = currentType.superclass();
 		}
@@ -1036,13 +1080,17 @@ public abstract class Scope
 		if ((mask & TYPE) != 0) {
 			// check single type imports.
 			ImportBinding[] imports = unitScope.imports;
-			// copy the list, since single type imports are removed if they cannot be resolved
-			for (int i = 0, length = imports.length; i < length; i++) {
-				ImportBinding typeImport = imports[i];
-				if (!typeImport.onDemand)
-					if (CharOperation.equals(typeImport.compoundName[typeImport.compoundName.length - 1], name))
-						if (unitScope.resolveSingleTypeImport(typeImport) != null)
-							return typeImport.resolvedImport; // already know its visible
+			if (imports != null){
+				// copy the list, since single type imports are removed if they cannot be resolved
+				for (int i = 0, length = imports.length; i < length; i++) {
+					ImportBinding typeImport = imports[i];
+					if (!typeImport.onDemand)
+						if (CharOperation.equals(typeImport.compoundName[typeImport.compoundName.length - 1], name))
+							if (unitScope.resolveSingleTypeImport(typeImport) != null) {
+								if (typeImport.reference != null) typeImport.reference.used = true;
+								return typeImport.resolvedImport; // already know its visible
+							}
+				}
 			}
 			// check if the name is in the current package (answer the problem binding unless its not found in which case continue to look)
 			ReferenceBinding type = findType(name, unitScope.fPackage, unitScope.fPackage); // is always visible
@@ -1050,19 +1098,23 @@ public abstract class Scope
 
 			// check on demand imports
 			boolean foundInImport = false;
-			for (int i = 0, length = unitScope.imports.length; i < length; i++) {
-				if (unitScope.imports[i].onDemand) {
-					Binding resolvedImport = unitScope.imports[i].resolvedImport;
-					ReferenceBinding temp =
-						(resolvedImport instanceof PackageBinding)
-							? findType(name, (PackageBinding) resolvedImport, unitScope.fPackage)
-							: findDirectMemberType(name, (ReferenceBinding) resolvedImport);
-					if (temp != null && temp.isValidBinding()) {
-						if (foundInImport)
-							// Answer error binding -- import on demand conflict; name found in two import on demand packages.
-							return new ProblemReferenceBinding(name, Ambiguous);
-						type = temp;
-						foundInImport = true;
+			if (imports != null){
+				for (int i = 0, length = imports.length; i < length; i++) {
+					ImportBinding someImport = imports[i];
+					if (someImport.onDemand) {
+						Binding resolvedImport = someImport.resolvedImport;
+						ReferenceBinding temp =
+							(resolvedImport instanceof PackageBinding)
+								? findType(name, (PackageBinding) resolvedImport, unitScope.fPackage)
+								: findDirectMemberType(name, (ReferenceBinding) resolvedImport);
+						if (temp != null && temp.isValidBinding()) {
+							if (someImport.reference != null) someImport.reference.used = true;
+							if (foundInImport)
+								// Answer error binding -- import on demand conflict; name found in two import on demand packages.
+								return new ProblemReferenceBinding(name, Ambiguous);
+							type = temp;
+							foundInImport = true;
+						}
 					}
 				}
 			}
@@ -1107,17 +1159,52 @@ public abstract class Scope
 		return false;
 	}
 
-	public final boolean isJavaIoSerializable(TypeBinding tb) {
-		//a first -none optimized version-...:-)....
-		//please modify as needed
+	public boolean isInsideDeprecatedCode(){
+		switch(kind){
+			case Scope.BLOCK_SCOPE :
+			case Scope.METHOD_SCOPE :
+				MethodScope methodScope = methodScope();
+				if (!methodScope.isInsideInitializer()){
+					// check method modifiers to see if deprecated
+					MethodBinding context = ((AbstractMethodDeclaration)methodScope.referenceContext).binding;
+					if (context != null && context.isViewedAsDeprecated()) {
+						return true;
+					}
+				} else {
+					SourceTypeBinding type = ((BlockScope)this).referenceType().binding;
 
+					// inside field declaration ? check field modifier to see if deprecated
+					if (methodScope.fieldDeclarationIndex != MethodScope.NotInFieldDecl) {
+						for (int i = 0; i < type.fields.length; i++){
+							if (type.fields[i].id == methodScope.fieldDeclarationIndex) {
+								// currently inside this field initialization
+								if (type.fields[i].isViewedAsDeprecated()){
+									return true;
+								}
+								break;
+							}
+						}
+					}
+					if (type != null && type.isViewedAsDeprecated()) {
+						return true;
+					}
+				}
+				break;
+			case Scope.CLASS_SCOPE :
+				ReferenceBinding context = ((ClassScope)this).referenceType().binding;
+				if (context != null && context.isViewedAsDeprecated()) {
+					return true;
+				}
+				break;
+		}
+		return false;
+	}
+	
+	public final boolean isJavaIoSerializable(TypeBinding tb) {
 		return tb == getJavaIoSerializable();
 	}
 
 	public final boolean isJavaLangCloneable(TypeBinding tb) {
-		//a first -none optimized version-...:-)....
-		//please modify as needed
-
 		return tb == getJavaLangCloneable();
 	}
 

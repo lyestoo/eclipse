@@ -67,6 +67,7 @@ public class ConditionalExpression extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		ConditionalExpression result = new ConditionalExpression(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setExpression((Expression) getExpression().clone(target));
 		result.setThenExpression(
 			(Expression) getThenExpression().clone(target));
@@ -105,7 +106,9 @@ public class ConditionalExpression extends Expression {
 	public Expression getExpression() {
 		if (conditionExpression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setExpression(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return conditionExpression;
 	}
@@ -114,9 +117,12 @@ public class ConditionalExpression extends Expression {
 	 * Sets the condition of this conditional expression.
 	 * 
 	 * @param expression the condition node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		if (expression == null) {
@@ -136,7 +142,9 @@ public class ConditionalExpression extends Expression {
 	public Expression getThenExpression() {
 		if (thenExpression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setThenExpression(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return thenExpression;
 	}
@@ -145,9 +153,12 @@ public class ConditionalExpression extends Expression {
 	 * Sets the "then" part of this conditional expression.
 	 * 
 	 * @param expression the "then" expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setThenExpression(Expression expression) {
 		if (expression == null) {
@@ -167,7 +178,9 @@ public class ConditionalExpression extends Expression {
 	public Expression getElseExpression() {
 		if (elseExpression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setElseExpression(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return elseExpression;
 	}
@@ -176,9 +189,12 @@ public class ConditionalExpression extends Expression {
 	 * Sets the "else" part of this conditional expression.
 	 * 
 	 * @param expression the "else" expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setElseExpression(Expression expression) {
 		if (expression == null) {

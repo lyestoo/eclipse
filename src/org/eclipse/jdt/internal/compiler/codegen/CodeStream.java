@@ -1,11 +1,14 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.codegen;
-
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import java.io.*;
-import java.util.*;
 
 import org.eclipse.jdt.internal.compiler.*;
 
@@ -14,8 +17,6 @@ import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.classfmt.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
 
 public class CodeStream implements OperatorIds, ClassFileConstants, Opcodes, BaseTypes, TypeConstants, TypeIds {
 	// It will be responsible for the following items.
@@ -62,7 +63,7 @@ public class CodeStream implements OperatorIds, ClassFileConstants, Opcodes, Bas
 	public int maxFieldCount;
 	// to handle goto_w
 	public boolean wideMode = false;
-	public static final CompilationResult RESTART_IN_WIDE_MODE = new CompilationResult((char[])null, 0, 0);
+	public static final CompilationResult RESTART_IN_WIDE_MODE = new CompilationResult((char[])null, 0, 0, 0);
 	
 public CodeStream(ClassFile classFile) {
 	generateLineNumberAttributes = (classFile.produceDebugAttributes & CompilerOptions.Lines) != 0;
@@ -1837,9 +1838,9 @@ public void generateStringAppend(BlockScope blockScope, Expression oper1, Expres
 public void generateSyntheticArgumentValues(BlockScope currentScope, ReferenceBinding targetType, Expression enclosingInstance, AstNode invocationSite) {
 
 	// perform some emulation work in case there is some and we are inside a local type only
+	boolean hasExtraEnclosingInstance = enclosingInstance != null;
 	ReferenceBinding[] syntheticArgumentTypes;
 
-	// generate the enclosing instance first
 	if ((syntheticArgumentTypes = targetType.syntheticEnclosingInstanceTypes()) != null) {
 
 		ReferenceBinding targetEnclosingType = targetType.isAnonymousType() ? 
@@ -1848,20 +1849,9 @@ public void generateSyntheticArgumentValues(BlockScope currentScope, ReferenceBi
 				
 		for (int i = 0, max = syntheticArgumentTypes.length; i < max; i++) {
 			ReferenceBinding syntheticArgType = syntheticArgumentTypes[i];
-			if (enclosingInstance != null && i == 0) {
-				if (syntheticArgType != targetEnclosingType) {
-					currentScope.problemReporter().unnecessaryEnclosingInstanceSpecification(enclosingInstance, targetType);
-				}
-				//if (currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4){
+			if (hasExtraEnclosingInstance && syntheticArgType == targetEnclosingType) {
+				hasExtraEnclosingInstance = false;
 				enclosingInstance.generateCode(currentScope, this, true);
-				if (syntheticArgType == targetEnclosingType){
-					this.dup();
-				} 
-				this.invokeObjectGetClass(); // causes null check for all explicit enclosing instances
-				this.pop();
-				//} else {
-				//	enclosingInstance.generateCode(currentScope, this, syntheticArgType == targetEnclosingType);
-				//}			
 			} else {
 				Object[] emulationPath = currentScope.getCompatibleEmulationPath(syntheticArgType);
 				if (emulationPath == null) {
@@ -1871,16 +1861,12 @@ public void generateSyntheticArgumentValues(BlockScope currentScope, ReferenceBi
 				}
 			}
 		}
-	} else { // we may still have an enclosing instance to consider
-		if (enclosingInstance != null) {
+		if (hasExtraEnclosingInstance){
 			currentScope.problemReporter().unnecessaryEnclosingInstanceSpecification(enclosingInstance, targetType);
-			//if (currentScope.environment().options.complianceLevel >= CompilerOptions.JDK1_4){
-			enclosingInstance.generateCode(currentScope, this, true);
-			this.invokeObjectGetClass(); // causes null check for all explicit enclosing instances
-			this.pop();
-			//} else {
-			//	enclosingInstance.generateCode(currentScope, this, false); // do not want the value
-			//}			
+		}
+	} else { // we may still have an enclosing instance to consider
+		if (hasExtraEnclosingInstance) {
+			currentScope.problemReporter().unnecessaryEnclosingInstanceSpecification(enclosingInstance, targetType);
 		}
 	}
 	// generate the synthetic outer arguments then
@@ -2008,7 +1994,7 @@ public void generateSyntheticBodyForMethodAccess(SyntheticAccessMethodBinding ac
 		if (methodBinding.isConstructor()
 			|| methodBinding.isPrivate()
 			// qualified super "X.super.foo()" targets methods from superclass
-			|| (methodBinding.declaringClass != methodDeclaration.binding.declaringClass)){
+			|| accessBinding.accessType == SyntheticAccessMethodBinding.SuperMethodAccess){
 			this.invokespecial(methodBinding);
 		} else {
 			if (methodBinding.declaringClass.isInterface()){
@@ -4807,12 +4793,19 @@ public void recordPositionsFrom(int startPC, int sourcePos) {
 				if (insertionIndex != -1) {
 					// widen the existing entry
 					// we have to figure out if we need to move the last entry at another location to keep a sorted table
-					if ((pcToSourceMapSize > 4) && (pcToSourceMap[pcToSourceMapSize - 4] > startPC)) {
-						System.arraycopy(pcToSourceMap, insertionIndex, pcToSourceMap, insertionIndex + 2, pcToSourceMapSize - 2 - insertionIndex);
-						pcToSourceMap[insertionIndex++] = startPC;
-						pcToSourceMap[insertionIndex] = newLine;						
-					} else {
-						pcToSourceMap[pcToSourceMapSize - 2] = startPC;
+					/* First we need to check if at the insertion position there is not an existing entry
+					 * that includes the one we want to insert. This is the case if pcToSourceMap[insertionIndex - 1] == newLine.
+					 * In this case we don't want to change the table. If not, we want to insert a new entry. Prior to insertion
+					 * we want to check if it is worth doing an arraycopy. If not we simply update the recorded pc.
+					 */
+					if (!((insertionIndex > 1) && (pcToSourceMap[insertionIndex - 1] == newLine))) {
+						if ((pcToSourceMapSize > 4) && (pcToSourceMap[pcToSourceMapSize - 4] > startPC)) {
+							System.arraycopy(pcToSourceMap, insertionIndex, pcToSourceMap, insertionIndex + 2, pcToSourceMapSize - 2 - insertionIndex);
+							pcToSourceMap[insertionIndex++] = startPC;
+							pcToSourceMap[insertionIndex] = newLine;						
+						} else {
+							pcToSourceMap[pcToSourceMapSize - 2] = startPC;
+						}
 					}
 				}
 			}

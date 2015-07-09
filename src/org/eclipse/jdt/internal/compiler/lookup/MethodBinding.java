@@ -1,11 +1,17 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
 
 public class MethodBinding extends Binding implements BaseTypes, TypeConstants {
 	public int modifiers;
@@ -329,6 +335,27 @@ public char[] readableName() /* foo(int, Thread) */ {
 	buffer.append(')');
 	return buffer.toString().toCharArray();
 }
+/**
+ * @see org.eclipse.jdt.internal.compiler.lookup.Binding#shortReadableName()
+ */
+public char[] shortReadableName() {
+	StringBuffer buffer = new StringBuffer(parameters.length + 1 * 20);
+	if (isConstructor())
+		buffer.append(declaringClass.shortReadableName());
+	else
+		buffer.append(selector);
+	buffer.append('(');
+	if (parameters != NoParameters) {
+		for (int i = 0, length = parameters.length; i < length; i++) {
+			if (i > 0)
+				buffer.append(", "); //$NON-NLS-1$
+			buffer.append(parameters[i].shortReadableName());
+		}
+	}
+	buffer.append(')');
+	return buffer.toString().toCharArray();
+}
+
 protected final void selector(char[] selector) {
 	this.selector = selector;
 	this.signature = null;

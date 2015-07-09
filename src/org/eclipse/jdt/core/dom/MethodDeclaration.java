@@ -1,12 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added getExtraDimensions() and setExtraDimensions(int)
  ******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
@@ -28,21 +29,8 @@ import java.util.List;
  *    [ Javadoc ] { Modifier } Identifier <b>(</b>
  * 		  [ FormalParameter
  * 			 { <b>,</b> FormalParameter } ] <b>)</b>
- *        [<b>throws</b> TypeName { <b>,</b> TypeName } ] MethodBody
+ *        [<b>throws</b> TypeName { <b>,</b> TypeName } ] Block
  * </pre>
- * Normal form:
- * <pre>
- * MethodDeclaration:
- *    [ Javadoc ] { Modifier } ( Type | <b>void</b> ) Identifier
- *        <b>(</b> [ FormalParamter { <b>,</b> FormalParameter } ] <b>)</b>
- *        [ <b>throws</b> TypeName { <b>,</b> TypeName } ]
- *        ( Block | <b>;</b> )
- * ConstructorDeclaration:
- *    [ Javadoc ] { Modifier } Identifier
- *        <b>(</b> [ FormalParameter { <b>,</b> FormalParameter } ] <b>)</b>
- *        [ <b>throws</b> TypeName { <b>,</b> TypeName } ]
- *        Block
- * </pre> 
  * <p>
  * When a Javadoc comment is present, the source
  * range begins with the first character of the "/**" comment delimiter.
@@ -99,6 +87,14 @@ public class MethodDeclaration extends BodyDeclaration {
 	private Type returnType = null;
 	
 	/**
+	 * The number of array dimensions that appear after the parameters, rather
+	 * than after the return type itself; defaults to 0.
+	 * 
+	 * @since 2.1
+	 */
+	private int extraArrayDimensions = 0;
+
+	/**
 	 * The list of thrown exception names (element type: <code>Name</code>).
 	 * Defaults to an empty list.
 	 */
@@ -115,8 +111,8 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * Creates a new AST node for a method declaration owned 
 	 * by the given AST. By default, the declaration is for a method of an
 	 * unspecified, but legal, name; no modifiers; no javadoc; no parameters; 
-	 * void return type; no thrown exceptions; and no body (as opposed to an
-	 * empty body).
+	 * void return type; no array dimensions after the parameters; no thrown
+	 * exceptions; and no body (as opposed to an empty body).
 	 * <p>
 	 * N.B. This constructor is package-private; all subclasses must be 
 	 * declared in the same package; clients are unable to declare 
@@ -141,12 +137,14 @@ public class MethodDeclaration extends BodyDeclaration {
 	 */
 	ASTNode clone(AST target) {
 		MethodDeclaration result = new MethodDeclaration(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setJavadoc(
 			(Javadoc) ASTNode.copySubtree(target,(ASTNode) getJavadoc()));
 		result.setModifiers(getModifiers());
 		result.setConstructor(isConstructor());
 		result.setReturnType(
 			(Type) ASTNode.copySubtree(target, getReturnType()));
+		result.setExtraDimensions(getExtraDimensions());
 		result.setName((SimpleName) getName().clone(target));
 		result.parameters().addAll(
 			ASTNode.copySubtrees(target, parameters()));
@@ -173,6 +171,7 @@ public class MethodDeclaration extends BodyDeclaration {
 		if (visitChildren) {
 			// visit children in normal left to right reading order
 			acceptChild(visitor, getJavadoc());
+			// n.b. visit return type even for constructors
 			acceptChild(visitor, getReturnType());
 			acceptChild(visitor, getName());
 			acceptChildren(visitor, parameters);
@@ -248,7 +247,9 @@ public class MethodDeclaration extends BodyDeclaration {
 	public SimpleName getName() {
 		if (methodName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return methodName;
 	}
@@ -259,8 +260,11 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * the name of the class.
 	 * 
 	 * @param methodName the new method name
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setName(SimpleName methodName) {
 		if (methodName == null) {
@@ -294,11 +298,13 @@ public class MethodDeclaration extends BodyDeclaration {
 	
 	/**
 	 * Returns the return type of the method declared in this method 
-	 * declaration. This is one of the few places where the void type 
-	 * is meaningful.
+	 * declaration, exclusive of any extra array dimensions. 
+	 * This is one of the few places where the void type is meaningful.
 	 * <p>
-	 * Note that this child is not relevant for constructors declarations
-	 * (although it does still figure in subtree equality comparisons).
+	 * Note that this child is not relevant for constructor declarations
+	 * (although it does still figure in subtree equality comparisons
+	 * and visits), and is devoid of the binding information ordinarily
+	 * available.
 	 * </p>
 	 * 
 	 * @return the return type, possibly the void primitive type
@@ -306,23 +312,28 @@ public class MethodDeclaration extends BodyDeclaration {
 	public Type getReturnType() {
 		if (returnType == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setReturnType(getAST().newPrimitiveType(PrimitiveType.VOID));
+			getAST().setModificationCount(count);
 		}
 		return returnType;
 	}
 
 	/**
 	 * Sets the return type of the method declared in this method declaration
-	 * to the given type. This is one of the few places where the void type is
-	 * meaningful.
+	 * to the given type, exclusive of any extra array dimensions. This is one
+	 * of the few places where the void type is meaningful.
 	 * <p>
-	 * Note that this child is not relevant for constructors declarations
-	 * (although it does still figure in subtree equality comparisons).
+	 * Note that this child is not relevant for constructor declarations
+	 * (although it does still figure in subtree equality comparisons and visits).
 	 * </p>
 	 * 
 	 * @param type the new return type, possibly the void primitive type
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setReturnType(Type type) {
 		if (type == null) {
@@ -330,6 +341,50 @@ public class MethodDeclaration extends BodyDeclaration {
 		}
 		replaceChild((ASTNode) this.returnType, (ASTNode) type, false);
 		this.returnType = type;
+	}
+
+	/**
+	 * Returns the number of extra array dimensions over and above the 
+	 * explicitly-specified return type.
+	 * <p>
+	 * For example, <code>int foo()[][]</code> has a return type of 
+	 * <code>int</code> and two extra array dimensions; 
+	 * <code>int[][] foo()</code> has a return type of <code>int[][]</code>
+	 * and zero extra array dimensions. The two constructs have different
+	 * ASTs, even though there are really syntactic variants of the same
+	 * method declaration.
+	 * </p>
+	 * 
+	 * @return the number of extra array dimensions
+	 * @since 2.1
+	 */ 
+	public int getExtraDimensions() {
+		return extraArrayDimensions;
+	}
+
+	/**
+	 * Sets the number of extra array dimensions over and above the 
+	 * explicitly-specified return type.
+	 * <p>
+	 * For example, <code>int foo()[][]</code> is rendered as a return
+	 * type of <code>int</code> with two extra array dimensions; 
+	 * <code>int[][] foo()</code> is rendered as a return type of 
+	 * <code>int[][]</code> with zero extra array dimensions. The two
+	 * constructs have different ASTs, even though there are really syntactic
+	 * variants of the same method declaration.
+	 * </p>
+	 * 
+	 * @param dimensions the number of array dimensions
+	 * @exception IllegalArgumentException if the number of dimensions is
+	 *    negative
+	 * @since 2.1
+	 */ 
+	public void setExtraDimensions(int dimensions) {
+		if (dimensions < 0) {
+			throw new IllegalArgumentException();
+		}
+		modifying();
+		this.extraArrayDimensions = dimensions;
 	}
 
 	/**
@@ -358,9 +413,12 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * 
 	 * @param body the block node, or <code>null</code> if 
 	 *    there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setBody(Block body) {
 		// a MethodDeclaration may occur in a Block - must check cycles
@@ -410,7 +468,7 @@ public class MethodDeclaration extends BodyDeclaration {
 	 * Method declared on ASTNode.
 	 */
 	int memSize() {
-		return super.memSize() + 7 * 4;
+		return super.memSize() + 8 * 4;
 	}
 	
 	/* (omit javadoc for this method)

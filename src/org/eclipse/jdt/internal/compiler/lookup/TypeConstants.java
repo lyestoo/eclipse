@@ -1,9 +1,14 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.*;
 
 public interface TypeConstants {
 	final char[] JAVA = new char[] {'j', 'a', 'v', 'a'};
@@ -13,7 +18,8 @@ public interface TypeConstants {
 	final char[] CharArray_JAVA_LANG_OBJECT = new char[] {'j', 'a', 'v', 'a', '.', 'l', 'a', 'n', 'g', '.', 'O', 'b', 'j', 'e', 'c', 't'};
 	final char[] LENGTH = new char[] {'l', 'e', 'n', 'g', 't', 'h'};
 	final char[] CLONE = new char[] {'c', 'l', 'o', 'n', 'e'};
-
+	final char[] OBJECT = new char[] {'O', 'b', 'j', 'e', 'c', 't' };
+	
 	// Constant compound names
 	final char[][] JAVA_LANG = new char[][] {JAVA, LANG};
 	final char[][] JAVA_IO = new char[][] {JAVA, IO};
@@ -24,7 +30,7 @@ public interface TypeConstants {
 	final char[][] JAVA_LANG_EXCEPTION = new char[][] {JAVA, LANG, {'E', 'x', 'c', 'e', 'p', 't', 'i', 'o', 'n'}};
 	final char[][] JAVA_LANG_ERROR = new char[][] {JAVA, LANG, {'E', 'r', 'r', 'o', 'r'}};
 	final char[][] JAVA_LANG_NOCLASSDEFERROR = new char[][] {JAVA, LANG, {'N', 'o', 'C', 'l', 'a', 's', 's', 'D', 'e', 'f', 'E', 'r', 'r', 'o', 'r'}};
-	final char[][] JAVA_LANG_OBJECT = new char[][] {JAVA, LANG, {'O', 'b', 'j', 'e', 'c', 't'}};
+	final char[][] JAVA_LANG_OBJECT = new char[][] {JAVA, LANG, OBJECT};
 	final char[][] JAVA_LANG_STRING = new char[][] {JAVA, LANG, {'S', 't', 'r', 'i', 'n', 'g'}};
 	final char[][] JAVA_LANG_STRINGBUFFER = new char[][] {JAVA, LANG, {'S', 't', 'r', 'i', 'n', 'g', 'B', 'u', 'f', 'f', 'e', 'r'}};
 	final char[][] JAVA_LANG_SYSTEM = new char[][] {JAVA, LANG, {'S', 'y', 's', 't', 'e', 'm'}};
@@ -48,9 +54,6 @@ public interface TypeConstants {
 	final int NotRelated = 0;
 	final int MoreGeneric = 1;
 
-	// Empty Collection which can later assign to null if performance is an issue.
-	final char[] NoChar = new char[0];
-	final char[][] NoCharChar = new char[0][];
 	// Method collections
 	final TypeBinding[] NoParameters = new TypeBinding[0];
 	final ReferenceBinding[] NoExceptions = new ReferenceBinding[0];

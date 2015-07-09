@@ -1,15 +1,20 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import java.util.*;
-
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
 
 public final class MethodVerifier implements TagBits, TypeConstants {
 	SourceTypeBinding type;
@@ -17,6 +22,7 @@ public final class MethodVerifier implements TagBits, TypeConstants {
 	HashtableOfObject currentMethods;
 	ReferenceBinding runtimeException;
 	ReferenceBinding errorException;
+	LookupEnvironment environment;
 /*
 Binding creation is responsible for reporting all problems with types:
 	- all modifier problems (duplicates & multiple visibility modifiers + incompatible combinations - abstract/final)
@@ -235,6 +241,7 @@ public MethodVerifier(LookupEnvironment environment) {
 	this.currentMethods = null;
 	this.runtimeException = null;
 	this.errorException = null;
+	this.environment = environment;
 }
 private void checkAgainstInheritedMethods(MethodBinding currentMethod, MethodBinding[] methods, int length) {
 	for (int i = length; --i >= 0;) {
@@ -250,9 +257,10 @@ private void checkAgainstInheritedMethods(MethodBinding currentMethod, MethodBin
 				this.problemReporter(currentMethod).finalMethodCannotBeOverridden(currentMethod, inheritedMethod);
 			if (!this.isAsVisible(currentMethod, inheritedMethod))
 				this.problemReporter(currentMethod).visibilityConflict(currentMethod, inheritedMethod);
-			if (inheritedMethod.isViewedAsDeprecated())
-				if (!currentMethod.isViewedAsDeprecated())
+			if (inheritedMethod.isViewedAsDeprecated()) {
+				if (!currentMethod.isViewedAsDeprecated() || environment.options.reportDeprecationInsideDeprecatedCode)
 					this.problemReporter(currentMethod).overridesDeprecatedMethod(currentMethod, inheritedMethod);
+			}
 		}
 	}
 }
@@ -619,8 +627,11 @@ private boolean mustImplementAbstractMethod(MethodBinding abstractMethod) {
 		while (superclass.isAbstract() && superclass != declaringClass)
 			superclass = superclass.superclass(); // find the first concrete superclass or the abstract declaringClass
 	} else {
-		if (this.type.implementsInterface(declaringClass, false))
-			return !this.type.isAbstract();
+		if (this.type.implementsInterface(declaringClass, false)) {
+			if (this.type.isAbstract()) return false; // leave it for the subclasses
+			if (!superclass.implementsInterface(declaringClass, true)) // only if a superclass does not also implement the interface
+				return true;
+		}
 		while (superclass.isAbstract() && !superclass.implementsInterface(declaringClass, false))
 			superclass = superclass.superclass(); // find the first concrete superclass or the superclass which implements the interface
 	}

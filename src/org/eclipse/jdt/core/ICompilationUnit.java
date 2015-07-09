@@ -1,13 +1,13 @@
-/**********************************************************************
-Copyright (c) 2000, 2001, 2002 IBM Corp. and others.
-All rights reserved.   This program and the accompanying materials
-are made available under the terms of the Common Public License v0.5
-which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/cpl-v05.html
- 
-Contributors:
-     IBM Corporation - initial API and implementation
-**********************************************************************/
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -118,7 +118,7 @@ IType createType(String contents, IJavaElement sibling, boolean force, IProgress
  * This includes all top-level types and nested member types.
  * It does NOT include local types (types defined in methods).
  *
- * @return the array of toplevel and member types defined in a compilation unit, in declaration order.
+ * @return the array of top-level and member types defined in a compilation unit, in declaration order.
  * @exception JavaModelException if this element does not exist or if an
  *		exception occurs while accessing its corresponding resource
  */
@@ -143,7 +143,7 @@ IJavaElement getElementAt(int position) throws JavaModelException;
  * is a convenience method - imports can also be accessed from a compilation unit's
  * import container.
  *
- * @param the name of the import to find as defined by JLS2 7.5. (For example: <code>"java.io.File"</code> 
+ * @param name the name of the import to find as defined by JLS2 7.5. (For example: <code>"java.io.File"</code> 
  * 	or <code>"java.awt.*"</code>)
  * @return a handle onto the corresponding import declaration. The import declaration may or may not exist.
  */
@@ -153,7 +153,6 @@ IImportDeclaration getImport(String name) ;
  * This is a handle-only method. The import container may or
  * may not exist. The import container can used to access the 
  * imports.
- *
  * @return a handle onto the corresponding import container. The 
  *		import contain may or may not exist.
  */

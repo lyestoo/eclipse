@@ -1,13 +1,13 @@
-/**********************************************************************
-Copyright (c) 2000, 2001, 2002 IBM Corp. and others.
-All rights reserved.   This program and the accompanying materials
-are made available under the terms of the Common Public License v0.5
-which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/cpl-v05.html
- 
-Contributors:
-     IBM Corporation - initial API and implementation
-**********************************************************************/
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core;
 
 import org.eclipse.core.resources.IWorkspace;
@@ -97,17 +97,23 @@ void delete(IJavaElement[] elements, boolean force, IProgressMonitor monitor) th
 /**
  * Returns the Java project with the given name. This is a handle-only method. 
  * The project may or may not exist.
+ * 
+ * @return the Java project with the given name
  */
 IJavaProject getJavaProject(String name);
 /**
  * Returns the Java projects in this Java model, or an empty array if there
  * are none.
  *
+ * @return the Java projects in this Java model, or an empty array if there
+ * are none
  * @exception JavaModelException if this request fails.
  */
 IJavaProject[] getJavaProjects() throws JavaModelException;
 /**
  * Returns the workspace associated with this Java model.
+ * 
+ * @return the workspace associated with this Java model
  */
 IWorkspace getWorkspace();
 /**
@@ -158,6 +164,35 @@ IWorkspace getWorkspace();
  * @exception IllegalArgumentException any element or container is <code>null</code>
  */
 void move(IJavaElement[] elements, IJavaElement[] containers, IJavaElement[] siblings, String[] renamings, boolean replace, IProgressMonitor monitor) throws JavaModelException;
+
+/**
+ * Triggers an update of the JavaModel with respect to the referenced external archives.
+ * This operation will issue a JavaModel delta describing the discovered changes, in term
+ * of Java element package fragment roots added, removed or changed.
+ * Note that a collection of elements can be passed so as to narrow the set of archives
+ * to refresh (passing <code>null</code> along is equivalent to refreshing the entire mode). 
+ * The elements can be:
+ * <ul>
+ * <li> package fragment roots corresponding to external archives
+ * <li> Java projects, which referenced external archives will be refreshed
+ * <li> Java model, all referenced external archives will be refreshed.
+ * </ul>
+ * <p> In case an archive is used by multiple projects, the delta issued will account for
+ * all of them. This means that even if a project was not part of the elements scope, it
+ * may still be notified of changes if it is referencing a library comprised in the scope.
+ * <p>
+ * @param elementsScope - a collection of elements defining the scope of the refresh
+ * @param monitor - a progress monitor used to report progress
+ * @exception JavaModelException in one of the corresponding situation:
+ * <ul>
+ *    <li> an exception occurs while accessing project resources </li>
+ * </ul>
+ * 
+ * @see IJavaElementDelta
+ * @since 2.0
+ */
+void refreshExternalArchives(IJavaElement[] elementsScope, IProgressMonitor monitor) throws JavaModelException;
+
 /**
  * Renames the given elements as specified.
  * If one container is specified, all elements are renamed within that
@@ -182,4 +217,5 @@ void move(IJavaElement[] elements, IJavaElement[] containers, IJavaElement[] sib
  * </ul>
  */
 void rename(IJavaElement[] elements, IJavaElement[] destinations, String[] names, boolean replace, IProgressMonitor monitor) throws JavaModelException;
+
 }

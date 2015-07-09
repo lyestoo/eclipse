@@ -1,15 +1,24 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.impl.*;
-import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.codegen.*;
-import org.eclipse.jdt.internal.compiler.flow.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.QualifiedNameReference;
+import org.eclipse.jdt.internal.compiler.ast.SingleNameReference;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
+import org.eclipse.jdt.internal.compiler.flow.UnconditionalFlowInfo;
+import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 
 /**
  * Particular block scope used for methods, constructors or clinits, representing
@@ -47,36 +56,6 @@ public class MethodScope extends BlockScope {
 		this.referenceContext = context;
 		this.isStatic = isStatic;
 		this.startIndex = 0;
-	}
-
-	/* Compute variable positions in scopes given an initial position offset
-	 * ignoring unused local variables.
-	 * 
-	 * Special treatment to have Try secret return address variables located at non
-	 * colliding positions. Return addresses are not allocated initially, but gathered
-	 * and allocated behind all other variables.
-	 */
-	public void computeLocalVariablePositions(
-		int initOffset,
-		CodeStream codeStream) {
-
-		super.computeLocalVariablePositions(initOffset, codeStream);
-		
-		// iterate over possible return addresses rooted at the method scope level, which
-		// have no resolvedPosition yet, and assign them to positions at maxOffset and beyond
-		for (int i = 0; i < this.localIndex; i++) {
-			LocalVariableBinding local = locals[i];
-			if (local.name == TryStatement.SecretReturnName 
-				&& local.resolvedPosition != -1){
-					
-				local.resolvedPosition = this.maxOffset++;
-				// check for too many arguments/local variables
-				if (this.maxOffset > 0xFFFF) { // no more than 65535 words of locals
-					this.problemReporter().noMoreAvailableSpaceForLocal(
-						local, local.declaration == null ? (AstNode)this.methodScope().referenceContext : local.declaration);
-				}				
-			}
-		}
 	}
 
 	/* Spec : 8.4.3 & 9.4

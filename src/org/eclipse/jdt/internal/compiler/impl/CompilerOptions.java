@@ -1,22 +1,24 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.impl;
 
-
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
-import org.eclipse.jdt.core.compiler.*; 
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.Compiler;
-import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.lookup.*;
+import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
+import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 
 
 public class CompilerOptions implements ProblemReasons, ProblemSeverities {
@@ -33,9 +35,11 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 	public static final String OPTION_ReportMethodWithConstructorName = "org.eclipse.jdt.core.compiler.problem.methodWithConstructorName"; //$NON-NLS-1$
 	public static final String OPTION_ReportOverridingPackageDefaultMethod = "org.eclipse.jdt.core.compiler.problem.overridingPackageDefaultMethod"; //$NON-NLS-1$
 	public static final String OPTION_ReportDeprecation = "org.eclipse.jdt.core.compiler.problem.deprecation"; //$NON-NLS-1$
+	public static final String OPTION_ReportDeprecationInDeprecatedCode = "org.eclipse.jdt.core.compiler.problem.deprecationInDeprecatedCode"; //$NON-NLS-1$
 	public static final String OPTION_ReportHiddenCatchBlock = "org.eclipse.jdt.core.compiler.problem.hiddenCatchBlock"; //$NON-NLS-1$
 	public static final String OPTION_ReportUnusedLocal = "org.eclipse.jdt.core.compiler.problem.unusedLocal"; //$NON-NLS-1$
 	public static final String OPTION_ReportUnusedParameter = "org.eclipse.jdt.core.compiler.problem.unusedParameter"; //$NON-NLS-1$
+	public static final String OPTION_ReportUnusedImport = "org.eclipse.jdt.core.compiler.problem.unusedImport"; //$NON-NLS-1$
 	public static final String OPTION_ReportSyntheticAccessEmulation = "org.eclipse.jdt.core.compiler.problem.syntheticAccessEmulation"; //$NON-NLS-1$
 	public static final String OPTION_ReportNonExternalizedStringLiteral = "org.eclipse.jdt.core.compiler.problem.nonExternalizedStringLiteral"; //$NON-NLS-1$
 	public static final String OPTION_Source = "org.eclipse.jdt.core.compiler.source"; //$NON-NLS-1$
@@ -43,6 +47,10 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 	public static final String OPTION_ReportAssertIdentifier = "org.eclipse.jdt.core.compiler.problem.assertIdentifier"; //$NON-NLS-1$
 	public static final String OPTION_Compliance = "org.eclipse.jdt.core.compiler.compliance"; //$NON-NLS-1$
 	public static final String OPTION_Encoding = "org.eclipse.jdt.core.encoding"; //$NON-NLS-1$
+	public static final String OPTION_MaxProblemPerUnit = "org.eclipse.jdt.core.compiler.maxProblemPerUnit"; //$NON-NLS-1$
+	public static final String OPTION_ReportStaticAccessReceiver = "org.eclipse.jdt.core.compiler.problem.staticAccessReceiver"; //$NON-NLS-1$
+	public static final String OPTION_TaskTags = "org.eclipse.jdt.core.compiler.taskTags"; //$NON-NLS-1$
+	public static final String OPTION_TaskPriorities = "org.eclipse.jdt.core.compiler.taskPriorities"; //$NON-NLS-1$
 
 	/* should surface ??? */
 	public static final String OPTION_PrivateConstructorAccess = "org.eclipse.jdt.core.compiler.codegen.constructorAccessEmulation"; //$NON-NLS-1$
@@ -61,6 +69,8 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 	public static final String ERROR = "error"; //$NON-NLS-1$
 	public static final String WARNING = "warning"; //$NON-NLS-1$
 	public static final String IGNORE = "ignore"; //$NON-NLS-1$
+	public static final String ENABLED = "enabled"; //$NON-NLS-1$
+	public static final String DISABLED = "disabled"; //$NON-NLS-1$
 	
 	/**
 	 * Bit mask for configurable problems (error/warning threshold)
@@ -77,14 +87,16 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 	public static final int AccessEmulation = 0x80000;
 	public static final int NonExternalizedString = 0x100000;
 	public static final int AssertUsedAsAnIdentifier = 0x200000;
-		
+	public static final int UnusedImport = 0x400000;
+	public static final int StaticAccessReceiver = 0x800000;
+	public static final int Task = 0x1000000;
+	
 	// Default severity level for handlers
 	public int errorThreshold = UnreachableCode | ImportProblem;
 	public int warningThreshold = 
-		MethodWithConstructorName | OverriddenPackageDefaultMethod |
-		UsingDeprecatedAPI | MaskedCatchBlock |
-		UnusedLocalVariable | AssertUsedAsAnIdentifier |
-		NoImplicitStringConversion;
+		MethodWithConstructorName | OverriddenPackageDefaultMethod
+		| UsingDeprecatedAPI | MaskedCatchBlock 
+		| AssertUsedAsAnIdentifier | NoImplicitStringConversion;
 
 	// Debug attributes
 	public static final int Source = 1; // SourceFileAttribute
@@ -107,8 +119,8 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 	// toggle private access emulation for 1.2 (constr. accessor has extra arg on constructor) or 1.3 (make private constructor default access when access needed)
 	public boolean isPrivateConstructorAccessChangingVisibility = false; // by default, follows 1.2
 
-	// 1.4 feature
-	public boolean assertMode = false; //1.3 behavior by default
+	// 1.4 feature (assertions are available in source 1.4 mode only)
+	public int sourceLevel = JDK1_3; //1.3 behavior by default
 	
 	// source encoding format
 	public String defaultEncoding = null; // will use the platform default encoding
@@ -128,6 +140,18 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 	// exception raised for unresolved compile errors
 	public String runtimeExceptionNameForCompileError = "java.lang.Error"; //$NON-NLS-1$
 
+	// max problems per compilation unit
+	public int maxProblemsPerUnit = 100; // no more than 100 problems per default
+	
+	// tags used to recognize tasks in comments
+	public char[][] taskTags = null;
+
+	// priorities of tasks in comments
+	public char[][] taskPriorites = null;
+
+	// deprecation report
+	public boolean reportDeprecationInsideDeprecatedCode = false;
+	
 	/** 
 	 * Initializing the compiler options with defaults
 	 */
@@ -295,6 +319,15 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 				}
 				continue;
 			} 
+			// Report deprecation inside deprecated code 
+			if(optionID.equals(OPTION_ReportDeprecationInDeprecatedCode)){
+				if (optionValue.equals(ENABLED)) {
+					this.reportDeprecationInsideDeprecatedCode = true;
+				} else if (optionValue.equals(DISABLED)) {
+					this.reportDeprecationInsideDeprecatedCode = false;
+				}
+				continue;
+			} 
 			// Report hidden catch block
 			if(optionID.equals(OPTION_ReportHiddenCatchBlock)){
 				if (optionValue.equals(ERROR)) {
@@ -334,6 +367,20 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 				} else if (optionValue.equals(IGNORE)) {
 					this.errorThreshold &= ~UnusedArgument;
 					this.warningThreshold &= ~UnusedArgument;
+				}
+				continue;
+			} 
+			// Report unused parameter
+			if(optionID.equals(OPTION_ReportUnusedImport)){
+				if (optionValue.equals(ERROR)) {
+					this.errorThreshold |= UnusedImport;
+					this.warningThreshold &= ~UnusedImport;
+				} else if (optionValue.equals(WARNING)) {
+					this.errorThreshold &= ~UnusedImport;
+					this.warningThreshold |= UnusedImport;
+				} else if (optionValue.equals(IGNORE)) {
+					this.errorThreshold &= ~UnusedImport;
+					this.warningThreshold &= ~UnusedImport;
 				}
 				continue;
 			} 
@@ -382,9 +429,9 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 			// Set the source compatibility mode (assertions)
 			if(optionID.equals(OPTION_Source)){
 				if (optionValue.equals(VERSION_1_3)) {
-					this.assertMode = false;
+					this.sourceLevel = JDK1_3;
 				} else if (optionValue.equals(VERSION_1_4)) {
-					this.assertMode = true;
+					this.sourceLevel = JDK1_4;
 				}
 				continue;
 			}
@@ -401,17 +448,53 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 				}
 				continue;
 			}
+			// Set the threshold for problems per unit
+			if(optionID.equals(OPTION_MaxProblemPerUnit)){
+				try {
+					int val = Integer.parseInt(optionValue);
+					if (val >= 0) this.maxProblemsPerUnit = val;
+				} catch(NumberFormatException e){
+				}				
+				continue;
+			}
+			// Report unnecessary receiver for static access
+			if(optionID.equals(OPTION_ReportStaticAccessReceiver)){
+				if (optionValue.equals(ERROR)) {
+					this.errorThreshold |= StaticAccessReceiver;
+					this.warningThreshold &= ~StaticAccessReceiver;
+				} else if (optionValue.equals(WARNING)) {
+					this.errorThreshold &= ~StaticAccessReceiver;
+					this.warningThreshold |= StaticAccessReceiver;
+				} else if (optionValue.equals(IGNORE)) {
+					this.errorThreshold &= ~StaticAccessReceiver;
+					this.warningThreshold &= ~StaticAccessReceiver;
+				}
+				continue;
+			} 
+			// Report task
+			if(optionID.equals(OPTION_TaskTags)){
+				if (optionValue.length() == 0) {
+					this.taskTags = null;
+				} else {
+					this.taskTags = CharOperation.splitAndTrimOn(',', optionValue.toCharArray());
+				}
+				continue;
+			} 
+			if(optionID.equals(OPTION_TaskPriorities)){
+				if (optionValue.length() == 0) {
+					this.taskPriorites = null;
+				} else {
+					this.taskPriorites = CharOperation.splitAndTrimOn(',', optionValue.toCharArray());
+				}
+				continue;
+			} 
 		}
 	}
 	
-	public int getTargetJDK() {
-		return this.targetJDK;
-	}
-
-	public int getNonExternalizedStringLiteralSeverity() {
-		if((warningThreshold & NonExternalizedString) != 0)
+	public int getSeverity(int irritant) {
+		if((warningThreshold & irritant) != 0)
 			return Warning;
-		if((errorThreshold & NonExternalizedString) != 0)
+		if((errorThreshold & irritant) != 0)
 			return Error;
 		return Ignore;
 	}
@@ -520,6 +603,15 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 				buf.append("\n-unused parameter: IGNORE"); //$NON-NLS-1$
 			}
 		}
+		if ((errorThreshold & UnusedImport) != 0){
+			buf.append("\n-unused import: ERROR"); //$NON-NLS-1$
+		} else {
+			if ((warningThreshold & UnusedImport) != 0){
+				buf.append("\n-unused import: WARNING"); //$NON-NLS-1$
+			} else {
+				buf.append("\n-unused import: IGNORE"); //$NON-NLS-1$
+			}
+		}
 		if ((errorThreshold & AccessEmulation) != 0){
 			buf.append("\n-synthetic access emulation: ERROR"); //$NON-NLS-1$
 		} else {
@@ -536,6 +628,15 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 				buf.append("\n-non externalized string: WARNING"); //$NON-NLS-1$
 			} else {
 				buf.append("\n-non externalized string: IGNORE"); //$NON-NLS-1$
+			}
+		}
+		if ((errorThreshold & StaticAccessReceiver) != 0){
+			buf.append("\n-static access receiver: ERROR"); //$NON-NLS-1$
+		} else {
+			if ((warningThreshold & StaticAccessReceiver) != 0){
+				buf.append("\n-static access receiver: WARNING"); //$NON-NLS-1$
+			} else {
+				buf.append("\n-static access receiver: IGNORE"); //$NON-NLS-1$
 			}
 		}
 		switch(targetJDK){
@@ -576,6 +677,9 @@ public class CompilerOptions implements ProblemReasons, ProblemSeverities {
 		buf.append("\n-parse literal expressions as constants : " + (parseLiteralExpressionsAsConstants ? "ON" : "OFF")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 		buf.append("\n-runtime exception name for compile error : " + runtimeExceptionNameForCompileError); //$NON-NLS-1$
 		buf.append("\n-encoding : " + (defaultEncoding == null ? "<default>" : defaultEncoding)); //$NON-NLS-1$ //$NON-NLS-2$
+		buf.append("\n-task tags: " + (this.taskTags == null ? "" : new String(CharOperation.concatWith(this.taskTags,',')))); //$NON-NLS-1$
+		buf.append("\n-task priorities : " + (this.taskPriorites == null ? "" : new String(CharOperation.concatWith(this.taskPriorites,',')))); //$NON-NLS-1$
+		buf.append("\n-report deprecation inside deprecated code : " + (reportDeprecationInsideDeprecatedCode ? "ENABLED" : "DISABLED")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 		return buf.toString();
 	}
 }

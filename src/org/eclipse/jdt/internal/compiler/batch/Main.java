@@ -1,12 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.batch;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -19,6 +26,7 @@ import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.StringTokenizer;
 
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.ClassFile;
@@ -33,51 +41,50 @@ import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.problem.DefaultProblem;
 import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
-import org.eclipse.jdt.internal.compiler.util.CharOperation;
 import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
 
 public class Main implements ProblemSeverities {
 
-	private boolean noWarn = false;
+	public boolean noWarn = false;
 
-	PrintWriter out;
-	boolean systemExitWhenFinished = true;
-	boolean proceedOnError = false;
+	public PrintWriter out;
+	public boolean systemExitWhenFinished = true;
+	public boolean proceedOnError = false;
 
-	boolean verbose = false;
-	boolean produceRefInfo = false;
-	boolean timer = false;
-	boolean showProgress = false;
+	public boolean verbose = false;
+	public boolean produceRefInfo = false;
+	public boolean timer = false;
+	public boolean showProgress = false;
 	public long time = 0;
-	long lineCount;
-	private boolean generatePackagesStructure;
+	public long lineCount;
+	public boolean generatePackagesStructure;
 
-	Hashtable options;
-	String[] filenames;
-	String[] encodings;
-	String[] classpaths;
-	String destinationPath;
-	String log;
-	int repetitions;
-	int globalProblemsCount;
-	int globalErrorsCount;
-	int globalWarningsCount;
-	int exportedClassFilesCounter;
+	public Hashtable options;
+	public String[] filenames;
+	public String[] encodings;
+	public String[] classpaths;
+	public String destinationPath;
+	public String log;
+	public int repetitions;
+	public int globalProblemsCount;
+	public int globalErrorsCount;
+	public int globalWarningsCount;
+	public int exportedClassFilesCounter;
 
-	private static final char[] CLASS_FILE_EXTENSION = ".class".toCharArray(); //$NON-NLS-1$
-	private final static char[] DOUBLE_QUOTES = "''".toCharArray(); //$NON-NLS-1$
-	private final static char[] SINGLE_QUOTE = "'".toCharArray(); //$NON-NLS-1$
+	public static final char[] CLASS_FILE_EXTENSION = ".class".toCharArray(); //$NON-NLS-1$
+	public final static char[] DOUBLE_QUOTES = "''".toCharArray(); //$NON-NLS-1$
+	public final static char[] SINGLE_QUOTE = "'".toCharArray(); //$NON-NLS-1$
 
 	/* Bundle containing messages */
-	protected static ResourceBundle bundle;
-	private final static String bundleName =
+	public static ResourceBundle bundle;
+	public final static String bundleName =
 		"org.eclipse.jdt.internal.compiler.batch.messages"; 	//$NON-NLS-1$
 
 	static {
 		relocalize();
 	}
 
-	private boolean proceed = true;
+	public boolean proceed = true;
 
 	public Main(PrintWriter writer, boolean systemExitWhenFinished) {
 
@@ -278,7 +285,7 @@ public class Main implements ProblemSeverities {
 		int count = 0;
 		String[] arguments = new String[10];
 		StringTokenizer tokenizer = new StringTokenizer(commandLine, " \"", true); //$NON-NLS-1$
-		String token = "", lastToken; //$NON-NLS-1$
+		String token = ""; //$NON-NLS-1$
 		boolean insideQuotes = false;
 		boolean startNewToken = true;
 
@@ -288,7 +295,6 @@ public class Main implements ProblemSeverities {
 		// 'xxx "aaa bbb";"ccc" yyy' --->  {"xxx", "aaa bbb;ccc", "yyy" }
 		// 'xxx/"aaa bbb";"ccc" yyy' --->  {"xxx/aaa bbb;ccc", "yyy" }
 		while (tokenizer.hasMoreTokens()) {
-			lastToken = token;
 			token = tokenizer.nextToken();
 
 			if (token.equals(" ")) { //$NON-NLS-1$
@@ -328,7 +334,7 @@ public class Main implements ProblemSeverities {
 	/*
 	Decode the command line arguments 
 	 */
-	private void configure(String[] argv) throws InvalidInputException {
+	public void configure(String[] argv) throws InvalidInputException {
 		
 		if ((argv == null) || (argv.length == 0))
 			throw new InvalidInputException(Main.bind("configure.noSourceFile")); //$NON-NLS-1$
@@ -339,11 +345,14 @@ public class Main implements ProblemSeverities {
 		final int InsideRepetition = 16;
 		final int InsideSource = 32;
 		final int InsideDefaultEncoding = 64;
+		final int InsideBootClasspath = 128;
 		final int Default = 0;
+		String[] bootclasspaths = null;
 		int DEFAULT_SIZE_CLASSPATH = 4;
 		boolean warnOptionInUse = false;
 		boolean noWarnOptionInUse = false;
 		int pathCount = 0;
+		int bootclasspathCount = 0;
 		int index = -1, filesCount = 0, argCount = argv.length;
 		int mode = Default;
 		repetitions = 0;
@@ -469,6 +478,14 @@ public class Main implements ProblemSeverities {
 						Main.bind("configure.duplicateClasspath", currentArg)); //$NON-NLS-1$
 				classpaths = new String[DEFAULT_SIZE_CLASSPATH];
 				mode = InsideClasspath;
+				continue;
+			}
+			if (currentArg.equals("-bootclasspath")) {//$NON-NLS-1$
+				if (bootclasspathCount > 0)
+					throw new InvalidInputException(
+						Main.bind("configure.duplicateBootClasspath", currentArg)); //$NON-NLS-1$
+				bootclasspaths = new String[DEFAULT_SIZE_CLASSPATH];
+				mode = InsideBootClasspath;
 				continue;
 			}
 			if (currentArg.equals("-progress")) { //$NON-NLS-1$
@@ -614,11 +631,15 @@ public class Main implements ProblemSeverities {
 				options.put(
 					CompilerOptions.OPTION_ReportMethodWithConstructorName,
 					CompilerOptions.IGNORE);
-				options.put(CompilerOptions.OPTION_ReportDeprecation, CompilerOptions.IGNORE);
+				options.put(
+					CompilerOptions.OPTION_ReportDeprecation, 
+					CompilerOptions.IGNORE);
 				options.put(
 					CompilerOptions.OPTION_ReportHiddenCatchBlock,
 					CompilerOptions.IGNORE);
-				options.put(CompilerOptions.OPTION_ReportUnusedLocal, CompilerOptions.IGNORE);
+				options.put(
+					CompilerOptions.OPTION_ReportUnusedLocal, 
+					CompilerOptions.IGNORE);
 				options.put(
 					CompilerOptions.OPTION_ReportUnusedParameter,
 					CompilerOptions.IGNORE);
@@ -631,6 +652,15 @@ public class Main implements ProblemSeverities {
 				options.put(
 					CompilerOptions.OPTION_ReportAssertIdentifier,
 					CompilerOptions.IGNORE);
+				options.put(
+					CompilerOptions.OPTION_ReportUnusedImport,
+					CompilerOptions.IGNORE);
+				options.put(
+					CompilerOptions.OPTION_ReportStaticAccessReceiver,
+					CompilerOptions.IGNORE);
+				options.put(
+					CompilerOptions.OPTION_TaskTags,
+					""); //$NON-NLS-1$
 
 				while (tokenizer.hasMoreTokens()) {
 					String token = tokenizer.nextToken();
@@ -648,12 +678,30 @@ public class Main implements ProblemSeverities {
 							CompilerOptions.OPTION_ReportHiddenCatchBlock,
 							CompilerOptions.WARNING);
 					} else if (token.equals("deprecation")) { //$NON-NLS-1$
-						options.put(CompilerOptions.OPTION_ReportDeprecation, CompilerOptions.WARNING);
+						options.put(
+							CompilerOptions.OPTION_ReportDeprecation, 
+							CompilerOptions.WARNING);
+						options.put(
+							CompilerOptions.OPTION_ReportDeprecationInDeprecatedCode, 
+							CompilerOptions.DISABLED);
+					} else if (token.equals("allDeprecation")) { //$NON-NLS-1$
+						options.put(
+							CompilerOptions.OPTION_ReportDeprecation, 
+							CompilerOptions.WARNING);
+						options.put(
+							CompilerOptions.OPTION_ReportDeprecationInDeprecatedCode, 
+							CompilerOptions.ENABLED);
 					} else if (token.equals("unusedLocals")) { //$NON-NLS-1$
-						options.put(CompilerOptions.OPTION_ReportUnusedLocal, CompilerOptions.WARNING);
+						options.put(
+							CompilerOptions.OPTION_ReportUnusedLocal, 
+							CompilerOptions.WARNING);
 					} else if (token.equals("unusedArguments")) { //$NON-NLS-1$
 						options.put(
 							CompilerOptions.OPTION_ReportUnusedParameter,
+							CompilerOptions.WARNING);
+					} else if (token.equals("unusedImports")) { //$NON-NLS-1$
+						options.put(
+							CompilerOptions.OPTION_ReportUnusedImport,
 							CompilerOptions.WARNING);
 					} else if (token.equals("syntheticAccess")) { //$NON-NLS-1$
 						options.put(
@@ -663,6 +711,24 @@ public class Main implements ProblemSeverities {
 						options.put(
 							CompilerOptions.OPTION_ReportNonExternalizedStringLiteral,
 							CompilerOptions.WARNING);
+					} else if (token.equals("staticReceiver")) { //$NON-NLS-1$
+						options.put(
+							CompilerOptions.OPTION_ReportStaticAccessReceiver,
+							CompilerOptions.WARNING);
+					} else if (token.startsWith("tasks")) { //$NON-NLS-1$
+						String taskTags = ""; //$NON-NLS-1$
+						int start = token.indexOf('(');
+						int end = token.indexOf(')');
+						if (start >= 0 && end >= 0 && start < end){
+							taskTags = token.substring(start+1, end).trim();
+							taskTags = taskTags.replace('|',',');
+						}
+						if (taskTags.length() == 0){
+							throw new InvalidInputException(Main.bind("configure.invalidTaskTag", token)); //$NON-NLS-1$
+						}
+						options.put(
+							CompilerOptions.OPTION_TaskTags,
+							taskTags);
 					} else if (token.equals("assertIdentifier")) { //$NON-NLS-1$
 						options.put(
 							CompilerOptions.OPTION_ReportAssertIdentifier,
@@ -768,6 +834,23 @@ public class Main implements ProblemSeverities {
 				mode = Default;
 				continue;
 			}
+			if (mode == InsideBootClasspath) {
+				StringTokenizer tokenizer = new StringTokenizer(currentArg, File.pathSeparator);
+				while (tokenizer.hasMoreTokens()) {
+					int length;
+					if ((length = bootclasspaths.length) <= bootclasspathCount) {
+						System.arraycopy(
+							bootclasspaths,
+							0,
+							(bootclasspaths = new String[length * 2]),
+							0,
+							length);
+					}
+					bootclasspaths[bootclasspathCount++] = tokenizer.nextToken();
+				}
+				mode = Default;
+				continue;
+			}			
 			//default is input directory
 			currentArg = currentArg.replace('/', File.separatorChar);
 			if (currentArg.endsWith(File.separator))
@@ -856,7 +939,8 @@ public class Main implements ProblemSeverities {
 				0,
 				filesCount);
 		if (pathCount == 0) {
-			String classProp = System.getProperty("DEFAULT_CLASSPATH"); //$NON-NLS-1$
+			// no user classpath specified.
+			String classProp = System.getProperty("java.class.path"); //$NON-NLS-1$
 			if ((classProp == null) || (classProp.length() == 0)) {
 				out.println(Main.bind("configure.noClasspath")); //$NON-NLS-1$
 				classProp = "."; //$NON-NLS-1$
@@ -867,19 +951,107 @@ public class Main implements ProblemSeverities {
 				classpaths[pathCount++] = tokenizer.nextToken();
 			}
 		}
+		
+		if (bootclasspathCount == 0) {
+			/* no bootclasspath specified
+			 * we can try to retrieve the default librairies of the VM used to run
+			 * the batch compiler
+			 */
+			 String javaversion = System.getProperty("java.version");//$NON-NLS-1$
+			 if (javaversion != null && javaversion.equalsIgnoreCase("1.1.8")) { //$NON-NLS-1$
+				out.println(Main.bind("configure.requiresJDK1.2orAbove")); //$NON-NLS-1$
+				proceed = false;
+				return;
+			 } else {
+				 String javaVMName = System.getProperty("java.vm.name");//$NON-NLS-1$
+				 if (javaVMName != null && javaVMName.equalsIgnoreCase("J9")) {//$NON-NLS-1$
+				 	/*
+				 	 * Handle J9 VM settings: Retrieve jclMax by default
+				 	 */
+				 	 String javaHome = System.getProperty("java.home");//$NON-NLS-1$
+				 	 if (javaHome != null) {
+				 	 	File javaHomeFile = new File(javaHome);
+				 	 	if (javaHomeFile.exists()) {
+							try {
+								javaHomeFile = new File(javaHomeFile.getCanonicalPath());
+								File defaultLibrary = new File(javaHomeFile, "lib" + File.separator + "jclMax" +  File.separator + "classes.zip"); //$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$
+								File locales = new File(javaHomeFile, "lib" + File.separator + "jclMax" +  File.separator + "locale.zip"); //$NON-NLS-1$//$NON-NLS-2$//$NON-NLS-3$
+								File charconv = new File(javaHomeFile, "lib" +  File.separator + "charconv.zip"); //$NON-NLS-1$//$NON-NLS-2$
+								/* we don't need to check if defaultLibrary exists. This is done later when the user
+								 * classpath and the bootclasspath are merged. 
+								 */
+								bootclasspaths = new String[] {
+									defaultLibrary.getAbsolutePath(),
+									locales.getAbsolutePath(),
+									charconv.getAbsolutePath()};
+								bootclasspathCount = 3;
+							} catch (IOException e) {
+							}
+				 	 	}
+				 	 }
+				 } else {
+				 	/*
+				 	 * Handle >= JDK 1.2.2 settings: retrieve rt.jar
+				 	 */
+				 	 String javaHome = System.getProperty("java.home");//$NON-NLS-1$
+				 	 if (javaHome != null) {
+				 	 	File javaHomeFile = new File(javaHome);
+				 	 	if (javaHomeFile.exists()) {
+							try {
+								javaHomeFile = new File(javaHomeFile.getCanonicalPath());
+								// add all jars in the lib subdirectory
+								File[] systemLibrariesJars = getFilesFrom(new File(javaHomeFile, "lib"), ".jar");//$NON-NLS-1$//$NON-NLS-2$
+								int length = systemLibrariesJars.length;
+								bootclasspaths = new String[length];
+								for (int i = 0; i < length; i++) {
+									/* we don't need to check if this file exists. This is done later when the user
+									 * classpath and the bootclasspath are merged. 
+									 */
+									bootclasspaths[bootclasspathCount++] = systemLibrariesJars[i].getAbsolutePath();
+								} 
+							} catch (IOException e) {
+							}
+				 	 	}
+				 	 }
+				 }
+			 }
+		}
 
-		if (classpaths == null)
+		if (classpaths == null) {
 			classpaths = new String[0];
+		}
+		/* 
+		 * We put the bootclasspath at the beginning of the classpath entries
+		 */
+		String[] newclasspaths = null;
+		if ((pathCount + bootclasspathCount) != classpaths.length) {
+			newclasspaths = new String[pathCount + bootclasspathCount];
+		} else {
+			newclasspaths = classpaths;
+		}
 		System.arraycopy(
 			classpaths,
 			0,
-			(classpaths = new String[pathCount]),
-			0,
+			newclasspaths,
+			bootclasspathCount,
 			pathCount);
+
+		if (bootclasspathCount != 0) {
+			System.arraycopy(
+				bootclasspaths,
+				0,
+				newclasspaths,
+				0,
+				bootclasspathCount);
+		}
+		classpaths = newclasspaths;
 		for (int i = 0, max = classpaths.length; i < max; i++) {
 			File file = new File(classpaths[i]);
-			if (!file.exists()) // signal missing classpath entry file
+			if (!file.exists()) { // signal missing classpath entry file
 				out.println(Main.bind("configure.incorrectClasspath", classpaths[i])); //$NON-NLS-1$
+			} /* else {
+				out.println(classpaths[i]);
+			}*/
 		}
 		if (destinationPath == null) {
 			generatePackagesStructure = false;
@@ -950,13 +1122,25 @@ public class Main implements ProblemSeverities {
 			repetitions = 1;
 		}
 	}
-	protected Map getOptions() {
+	
+	private File[] getFilesFrom(File f, final String extension) {
+		return f.listFiles(new FilenameFilter() {
+			public boolean accept(File dir, String name) {
+				if (name.endsWith(extension)) {
+					return true;
+				}
+				return false;
+			}
+		});
+	}
+	
+	public Map getOptions() {
 		return this.options;
 	}
 	/*
 	 * Answer the component to which will be handed back compilation results from the compiler
 	 */
-	protected ICompilerRequestor getBatchRequestor() {
+	public ICompilerRequestor getBatchRequestor() {
 		return new ICompilerRequestor() {
 			int lineDelta = 0;
 			public void acceptResult(CompilationResult compilationResult) {
@@ -1020,7 +1204,7 @@ public class Main implements ProblemSeverities {
 	/*
 	 *  Build the set of compilation source units
 	 */
-	protected CompilationUnit[] getCompilationUnits()
+	public CompilationUnit[] getCompilationUnits()
 		throws InvalidInputException {
 		int fileCount = filenames.length;
 		CompilationUnit[] units = new CompilationUnit[fileCount];
@@ -1050,7 +1234,7 @@ public class Main implements ProblemSeverities {
 	/*
 	 *  Low-level API performing the actual compilation
 	 */
-	protected IErrorHandlingPolicy getHandlingPolicy() {
+	public IErrorHandlingPolicy getHandlingPolicy() {
 
 		// passes the initial set of files to the batch oracle (to avoid finding more than once the same units when case insensitive match)	
 		return new IErrorHandlingPolicy() {
@@ -1065,7 +1249,7 @@ public class Main implements ProblemSeverities {
 	/*
 	 *  Low-level API performing the actual compilation
 	 */
-	protected FileSystem getLibraryAccess() {
+	public FileSystem getLibraryAccess() {
 
 		String defaultEncoding = (String) options.get(CompilerOptions.OPTION_Encoding);
 		if ("".equals(defaultEncoding)) //$NON-NLS-1$
@@ -1075,7 +1259,7 @@ public class Main implements ProblemSeverities {
 	/*
 	 *  Low-level API performing the actual compilation
 	 */
-	protected IProblemFactory getProblemFactory() {
+	public IProblemFactory getProblemFactory() {
 		return new DefaultProblemFactory(Locale.getDefault());
 	}
 	/*
@@ -1087,7 +1271,7 @@ public class Main implements ProblemSeverities {
 	}
 	// Dump classfiles onto disk for all compilation units that where successfull.
 
-	protected void outputClassFiles(CompilationResult unitResult) {
+	public void outputClassFiles(CompilationResult unitResult) {
 
 		if (!((unitResult == null) || (unitResult.hasErrors() && !proceedOnError))) {
 			Enumeration classFiles = unitResult.compiledTypes.elements();
@@ -1144,7 +1328,7 @@ public class Main implements ProblemSeverities {
 	/*
 	 *  Low-level API performing the actual compilation
 	 */
-	protected void performCompilation() throws InvalidInputException {
+	public void performCompilation() throws InvalidInputException {
 
 		INameEnvironment environment = getLibraryAccess();
 		Compiler batchCompiler =
@@ -1164,7 +1348,7 @@ public class Main implements ProblemSeverities {
 		// cleanup
 		environment.cleanup();
 	}
-	private void printUsage() {
+	public void printUsage() {
 		out.println(Main.bind("misc.usage", Main.bind("compiler.version"))); //$NON-NLS-1$ //$NON-NLS-2$
 		out.flush();
 	}
@@ -1251,7 +1435,7 @@ public class Main implements ProblemSeverities {
 		return bind(id, new String[] { binding1, binding2 });
 	}
 
-	private String extractDestinationPathFromSourceFile(CompilationResult result) {
+	public String extractDestinationPathFromSourceFile(CompilationResult result) {
 		ICompilationUnit compilationUnit = result.compilationUnit;
 		if (compilationUnit != null) {
 			char[] fileName = compilationUnit.getFileName();

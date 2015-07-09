@@ -1,12 +1,13 @@
 /**********************************************************************
 Copyright (c) 2002 IBM Corp. and others.
 All rights reserved.   This program and the accompanying materials
-are made available under the terms of the Common Public License v0.5
+are made available under the terms of the Common Public License v1.0
 which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/cpl-v05.html
+http://www.eclipse.org/legal/cpl-v10.html
  
 Contributors:
      IBM Corporation - initial API and implementation
+     IBM Corporation - added getRawTokenSource()
 **********************************************************************/
 
 package org.eclipse.jdt.core.compiler;
@@ -31,14 +32,30 @@ public interface IScanner {
 	 * Answers the current identifier source, after unicode escape sequences have
 	 * been translated into unicode characters.
 	 * e.g. if original source was <code>\\u0061bc</code> then it will answer <code>abc</code>.
+	 * 
+	 * @return the current identifier source, after unicode escape sequences have
+	 * been translated into unicode characters
 	 */
 	char[] getCurrentTokenSource();
+	
+	/**
+	 * Answers the current identifier source, before unicode escape sequences have
+	 * been translated into unicode characters.
+	 * e.g. if original source was <code>\\u0061bc</code> then it will answer <code>\\u0061bc</code>.
+	 * 
+	 * @return the current identifier source, before unicode escape sequences have
+	 * been translated into unicode characters
+	 * @since 2.1
+	 */
+	char[] getRawTokenSource();	
 
 	/**
 	 * Answers the starting position of the current token inside the original source.
 	 * This position is zero-based and inclusive. It corresponds to the position of the first character 
 	 * which is part of this token. If this character was a unicode escape sequence, it points at the first 
 	 * character of this sequence.
+	 * 
+	 * @return the starting position of the current token inside the original source
 	 */
 	int getCurrentTokenStartPosition();
 
@@ -47,6 +64,8 @@ public interface IScanner {
 	 * This position is zero-based and inclusive. It corresponds to the position of the last character
 	 * which is part of this token. If this character was a unicode escape sequence, it points at the last 
 	 * character of this sequence.
+	 * 
+	 * @return the ending position of the current token inside the original source
 	 */
 	int getCurrentTokenEndPosition();
 
@@ -55,6 +74,9 @@ public interface IScanner {
 	 * already in the tokenization process (i.e. it cannot be used to compute positions of lines beyond
 	 * current token). Once the entire source has been processed, it can be used without any limit.
 	 * Line starting positions are zero-based, and start immediately after the previous line separator (if any).
+	 * 
+	 * @param lineNumber the given line number
+	 * @return the starting position of a given line number
 	 */
 	int getLineStart(int lineNumber);
 
@@ -62,21 +84,29 @@ public interface IScanner {
 	 * Answers the ending position of a given line number. This line has to have been encountered
 	 * already in the tokenization process (i.e. it cannot be used to compute positions of lines beyond
 	 * current token). Once the entire source has been processed, it can be used without any limit.
-	* Line ending positions are zero-based, and correspond to the last character of the line separator 
-	* (in case multi-character line separators).	 
-	**/
+	 * Line ending positions are zero-based, and correspond to the last character of the line separator 
+	 * (in case multi-character line separators).	 
+	 * 
+	 * @param lineNumber the given line number
+	 * @return the ending position of a given line number
+	 **/
 	int getLineEnd(int lineNumber);
 
 	/**
 	 * Answers an array of the ending positions of the lines encountered so far. Line ending positions
 	 * are zero-based, and correspond to the last character of the line separator (in case multi-character
 	 * line separators).
+	 * 
+	 * @return an array of the ending positions of the lines encountered so far
 	 */
 	int[] getLineEnds();
 
 	/**
 	 * Answers a 1-based line number using the lines which have been encountered so far. If the position
 	 * is located beyond the current scanned line, then the last line number will be answered.
+	 * 
+	 * @param charPosition the given character position
+	 * @return a 1-based line number using the lines which have been encountered so far
 	 */
 	int getLineNumber(int charPosition);
 
@@ -91,18 +121,25 @@ public interface IScanner {
 
 	/**
 	 * Answers the original source being processed (not a copy of it). 
+	 * 
+	 * @return the original source being processed
 	 */
 	char[] getSource();
 
 	/**
 	 * Reposition the scanner on some portion of the original source. Once reaching the given <code>endPosition</code>
 	 * it will answer EOF tokens (<code>ITerminalSymbols.TokenNameEOF</code>).
+	 * 
+	 * @param startPosition the given start position
+	 * @param endPosition the given end position
 	 */
 	void resetTo(int startPosition, int endPosition);
 
 	/**
 	 * Set the scanner source to process. By default, the scanner will consider starting at the beginning of the
 	 * source until it reaches its end.
+	 * 
+	 * @param source the given source
 	 */
 	void setSource(char[] source);
 }

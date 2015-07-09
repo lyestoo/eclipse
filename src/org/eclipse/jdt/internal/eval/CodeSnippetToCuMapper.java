@@ -1,19 +1,20 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.core.resources.IMarker;
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.jdt.core.ICompletionRequestor;
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.core.compiler.IProblem;
-import org.eclipse.jdt.internal.codeassist.*;
-import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.compiler.env.IConstants;
-import org.eclipse.jdt.internal.compiler.util.CharOperation;
+import org.eclipse.jdt.internal.codeassist.ISelectionRequestor;
 import org.eclipse.jdt.internal.compiler.util.Util;
-import org.eclipse.jdt.internal.core.JavaModelManager;
 
 /**
  * Maps back and forth a code snippet to a compilation unit.
@@ -39,17 +40,17 @@ class CodeSnippetToCuMapper implements EvaluationConstants {
 	public int startPosOffset = 0;
 
 	// Internal fields
-	private char[] codeSnippet;
-	private char[] packageName;
-	private char[][] imports;
-	char[] className; // NB: Make it package default visibility to optimize access from inner classes
-	private char[] varClassName;
+	char[] codeSnippet;
+	char[] packageName;
+	char[][] imports;
+	char[] className; 
+	char[] varClassName;
 
 	// Mapping of external local variables
-	private char[][] localVarNames;
-	private char[][] localVarTypeNames;
-	private int[] localVarModifiers;
-	private char[] declaringTypeName;
+	char[][] localVarNames;
+	char[][] localVarTypeNames;
+	int[] localVarModifiers;
+	char[] declaringTypeName;
 
 /**
  * Rebuild source in presence of external local variables
@@ -262,7 +263,7 @@ public int getEvaluationType(int lineNumber) {
  * Returns the import defined at the given line number. 
  */
 public char[] getImport(int lineNumber) {
-	int importStartLine = this.lineNumberOffset - 2 - this.imports.length;
+	int importStartLine = this.lineNumberOffset - 1 - this.imports.length;
 	return this.imports[lineNumber - importStartLine];
 }
 /**

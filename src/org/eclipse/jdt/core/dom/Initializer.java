@@ -65,6 +65,7 @@ public class Initializer extends BodyDeclaration {
 	 */
 	ASTNode clone(AST target) {
 		Initializer result = new Initializer(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setModifiers(getModifiers());
 		result.setJavadoc(
 			(Javadoc) ASTNode.copySubtree(target,(ASTNode) getJavadoc()));
@@ -131,7 +132,9 @@ public class Initializer extends BodyDeclaration {
 	public Block getBody() {
 		if (body == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setBody(new Block(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return body;
 	}
@@ -140,9 +143,12 @@ public class Initializer extends BodyDeclaration {
 	 * Sets the body of this initializer declaration.
 	 * 
 	 * @param body the block node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setBody(Block body) {
 		if (body == null) {

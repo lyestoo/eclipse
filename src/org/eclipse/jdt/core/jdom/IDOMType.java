@@ -1,9 +1,14 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.core.jdom;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.core.*;
 
 /**
  * Represents a source type in a compilation unit, either as a top-level type or a member type.
@@ -93,7 +98,7 @@ public void setClass(boolean b);
  */
 public void setName(String name) throws IllegalArgumentException;
 /**
- * Sets the name of this type's superclass. Has nbo effect if this type
+ * Sets the name of this type's superclass. Has no effect if this type
  * represents an interface. A <code>null</code> name indicates that no 
  * superclass name (extends clause) should appear in the source code.
  * The syntax for a superclass name is specified by Super in ClassDeclaration

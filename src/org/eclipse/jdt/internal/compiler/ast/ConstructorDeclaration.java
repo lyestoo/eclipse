@@ -1,20 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import java.util.ArrayList;
 
 import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.parser.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
 
 public class ConstructorDeclaration extends AbstractMethodDeclaration {
 
@@ -164,18 +169,58 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 		}
 	}
 
+	public void generateSyntheticFieldInitializationsIfNecessary(
+		MethodScope scope,
+		CodeStream codeStream,
+		ReferenceBinding declaringClass,
+		boolean addNullCheckForEnclosingInstance) {
+			
+		if (!declaringClass.isNestedType()) return;
+		
+		NestedTypeBinding nestedType = (NestedTypeBinding) declaringClass;
+		SourceTypeBinding enclosingType = nestedType.enclosingType;
+
+		SyntheticArgumentBinding[] syntheticArgs = nestedType.syntheticEnclosingInstances();
+		for (int i = 0, max = syntheticArgs == null ? 0 : syntheticArgs.length; i < max; i++) {
+			SyntheticArgumentBinding syntheticArg;
+			if ((syntheticArg = syntheticArgs[i]).matchingField != null) {
+				codeStream.aload_0();
+				codeStream.load(syntheticArg);
+				if (enclosingType == syntheticArg.type && addNullCheckForEnclosingInstance) {
+					codeStream.dup();
+					codeStream.invokeObjectGetClass(); // causes null check
+					codeStream.pop();
+				}
+				codeStream.putfield(syntheticArg.matchingField);
+			}
+		}
+		syntheticArgs = nestedType.syntheticOuterLocalVariables();
+		for (int i = 0, max = syntheticArgs == null ? 0 : syntheticArgs.length; i < max; i++) {
+			SyntheticArgumentBinding syntheticArg;
+			if ((syntheticArg = syntheticArgs[i]).matchingField != null) {
+				codeStream.aload_0();
+				codeStream.load(syntheticArg);
+				codeStream.putfield(syntheticArg.matchingField);
+			}
+		}
+	}
+
 	private void internalGenerateCode(ClassScope classScope, ClassFile classFile) {
+		
 		classFile.generateMethodInfoHeader(binding);
 		int methodAttributeOffset = classFile.contentsOffset;
 		int attributeNumber = classFile.generateMethodInfoAttribute(binding);
 		if ((!binding.isNative()) && (!binding.isAbstract())) {
+			
 			TypeDeclaration declaringType = classScope.referenceContext;
 			int codeAttributeOffset = classFile.contentsOffset;
 			classFile.generateCodeAttributeHeader();
 			CodeStream codeStream = classFile.codeStream;
 			codeStream.reset(this, classFile);
+
 			// initialize local positions - including initializer scope.
 			ReferenceBinding declaringClass = binding.declaringClass;
+
 			int argSize = 0;
 			scope.computeLocalVariablePositions(// consider synthetic arguments if any
 			argSize =
@@ -198,40 +243,24 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 				}
 			}
 			MethodScope initializerScope = declaringType.initializerScope;
-			initializerScope.computeLocalVariablePositions(argSize, codeStream);
-			// offset by the argument size (since not linked to method scope)
+			initializerScope.computeLocalVariablePositions(argSize, codeStream); // offset by the argument size (since not linked to method scope)
 
+			boolean needFieldInitializations = constructorCall != null && constructorCall.accessMode != ExplicitConstructorCall.This;
+
+			// post 1.4 source level, synthetic initializations occur prior to explicit constructor call
+			boolean preInitSyntheticFields = scope.environment().options.targetJDK >= CompilerOptions.JDK1_4;
+
+			if (needFieldInitializations && preInitSyntheticFields){
+				generateSyntheticFieldInitializationsIfNecessary(scope, codeStream, declaringClass, true);
+			}			
 			// generate constructor call
 			if (constructorCall != null) {
 				constructorCall.generateCode(scope, codeStream);
 			}
 			// generate field initialization - only if not invoking another constructor call of the same class
-			if ((constructorCall != null)
-				&& (constructorCall.accessMode != ExplicitConstructorCall.This)) {
-				// generate synthetic fields initialization
-				if (declaringClass.isNestedType()) {
-					NestedTypeBinding nestedType = (NestedTypeBinding) declaringClass;
-					SyntheticArgumentBinding[] syntheticArgs =
-						nestedType.syntheticEnclosingInstances();
-					for (int i = 0, max = syntheticArgs == null ? 0 : syntheticArgs.length;
-						i < max;
-						i++) {
-						if (syntheticArgs[i].matchingField != null) {
-							codeStream.aload_0();
-							codeStream.load(syntheticArgs[i]);
-							codeStream.putfield(syntheticArgs[i].matchingField);
-						}
-					}
-					syntheticArgs = nestedType.syntheticOuterLocalVariables();
-					for (int i = 0, max = syntheticArgs == null ? 0 : syntheticArgs.length;
-						i < max;
-						i++) {
-						if (syntheticArgs[i].matchingField != null) {
-							codeStream.aload_0();
-							codeStream.load(syntheticArgs[i]);
-							codeStream.putfield(syntheticArgs[i].matchingField);
-						}
-					}
+			if (needFieldInitializations) {
+				if (!preInitSyntheticFields){
+					generateSyntheticFieldInitializationsIfNecessary(scope, codeStream, declaringClass, false);
 				}
 				// generate user field initialization
 				if (declaringType.fields != null) {
@@ -254,7 +283,7 @@ public class ConstructorDeclaration extends AbstractMethodDeclaration {
 			}
 			// local variable attributes
 			codeStream.exitUserScope(scope);
-			codeStream.recordPositionsFrom(0, this.sourceStart);
+			codeStream.recordPositionsFrom(0, this.bodyEnd);
 			classFile.completeCodeAttribute(codeAttributeOffset);
 			attributeNumber++;
 		}

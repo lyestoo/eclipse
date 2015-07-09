@@ -1,23 +1,31 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.core.ICompletionRequestor;
-import org.eclipse.jdt.core.compiler.IProblem;
-import org.eclipse.jdt.internal.codeassist.*;
-import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.compiler.env.*;
-import org.eclipse.jdt.internal.compiler.classfmt.*;
-import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
-import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
-import org.eclipse.jdt.internal.compiler.util.CharOperation;
-import org.eclipse.jdt.internal.compiler.util.Util;
+import java.io.File;
+import java.util.Map;
 
-import java.io.*;
-import java.util.*;
-import java.util.zip.*;
+import org.eclipse.jdt.core.ICompletionRequestor;
+import org.eclipse.jdt.core.compiler.*;
+import org.eclipse.jdt.core.compiler.IProblem;
+import org.eclipse.jdt.internal.codeassist.CompletionEngine;
+import org.eclipse.jdt.internal.codeassist.ISearchableNameEnvironment;
+import org.eclipse.jdt.internal.codeassist.ISelectionRequestor;
+import org.eclipse.jdt.internal.codeassist.SelectionEngine;
+import org.eclipse.jdt.internal.compiler.ClassFile;
+import org.eclipse.jdt.internal.compiler.IProblemFactory;
+import org.eclipse.jdt.internal.compiler.env.IBinaryType;
+import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
+import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
+import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 
 /**
  * @see org.eclipse.jdt.core.eval.IEvaluationContext
@@ -36,8 +44,8 @@ public class EvaluationContext implements EvaluationConstants {
 
 	GlobalVariable[] variables = new GlobalVariable[5];
 	int variableCount = 0;
-	char[][] imports = new char[0][];
-	char[] packageName = new char[0];
+	char[][] imports = CharOperation.NO_CHAR_CHAR;
+	char[] packageName = CharOperation.NO_CHAR;
 	boolean varsChanged = true;
 	VariablesInfo installedVars;
 	IBinaryType codeSnippetBinary;
@@ -280,15 +288,18 @@ public void evaluateImports(INameEnvironment environment, IRequestor requestor, 
 						packageName = splitDeclaration[splitLength - 2];
 				}
 				if (!environment.isPackage(parentName, packageName)) {
-					problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, new String[] {new String(importDeclaration)}, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
+					String[] arguments = new String[] {new String(importDeclaration)};
+					problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, arguments, arguments, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
 				}
 			} else {
 				if (environment.findType(splitDeclaration) == null) {
-					problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, new String[] {new String(importDeclaration)}, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
+					String[] arguments = new String[] {new String(importDeclaration)};
+					problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, arguments, arguments, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
 				}
 			}
 		} else {
-			problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, new String[] {new String(importDeclaration)}, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
+			String[] arguments = new String[] {new String(importDeclaration)};
+			problems[0] = problemFactory.createProblem(importDeclaration, IProblem.ImportNotFound, arguments, arguments, ProblemSeverities.Warning, 0, importDeclaration.length - 1, i);
 		}
 		if (problems[0] != null) {
 			requestor.acceptProblem(problems[0], importDeclaration, EvaluationResult.T_IMPORT);
@@ -356,7 +367,7 @@ buffer.append("}");
 buffer.toString()
 ]
  */
-private byte[] getCodeSnippetBytes() {
+byte[] getCodeSnippetBytes() {
 	return new byte[] {
 		-54, -2, -70, -66, 0, 3, 0, 45, 0, 35, 1, 0, 48, 111, 114, 103, 47, 101, 99, 108, 105, 112, 115, 101, 47, 106, 100, 116, 47, 105, 110, 116, 101, 114, 110, 97, 108, 47, 101, 118, 97, 108, 47, 116, 97, 114, 103, 101, 116, 47, 67, 111, 100, 101, 83, 110, 105, 112, 112, 101, 116, 7, 0, 1, 1, 0, 16, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 79, 98, 106, 101, 99, 116, 7, 0, 3, 1, 0, 10, 114, 101, 115, 117, 108, 116, 84, 121, 112, 101, 1, 0, 17, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 67, 108, 97, 115, 115, 59, 1, 0, 11, 114, 101, 115, 117, 108, 116, 86, 97, 108, 117, 101, 1, 0, 18, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 79, 98, 106, 101, 99, 116, 59, 1, 0, 7, 99, 108, 97, 115, 115, 36, 48, 1, 0, 9, 83, 121, 110, 116, 104, 101, 116, 105, 99, 1, 0, 6, 60, 105, 110, 105, 116, 62, 1, 0, 3, 40, 41, 86, 1, 0, 4, 67, 111, 100, 101, 12, 0, 11, 0, 12, 10, 0, 4, 0, 14, 1, 0, 14, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 86, 111, 105, 100, 7, 0, 16, 1, 0, 4, 84, 89, 80, 69, 12, 0, 18, 0, 6, 9, 0, 17, 0, 19, 12, 0, 5, 0, 6, 9, 0, 2, 0, 21, 12, 0, 7, 0, 8, 9, 0, 2, 0, 23, 1, 0, 15, 76, 105, 110, 101, 78, 117, 109, 98, 101, 114, 84, 97, 98, 108, 101, 1, 0, 13, 103, 101, 116, 82, 101, 115, 117, 108, 116, 84, 121, 112, 101, 1, 0, 19, 40, 41, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 67, 108, 97, 115, 115, 59, 1, 0, 14, 103, 101, 116, 82, 101, 115, 117, 108, 116, 86, 97, 108, 117, 101, 1, 0, 20, 40, 41, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 79, 98, 106, 101, 99, 116, 59, 1, 0, 3, 114, 117, 110, 1, 0, 9, 115, 101, 116, 82, 101, 115, 117, 108, 116, 1, 0, 38, 40, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 79, 98, 106, 101, 99, 116, 59, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 67, 108, 97, 115, 115, 59, 41, 86, 1, 0, 10, 83, 111, 117, 114, 99, 101, 70, 105, 108, 101, 1, 0, 16, 67, 111, 100, 101, 83, 110, 105, 112, 112, 101, 116, 46, 106, 97, 118, 97, 0, 33, 0, 2, 0, 4, 0, 0, 0, 3, 0, 2, 0, 5, 0, 6, 0, 0, 0, 2, 0, 7, 0, 8, 0, 0, 0, 8, 0, 9, 0, 6, 0, 1, 0, 10, 0, 0, 0, 0, 0, 5, 0, 1, 0, 11, 0, 12, 0, 1, 0, 13, 0, 0, 0, 53, 0, 2, 0, 1, 0, 0, 0, 17, 42, -73, 0, 15, 42, -78, 0, 20, -75, 0, 22, 42, 1, -75, 0, 24, -79, 0, 0, 0, 1, 0, 25, 0, 0, 0, 18, 0, 4, 0, 0, 0, 17, 0, 4, 0, 18, 0, 11, 0, 19, 0, 16, 0, 17, 0, 1, 0, 26, 0, 27, 0, 1, 0, 13, 0, 0, 0, 29, 0, 1, 0, 1, 0, 0, 0, 5, 42, -76, 0, 22, -80, 0, 0, 0, 1, 0, 25, 0, 0, 0, 6, 0, 1, 0, 0, 0, 24, 0, 1, 0, 28, 0, 29, 0, 1, 0, 13, 0, 0, 0, 29, 0, 1, 0, 1, 0, 0, 0, 5, 42, -76, 0, 24, -80, 0, 0, 0, 1, 0, 25, 0, 0, 0, 6, 0, 1, 0, 0, 0, 30, 0, 1, 0, 30, 0, 12, 0, 1, 0, 13, 0, 0, 0, 25, 0, 0, 0, 1, 0, 0, 0, 1, -79, 0, 0, 0, 1, 0, 25, 0, 0, 0, 6, 0, 1, 0, 0, 0, 36, 0, 1, 0, 31, 0, 32, 0, 1, 0, 13, 0, 0, 0, 43, 0, 2, 0, 3, 0, 0, 0, 11, 42, 43, -75, 0, 24, 42, 44, -75, 0, 22, -79, 0, 0, 0, 1, 0, 25, 0, 0, 0, 14, 0, 3, 0, 0, 0, 42, 0, 5, 0, 43, 0, 10, 0, 41, 0, 1, 0, 33, 0, 0, 0, 2, 0, 34
 	};

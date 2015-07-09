@@ -1,15 +1,22 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.eval;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved. 
- */
-import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.internal.compiler.*;
+import org.eclipse.jdt.core.compiler.CharOperation;
+import org.eclipse.jdt.core.compiler.IProblem;
+import org.eclipse.jdt.internal.compiler.CompilationResult;
 import org.eclipse.jdt.internal.compiler.ast.*;
-import org.eclipse.jdt.internal.compiler.parser.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.internal.compiler.parser.Parser;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
+import org.eclipse.jdt.internal.compiler.util.Util;
 
 /**
  * A parser for code snippets.
@@ -73,8 +80,8 @@ protected void classInstanceCreation(boolean alwaysQualified) {
 		astPtr--;
 		astLengthPtr--;
 
-		// mark fields and initializer with local type mark if needed
-		markFieldsWithLocalType(anonymousTypeDeclaration);
+		// mark initializers with local type mark if needed
+		markInitializersWithLocalType(anonymousTypeDeclaration);
 	}
 }
 protected void consumeClassDeclaration() {
@@ -94,7 +101,7 @@ protected void consumeClassHeaderName() {
 	} else {
 		// Record that the block has a declaration for local types
 		typeDecl = new LocalTypeDeclaration(this.compilationUnit.compilationResult);
-		markCurrentMethodWithLocalType();
+		markEnclosingMemberWithLocalType();
 		blockReal();
 	}
 
@@ -172,7 +179,7 @@ protected void consumeInterfaceHeaderName() {
 	} else {
 		// Record that the block has a declaration for local types
 		typeDecl = new LocalTypeDeclaration(this.compilationUnit.compilationResult);
-		markCurrentMethodWithLocalType(); 
+		markEnclosingMemberWithLocalType(); 
 		blockReal();
 	}
 

@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
@@ -14,8 +20,6 @@ public class ArrayReference extends Reference {
 	
 	public Expression receiver;
 	public Expression position;
-
-	public TypeBinding arrayElementBinding;
 
 	public ArrayReference(Expression rec, Expression pos) {
 		this.receiver = rec;
@@ -63,7 +67,7 @@ public class ArrayReference extends Reference {
 		receiver.generateCode(currentScope, codeStream, true);
 		position.generateCode(currentScope, codeStream, true);
 		assignment.expression.generateCode(currentScope, codeStream, true);
-		codeStream.arrayAtPut(arrayElementBinding.id, valueRequired);
+		codeStream.arrayAtPut(this.resolvedType.id, valueRequired);
 		if (valueRequired) {
 			codeStream.generateImplicitConversion(assignment.implicitConversion);
 		}
@@ -80,13 +84,13 @@ public class ArrayReference extends Reference {
 		int pc = codeStream.position;
 		receiver.generateCode(currentScope, codeStream, true);
 		position.generateCode(currentScope, codeStream, true);
-		codeStream.arrayAt(arrayElementBinding.id);
+		codeStream.arrayAt(this.resolvedType.id);
 		// Generating code for the potential runtime type checking
 		if (valueRequired) {
 			codeStream.generateImplicitConversion(implicitConversion);
 		} else {
-			if (arrayElementBinding == LongBinding
-				|| arrayElementBinding == DoubleBinding) {
+			if (this.resolvedType == LongBinding
+				|| this.resolvedType == DoubleBinding) {
 				codeStream.pop2();
 			} else {
 				codeStream.pop();
@@ -106,7 +110,7 @@ public class ArrayReference extends Reference {
 		receiver.generateCode(currentScope, codeStream, true);
 		position.generateCode(currentScope, codeStream, true);
 		codeStream.dup2();
-		codeStream.arrayAt(arrayElementBinding.id);
+		codeStream.arrayAt(this.resolvedType.id);
 		int operationTypeID;
 		if ((operationTypeID = implicitConversion >> 4) == T_String) {
 			codeStream.generateStringAppend(currentScope, null, expression);
@@ -124,7 +128,7 @@ public class ArrayReference extends Reference {
 			// cast the value back to the array reference type
 			codeStream.generateImplicitConversion(assignmentImplicitConversion);
 		}
-		codeStream.arrayAtPut(arrayElementBinding.id, valueRequired);
+		codeStream.arrayAtPut(this.resolvedType.id, valueRequired);
 	}
 
 	public void generatePostIncrement(
@@ -136,10 +140,10 @@ public class ArrayReference extends Reference {
 		receiver.generateCode(currentScope, codeStream, true);
 		position.generateCode(currentScope, codeStream, true);
 		codeStream.dup2();
-		codeStream.arrayAt(arrayElementBinding.id);
+		codeStream.arrayAt(this.resolvedType.id);
 		if (valueRequired) {
-			if ((arrayElementBinding == LongBinding)
-				|| (arrayElementBinding == DoubleBinding)) {
+			if ((this.resolvedType == LongBinding)
+				|| (this.resolvedType == DoubleBinding)) {
 				codeStream.dup2_x2();
 			} else {
 				codeStream.dup_x2();
@@ -148,27 +152,28 @@ public class ArrayReference extends Reference {
 		codeStream.generateConstant(
 			postIncrement.expression.constant,
 			implicitConversion);
-		codeStream.sendOperator(postIncrement.operator, arrayElementBinding.id);
+		codeStream.sendOperator(postIncrement.operator, this.resolvedType.id);
 		codeStream.generateImplicitConversion(
 			postIncrement.assignmentImplicitConversion);
-		codeStream.arrayAtPut(arrayElementBinding.id, false);
+		codeStream.arrayAtPut(this.resolvedType.id, false);
 	}
 
 	public TypeBinding resolveType(BlockScope scope) {
 
 		constant = Constant.NotAConstant;
-		TypeBinding arrayTb = receiver.resolveType(scope);
-		if (arrayTb == null)
-			return null;
-		if (!arrayTb.isArrayType()) {
-			scope.problemReporter().referenceMustBeArrayTypeAt(arrayTb, this);
-			return null;
+		TypeBinding arrayType = receiver.resolveType(scope);
+		if (arrayType != null) {
+			if (arrayType.isArrayType()) {
+				this.resolvedType = ((ArrayBinding) arrayType).elementsType(scope);
+			} else {
+				scope.problemReporter().referenceMustBeArrayTypeAt(arrayType, this);
+			}
 		}
-		TypeBinding positionTb = position.resolveTypeExpecting(scope, IntBinding);
-		if (positionTb == null)
-			return null;
-		position.implicitWidening(IntBinding, positionTb);
-		return arrayElementBinding = ((ArrayBinding) arrayTb).elementsType(scope);
+		TypeBinding positionType = position.resolveTypeExpecting(scope, IntBinding);
+		if (positionType != null) {
+			position.implicitWidening(IntBinding, positionType);
+		}
+		return this.resolvedType;
 	}
 
 	public String toStringExpression() {

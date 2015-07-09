@@ -58,6 +58,7 @@ public class ExpressionStatement extends Statement {
 	 */
 	ASTNode clone(AST target) {
 		ExpressionStatement result = new ExpressionStatement(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.setExpression((Expression) getExpression().clone(target));
 		return result;
@@ -90,7 +91,9 @@ public class ExpressionStatement extends Statement {
 	public Expression getExpression() {
 		if (expression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setExpression(new MethodInvocation(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return expression;
 	}
@@ -99,9 +102,12 @@ public class ExpressionStatement extends Statement {
 	 * Sets the expression of this expression statement.
 	 * 
 	 * @param expression the new expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		if (expression == null) {

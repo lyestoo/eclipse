@@ -1,10 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.classfmt;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.*;
- 
+
 public class ClassFormatException extends Exception {
 	private int errorCode;
 	private int bufferPosition;
@@ -41,21 +46,9 @@ public class ClassFormatException extends Exception {
 	public static final int ErrInvalidMethodName = 27;
 	public static final int ErrInvalidMethodSignature = 28;
     
-/**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- * 
- * 
- */
 public ClassFormatException(int code) {
 	errorCode = code;
 }
-/**
- * (c)1998 Object Technology International.
- * (c)1998 International Business Machines Corporation.
- * 
- * 
- */
 public ClassFormatException(int code, int bufPos) {
 	errorCode = code;
 	bufferPosition = bufPos;

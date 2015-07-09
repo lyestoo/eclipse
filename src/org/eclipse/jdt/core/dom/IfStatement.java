@@ -72,6 +72,7 @@ public class IfStatement extends Statement {
 	 */
 	ASTNode clone(AST target) {
 		IfStatement result = new IfStatement(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setLeadingComment(getLeadingComment());
 		result.setExpression((Expression) getExpression().clone(target));
 		result.setThenStatement(
@@ -111,7 +112,9 @@ public class IfStatement extends Statement {
 	public Expression getExpression() {
 		if (expression == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setExpression(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return expression;
 	}
@@ -120,9 +123,12 @@ public class IfStatement extends Statement {
 	 * Sets the condition of this if statement.
 	 * 
 	 * @param expression the expression node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setExpression(Expression expression) {
 		if (expression == null) {
@@ -141,7 +147,9 @@ public class IfStatement extends Statement {
 	public Statement getThenStatement() {
 		if (thenStatement == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setThenStatement(new Block(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return thenStatement;
 	}
@@ -150,9 +158,12 @@ public class IfStatement extends Statement {
 	 * Sets the "then" part of this if statement.
 	 * 
 	 * @param statement the "then" statement node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setThenStatement(Statement statement) {
 		if (statement == null) {
@@ -187,9 +198,12 @@ public class IfStatement extends Statement {
 	 * 
 	 * @param statement the "else" statement node, or <code>null</code> if 
 	 *    there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setElseStatement(Statement statement) {
 		// an IfStatement may occur inside a Statement - must check cycles
@@ -210,7 +224,7 @@ public class IfStatement extends Statement {
 	int treeSize() {
 		return
 			memSize()
-			+ (expression == null ? 0 : getElseStatement().treeSize())
+			+ (expression == null ? 0 : getExpression().treeSize())
 			+ (thenStatement == null ? 0 : getThenStatement().treeSize())
 			+ (optionalElseStatement == null ? 0 : getElseStatement().treeSize());
 	}

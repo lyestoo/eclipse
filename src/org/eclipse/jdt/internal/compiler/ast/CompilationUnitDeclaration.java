@@ -1,15 +1,20 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
+import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.internal.compiler.*;
 import org.eclipse.jdt.internal.compiler.impl.*;
-import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
 
 public class CompilationUnitDeclaration
 	extends AstNode
@@ -98,10 +103,23 @@ public class CompilationUnitDeclaration
 		}
 	}
 
+	public void checkUnusedImports(){
+		
+		if (this.scope.imports != null){
+			for (int i = 0, max = this.scope.imports.length; i < max; i++){
+				ImportBinding importBinding = this.scope.imports[i];
+				ImportReference importReference = importBinding.reference;
+				if (importReference != null && !importReference.used){
+					scope.problemReporter().unusedImport(importReference);
+				}
+			}
+		}
+	}
+	
 	public CompilationResult compilationResult() {
 		return compilationResult;
 	}
-
+	
 	/*
 	 * Finds the matching type amoung this compilation unit types.
 	 * Returns null if no type with this name is found.
@@ -172,6 +190,10 @@ public class CompilationUnitDeclaration
 		return (currentPackage == null) && (imports == null) && (types == null);
 	}
 
+	public boolean hasErrors() {
+		return this.ignoreFurtherInvestigation;
+	}
+
 	/*
 	 * Force inner local types to update their innerclass emulation
 	 */
@@ -208,9 +230,12 @@ public class CompilationUnitDeclaration
 	public void resolve() {
 
 		try {
-			if (types != null)
-				for (int i = 0, count = types.length; i < count; i++)
+			if (types != null) {
+				for (int i = 0, count = types.length; i < count; i++) {
 					types[i].resolve(scope);
+				}
+			}
+			if (!this.compilationResult.hasSyntaxError()) checkUnusedImports();
 		} catch (AbortCompilationUnit e) {
 			this.ignoreFurtherInvestigation = true;
 			return;
@@ -218,7 +243,6 @@ public class CompilationUnitDeclaration
 	}
 
 	public void tagAsHavingErrors() {
-
 		ignoreFurtherInvestigation = true;
 	}
 
@@ -248,15 +272,20 @@ public class CompilationUnitDeclaration
 			return;
 		try {
 			if (visitor.visit(this, scope)) {
+				if (currentPackage != null) {
+					currentPackage.traverse(visitor, scope);
+				}
 				if (imports != null) {
 					int importLength = imports.length;
-					for (int i = 0; i < importLength; i++)
+					for (int i = 0; i < importLength; i++) {
 						imports[i].traverse(visitor, scope);
+					}
 				}
 				if (types != null) {
 					int typesLength = types.length;
-					for (int i = 0; i < typesLength; i++)
+					for (int i = 0; i < typesLength; i++) {
 						types[i].traverse(visitor, scope);
+					}
 				}
 			}
 			visitor.endVisit(this, scope);

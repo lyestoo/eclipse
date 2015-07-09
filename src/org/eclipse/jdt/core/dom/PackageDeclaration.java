@@ -56,6 +56,7 @@ public class PackageDeclaration extends ASTNode {
 	 */
 	ASTNode clone(AST target) {
 		PackageDeclaration result = new PackageDeclaration(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setName((Name) getName().clone(target));
 		return result;
 	}
@@ -87,7 +88,9 @@ public class PackageDeclaration extends ASTNode {
 	public Name getName() {
 		if (packageName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return packageName;
 	}
@@ -96,8 +99,11 @@ public class PackageDeclaration extends ASTNode {
 	 * Sets the package name of this package declaration to the given name.
 	 * 
 	 * @param name the new package name
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if`:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setName(Name name) {
 		if (name == null) {

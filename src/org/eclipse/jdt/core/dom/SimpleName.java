@@ -11,11 +11,6 @@
 
 package org.eclipse.jdt.core.dom;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-
-import org.eclipse.jdt.core.compiler.*;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
 
@@ -71,12 +66,8 @@ public class SimpleName extends Name {
 	 */
 	ASTNode clone(AST target) {
 		SimpleName result = new SimpleName(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setIdentifier(getIdentifier());
-		int startPosition = getStartPosition();
-		int length = getLength();
-		if (startPosition >= 0 && length > 0) {
-			result.setSourceRange(startPosition, length);
-		}
 		return result;
 	}
 	
@@ -92,7 +83,7 @@ public class SimpleName extends Name {
 	 * Method declared on ASTNode.
 	 */
 	void accept0(ASTVisitor visitor) {
-		boolean visitChildren = visitor.visit(this);
+		visitor.visit(this);
 		visitor.endVisit(this);
 	}
 
@@ -150,7 +141,6 @@ public class SimpleName extends Name {
 	 * <li>The type name in a <code>TypeDeclaration</code> node.</li>
 	 * <li>The method name in a <code>MethodDeclaration</code> node
 	 * providing <code>isConstructor</code> is <code>false</code>.</li>
-	 * </ul>
 	 * <li>The variable name in any type of <code>VariableDeclaration</code>
 	 * node.</li>
 	 * </ul>
@@ -197,7 +187,7 @@ public class SimpleName extends Name {
 	int memSize() {
 		int size = BASE_NODE_SIZE + 1 * 4;
 		if (identifier != null) {
-			size += HEADERS + 2 * 4 + HEADERS + 2 * identifier.length();
+			size += HEADERS + 3 * 4 + HEADERS + 2 * identifier.length();
 		}
 		return size;
 	}

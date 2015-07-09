@@ -1,17 +1,29 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import org.eclipse.jdt.internal.compiler.impl.*;
-import org.eclipse.jdt.internal.compiler.ast.*;
+import org.eclipse.jdt.internal.compiler.ast.LocalDeclaration;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
 
 public class LocalVariableBinding extends VariableBinding {
+
 	public boolean isArgument;
 
 	public int resolvedPosition; // for code generation (position in method context)
-	public boolean used; // for flow analysis
+	
+	public static final int UNUSED = 0;
+	public static final int USED = 1;
+	public static final int FAKE_USED = 2;
+	public int useFlag; // for flow analysis (default is UNUSED)
+	
 	public BlockScope declaringScope; // back-pointer to its declaring scope
 	public LocalDeclaration declaration; // for source-positions
 
@@ -66,10 +78,18 @@ public void recordInitializationStartPC(int pc) {
 }
 public String toString() {
 	String s = super.toString();
-	if (!used)
-		s += "[pos: unused]"; //$NON-NLS-1$
-	else
-		s += "[pos: " + String.valueOf(resolvedPosition) + "]"; //$NON-NLS-2$ //$NON-NLS-1$
+	switch (useFlag){
+		case USED:
+			s += "[pos: " + String.valueOf(resolvedPosition) + "]"; //$NON-NLS-2$ //$NON-NLS-1$
+			break;
+		case UNUSED:
+			s += "[pos: unused]"; //$NON-NLS-1$
+			break;
+		case FAKE_USED:
+			s += "[pos: fake_used]"; //$NON-NLS-1$
+			break;
+	}
+
 	s += "[id:" + String.valueOf(id) + "]"; //$NON-NLS-2$ //$NON-NLS-1$
 	if (initializationCount > 0) {
 		s += "[pc: "; //$NON-NLS-1$

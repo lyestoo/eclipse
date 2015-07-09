@@ -1,14 +1,22 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.problem;
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import java.text.*; 
-import java.util.*;
+
+import java.util.Locale;
+import java.util.MissingResourceException;
+import java.util.ResourceBundle;
 
 import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.compiler.util.CharOperation;
+import org.eclipse.jdt.core.compiler.IProblem;
+import org.eclipse.jdt.internal.compiler.IProblemFactory;
 
 public class DefaultProblemFactory implements IProblemFactory {
 
@@ -38,7 +46,8 @@ public DefaultProblemFactory(Locale loc) {
  * <ul>
  * <li>originatingFileName the name of the file name from which the problem is originated
  * <li>problemId the problem id
- * <li>arguments the arguments needed to set the error message
+ * <li>problemArguments the fully qualified arguments recorded inside the problem
+ * <li>messageArguments the arguments needed to set the error message (shorter names than problemArguments ones)
  * <li>severity the severity of the problem
  * <li>startPosition the starting position of the problem
  * <li>endPosition the end position of the problem
@@ -56,7 +65,8 @@ public DefaultProblemFactory(Locale loc) {
 public IProblem createProblem(
 	char[] originatingFileName, 
 	int problemId, 
-	String[] arguments, 
+	String[] problemArguments, 
+	String[] messageArguments, 
 	int severity, 
 	int startPosition, 
 	int endPosition, 
@@ -64,9 +74,9 @@ public IProblem createProblem(
 
 	return new DefaultProblem(
 		originatingFileName, 
-		this.getLocalizedMessage(problemId, arguments),
+		this.getLocalizedMessage(problemId, messageArguments),
 		problemId, 
-		arguments, 
+		problemArguments, 
 		severity, 
 		startPosition, 
 		endPosition, 

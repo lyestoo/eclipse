@@ -1,18 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2001 International Business Machines Corp. and others.
+ * Copyright (c) 2001, 2002 International Business Machines Corp. and others.
  * All rights reserved. This program and the accompanying materials 
- * are made available under the terms of the Common Public License v0.5 
+ * are made available under the terms of the Common Public License v1.0 
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/cpl-v05.html
+ * http://www.eclipse.org/legal/cpl-v10.html
  * 
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     IBM Corporation - added findDeclaringNode(String) and getProblems()
  ******************************************************************************/
 
 package org.eclipse.jdt.core.dom;
 
 import java.util.Iterator;
 import java.util.List;
+
+import org.eclipse.jdt.core.compiler.IProblem;
 
 /**
  * Java compilation unit AST node type. This is the type of the root of an AST.
@@ -66,10 +69,19 @@ public class CompilationUnit extends ASTNode {
 	private static final Message[] EMPTY_MESSAGES = new Message[0];
 
 	/**
-	 * Messages reported by the compiler during parsing or name resolution;
-	 * defaults to the empty list.
+	 * Canonical empty list of problems.
 	 */
-	private Message[] messages = EMPTY_MESSAGES;
+	private static final IProblem[] EMPTY_PROBLEMS = new IProblem[0];
+
+	/**
+	 * Messages reported by the compiler during parsing or name resolution.
+	 */
+	private Message[] messages;
+	
+	/**
+	 * Problems reported by the compiler during parsing or name resolution.
+	 */
+	private IProblem[] problems = EMPTY_PROBLEMS;
 	 
 	/**
 	 * Sets the line end table for this compilation unit.
@@ -118,6 +130,7 @@ public class CompilationUnit extends ASTNode {
 	ASTNode clone(AST target) {
 		CompilationUnit result = new CompilationUnit(target);
 		// n.b do not copy line number table or messages
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setPackage(
 			(PackageDeclaration) ASTNode.copySubtree(target, getPackage()));
 		result.imports().addAll(ASTNode.copySubtrees(target, imports()));
@@ -163,10 +176,13 @@ public class CompilationUnit extends ASTNode {
 	 * node to the given package declaration node.
 	 * 
 	 * @param pkgDecl the new package declaration node, or 
-	 *   <code>null</code> if this compilation unit is not have no package
-	 *   declaration (that is, is to be in the default package)
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 *   <code>null</code> if this compilation unit does not have a package
+	 *   declaration (that is in the default package)
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setPackage(PackageDeclaration pkgDecl) {
 		replaceChild(this.optionalPackageDeclaration, pkgDecl, false);
@@ -199,6 +215,8 @@ public class CompilationUnit extends ASTNode {
 	 * Finds the corresponding AST node in the given compilation unit from 
 	 * which the given binding originated. Returns <code>null</code> if the
 	 * binding does not correspond to any node in this compilation unit.
+	 * This method always returns <code>null</code> if bindings were not requested
+	 * when this AST was built.
 	 * <p>
 	 * The following table indicates the expected node type for the various
 	 * different kinds of bindings:
@@ -220,18 +238,62 @@ public class CompilationUnit extends ASTNode {
 	 * </ul>
 	 * </p>
 	 * <p>
-	 * Note that bindings are generally unavailable unless requested when the
-	 * AST is being built.
+	 * Each call to <code>AST.parseCompilationUnit</code> with a request for bindings
+	 * gives rise to separate universe of binding objects. This method always returns
+	 * <code>null</code> when the binding object comes from a different AST.
+	 * Use <code>findDeclaringNode(binding.getKey())</code> when the binding comes
+	 * from a different AST.
 	 * </p>
 	 * 
 	 * @param binding the binding
-	 * @return the corresponding node where the bindings is declared, 
-	 *    or <code>null</code> if none
+	 * @return the corresponding node where the given binding is declared,
+	 * or <code>null</code> if the binding does not correspond to a node in this
+	 * compilation unit or if bindings were not requested when this AST was built
+	 * @see #findDeclaringNode(java.lang.String)
 	 */
 	public ASTNode findDeclaringNode(IBinding binding) {
 		return getAST().getBindingResolver().findDeclaringNode(binding);
 	}
-	
+
+	/**
+	 * Finds the corresponding AST node in the given compilation unit from 
+	 * which the binding with the given key originated. Returns
+	 * <code>null</code> if the corresponding node cannot be determined.
+	 * This method always returns <code>null</code> if bindings were not requested
+	 * when this AST was built.
+	 * <p>
+	 * The following table indicates the expected node type for the various
+	 * different kinds of binding keys:
+	 * <ul>
+	 * <li></li>
+	 * <li>package - a <code>PackageDeclaration</code></li>
+	 * <li>class or interface - a <code>TypeDeclaration</code> or a
+	 *    <code>ClassInstanceCreation</code> (for anonymous classes) </li>
+	 * <li>primitive type - none</li>
+	 * <li>array type - none</li>
+	 * <li>field - a <code>VariableDeclarationFragment</code> in a 
+	 *    <code>FieldDeclaration</code> </li>
+	 * <li>local variable - a <code>SingleVariableDeclaration</code>, or
+	 *    a <code>VariableDeclarationFragment</code> in a 
+	 *    <code>VariableDeclarationStatement</code> or 
+	 *    <code>VariableDeclarationExpression</code></li>
+	 * <li>method - a <code>MethodDeclaration</code> </li>
+	 * <li>constructor - a <code>MethodDeclaration</code> </li>
+	 * </ul>
+	 * </p>
+	 * 
+	 * @param key the binding key, or <code>null</code>
+	 * @return the corresponding node where a binding with the given
+	 * key is declared, or <code>null</code> if the key is <code>null</code>
+	 * or if the key does not correspond to a node in this compilation unit
+	 * or if bindings were not requested when this AST was built
+	 * @see IBinding#getKey
+	 * @since 2.1
+	 */
+	public ASTNode findDeclaringNode(String key) {
+		return getAST().getBindingResolver().findDeclaringNode(key);
+	}
+		
 	/**
 	 * Returns the line number corresponding to the given source character
 	 * position in the original source string. The initial line of the 
@@ -308,25 +370,65 @@ public class CompilationUnit extends ASTNode {
 	 * Returns the list of messages reported by the compiler during the parsing 
 	 * or the type checking of this compilation unit. This list might be a subset of 
 	 * errors detected and reported by a Java compiler.
-	 * 
+	 * <p>
+	 * This list of messages is suitable for simple clients that do little
+	 * more than log the messages or display them to the user. Clients that
+	 * need further details should call <code>getProblems</code> to get
+	 * compiler problem objects.
+	 * </p>
+	 *
 	 * @return the list of messages, possibly empty
+	 * @see #getProblems
 	 * @see AST#parseCompilationUnit
 	 */
 	public Message[] getMessages() {
-		return messages;
+		if (this.messages == null) {
+			int problemLength = this.problems.length;
+			if (problemLength == 0) {
+				this.messages = EMPTY_MESSAGES;
+			} else {
+				this.messages = new Message[problemLength];
+				for (int i = 0; i < problemLength; i++) {
+					IProblem problem = this.problems[i];
+					int start = problem.getSourceStart();
+					int end = problem.getSourceEnd();
+					messages[i] = new Message(problem.getMessage(), start, end - start + 1);
+				}
+			}
+		}
+		return this.messages;
 	}
 
 	/**
-	 * Sets the array of messages reported by the compiler during the parsing or
+	 * Returns the list of detailed problem reports noted by the compiler
+	 * during the parsing or the type checking of this compilation unit. This
+	 * list might be a subset of errors detected and reported by a Java
+	 * compiler.
+	 * <p>
+	 * Simple clients that do little more than log the messages or display
+	 * them to the user should probably call <code>getMessages</code> instead.
+	 * </p>
+	 * 
+	 * @return the list of detailed problem objects, possibly empty
+	 * @see #getMessages
+	 * @see AST#parseCompilationUnit
+	 * @since 2.1
+	 */
+	public IProblem[] getProblems() {
+		return problems;
+	}
+
+	/**
+	 * Sets the array of problems reported by the compiler during the parsing or
 	 * name resolution of this compilation unit.
 	 * 
-	 * @param messages the list of messages
+	 * @param problems the list of problems
 	 */
-	void setMessages(Message[] messages) {
-		if (messages == null) {
+	void setProblems(IProblem[] problems) {
+		if (problems == null) {
 			throw new IllegalArgumentException();
 		}
-		this.messages = messages;
+		this.problems = problems;
 	}
 		
 	/* (omit javadoc for this method)

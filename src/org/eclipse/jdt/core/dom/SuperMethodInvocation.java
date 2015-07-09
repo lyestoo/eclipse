@@ -67,6 +67,7 @@ public class SuperMethodInvocation extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		SuperMethodInvocation result = new SuperMethodInvocation(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setName((SimpleName) getName().clone(target));
 		result.setQualifier((Name) ASTNode.copySubtree(target, getQualifier()));
 		result.arguments().addAll(ASTNode.copySubtrees(target, arguments()));
@@ -110,8 +111,11 @@ public class SuperMethodInvocation extends Expression {
 	 * 
 	 * @param name the qualifier name node, or <code>null</code> if 
 	 *    there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setQualifier(Name name) {
 		// a SuperMethodInvocation cannot occur inside a Name
@@ -127,7 +131,9 @@ public class SuperMethodInvocation extends Expression {
 	public SimpleName getName() {
 		if (methodName == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setName(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return methodName;
 	}
@@ -137,8 +143,11 @@ public class SuperMethodInvocation extends Expression {
 	 * given name.
 	 * 
 	 * @param name the new method name
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setName(SimpleName name) {
 		if (name == null) {

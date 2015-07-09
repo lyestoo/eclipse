@@ -11,9 +11,7 @@
 
 package org.eclipse.jdt.core.dom;
 
-import java.util.ArrayList;
-
-import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
+import org.eclipse.jdt.core.compiler.CharOperation;
 
 /**
  * Internal implementation of package bindings.
@@ -107,7 +105,7 @@ class PackageBinding implements IPackageBinding {
 
 	private void computeNameAndComponents() {
 		char[][] compoundName = this.binding.compoundName;
-		if (compoundName == TypeConstants.NoCharChar || compoundName == null) {
+		if (compoundName == CharOperation.NO_CHAR_CHAR || compoundName == null) {
 			name = UNNAMED;
 			components = NO_NAME_COMPONENTS;
 		} else {
@@ -122,5 +120,13 @@ class PackageBinding implements IPackageBinding {
 			buffer.append(compoundName[length - 1]);
 			name = buffer.toString();
 		}
-	}		
+	}
+	
+	/* 
+	 * For debugging purpose only.
+	 * @see java.lang.Object#toString()
+	 */
+	public String toString() {
+		return this.binding.toString();
+	}	
 }

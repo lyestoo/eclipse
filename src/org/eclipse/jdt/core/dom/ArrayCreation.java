@@ -11,7 +11,6 @@
 
 package org.eclipse.jdt.core.dom;
 
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -19,10 +18,10 @@ import java.util.List;
  *
  * <pre>
  * ArrayCreation:
- *		<b>new</b> PrimitiveType <b>[</b> Expression <b>]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> b>]</b> }
- *		<b>new</b> TypeName <b>[</b> Expression b>]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> b>]</b> }
- *		<b>new</b> PrimitiveType <b>[</b> b>]</b> { <b>[</b> b>]</b> } ArrayInitializer
- * 		<b>new</b> TypeName <b>[</b> b>]</b> { <b>[</b> b>]</b> } ArrayInitializer
+ *		<b>new</b> PrimitiveType <b>[</b> Expression <b>]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> <b>]</b> }
+ *		<b>new</b> TypeName <b>[</b> Expression ]</b> { <b>[</b> Expression <b>]</b> } { <b>[</b> <b>]</b> }
+ *		<b>new</b> PrimitiveType <b>[</b> <b>]</b> { <b>[</b> <b>]</b> } ArrayInitializer
+ * 		<b>new</b> TypeName <b>[</b> <b>]</b> { <b>[</b> <b>]</b> } ArrayInitializer
  * </pre>
  * <p>
  * The mapping from Java language syntax to AST nodes is as follows:
@@ -81,6 +80,7 @@ public class ArrayCreation extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		ArrayCreation result = new ArrayCreation(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setType((ArrayType) getType().clone(target));
 		result.dimensions().addAll(ASTNode.copySubtrees(target, dimensions()));
 		result.setInitializer(
@@ -118,8 +118,10 @@ public class ArrayCreation extends Expression {
 	public ArrayType getType() {
 		if (arrayType == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setType(getAST().newArrayType(
 				getAST().newPrimitiveType(PrimitiveType.INT)));
+			getAST().setModificationCount(count);
 		}
 		return arrayType;
 	}
@@ -128,8 +130,11 @@ public class ArrayCreation extends Expression {
 	 * Sets the array type in this array creation expression.
 	 * 
 	 * @param type the new array type
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setType(ArrayType type) {
 		if (type == null) {
@@ -167,9 +172,12 @@ public class ArrayCreation extends Expression {
 	 * 
 	 * @param initializer the array initializer node, or <code>null</code>
 	 *    if there is none
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setInitializer(ArrayInitializer initializer) {
 		// an ArrayCreation may occur inside an ArrayInitializer

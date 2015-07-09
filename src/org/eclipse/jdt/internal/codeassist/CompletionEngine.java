@@ -1,37 +1,40 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.codeassist;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
-import java.util.*;
+import java.util.Locale;
+import java.util.Map;
 
-import org.eclipse.jdt.core.compiler.InvalidInputException;
-import org.eclipse.jdt.internal.compiler.*;
-import org.eclipse.jdt.internal.compiler.env.*;
-
-import org.eclipse.jdt.internal.codeassist.impl.*;
-import org.eclipse.core.resources.IMarker;
-import org.eclipse.core.resources.ResourcesPlugin;
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.jdt.core.ICompletionRequestor;
-import org.eclipse.jdt.core.IJavaModelMarker;
 import org.eclipse.jdt.core.IType;
-import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
-import org.eclipse.jdt.core.Signature;
 import org.eclipse.jdt.core.compiler.*;
-import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.codeassist.complete.*;
-
+import org.eclipse.jdt.internal.codeassist.impl.AssistParser;
+import org.eclipse.jdt.internal.codeassist.impl.Engine;
+import org.eclipse.jdt.internal.compiler.CompilationResult;
+import org.eclipse.jdt.internal.compiler.DefaultErrorHandlingPolicies;
 import org.eclipse.jdt.internal.compiler.ast.*;
+import org.eclipse.jdt.internal.compiler.env.*;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.parser.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.internal.compiler.parser.Scanner;
+import org.eclipse.jdt.internal.compiler.problem.AbortCompilation;
+import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
+import org.eclipse.jdt.internal.compiler.util.ObjectVector;
 import org.eclipse.jdt.internal.core.BasicCompilationUnit;
 import org.eclipse.jdt.internal.core.TypeConverter;
-import org.eclipse.jdt.internal.compiler.impl.*;
 
 /**
  * This class is the entry point for source completions.
@@ -47,13 +50,18 @@ public final class CompletionEngine
 	private final static char[] ERROR_PATTERN = "*error*".toCharArray();  //$NON-NLS-1$
 	private final static char[] EXCEPTION_PATTERN = "*exception*".toCharArray();  //$NON-NLS-1$
 	private final static char[] SEMICOLON = new char[] { ';' };
-	TypeBinding[] expectedTypes;
+	
+	private final static int SUPERTYPE = 1;
+	private final static int SUBTYPE = 2;
+	
+	int expectedTypesCount = -1;
+	TypeBinding[] expectedTypes = new TypeBinding[1];
+	int expectedTypesFilter;
 	
 	boolean assistNodeIsClass;
 	boolean assistNodeIsException;
 	boolean assistNodeIsInterface;
 	
-	AssistOptions options;
 	CompletionParser parser;
 	ICompletionRequestor requestor;
 	ProblemReporter problemReporter;
@@ -138,28 +146,33 @@ public final class CompletionEngine
 		ICompletionRequestor requestor,
 		Map settings) {
 
+		super(settings);
 		this.requestor = requestor;
 		this.nameEnvironment = nameEnvironment;
 
-		options = new AssistOptions(settings);
-		CompilerOptions compilerOptions = new CompilerOptions(settings);
-
 		problemReporter = new ProblemReporter(
 				DefaultErrorHandlingPolicies.proceedWithAllProblems(),
-				compilerOptions,
+				this.compilerOptions,
 				new DefaultProblemFactory(Locale.getDefault()) {
-					public void record(IProblem problem, CompilationResult unitResult) {
+					public void record(IProblem problem, CompilationResult unitResult, ReferenceContext referenceContext) {
 						if (problem.isError() && (problem.getID() & IProblem.Syntax) != 0) {
 							CompletionEngine.this.requestor.acceptError(problem);
 						}
 					}
 				});
 		this.parser =
-			new CompletionParser(problemReporter, compilerOptions.assertMode);
+			new CompletionParser(problemReporter, this.compilerOptions.sourceLevel >= CompilerOptions.JDK1_4);
 		this.lookupEnvironment =
-			new LookupEnvironment(this, compilerOptions, problemReporter, nameEnvironment);
+			new LookupEnvironment(this, this.compilerOptions, problemReporter, nameEnvironment);
 		this.nameScanner =
-			new Scanner(false, false, false, compilerOptions.assertMode);
+			new Scanner(
+				false /*comment*/, 
+				false /*whitespace*/, 
+				false /*nls*/, 
+				this.compilerOptions.sourceLevel >= CompilerOptions.JDK1_4 /*assert*/, 
+				this.compilerOptions.complianceLevel >= CompilerOptions.JDK1_4 /*strict comment*/,
+				null /*taskTags*/, 
+				null/*taskPriorities*/);
 	}
 
 	/**
@@ -187,7 +200,7 @@ public final class CompletionEngine
 			if (!insideQualifiedReference) {
 				if (mustQualifyType(packageName, className)) {
 					if (packageName == null || packageName.length == 0)
-						if (unitScope != null && unitScope.fPackage.compoundName != NoCharChar)
+						if (unitScope != null && unitScope.fPackage.compoundName != CharOperation.NO_CHAR_CHAR)
 							return; // ignore types from the default package from outside it
 				} else {
 					completionName = className;
@@ -237,7 +250,7 @@ public final class CompletionEngine
 			if (!insideQualifiedReference) {
 				if (mustQualifyType(packageName, interfaceName)) {
 					if (packageName == null || packageName.length == 0)
-						if (unitScope != null && unitScope.fPackage.compoundName != NoCharChar)
+						if (unitScope != null && unitScope.fPackage.compoundName != CharOperation.NO_CHAR_CHAR)
 							return; // ignore types from the default package from outside it
 				} else {
 					completionName = interfaceName;
@@ -309,7 +322,7 @@ public final class CompletionEngine
 			if (!insideQualifiedReference) {
 				if (mustQualifyType(packageName, typeName)) {
 					if (packageName == null || packageName.length == 0)
-						if (unitScope != null && unitScope.fPackage.compoundName != NoCharChar)
+						if (unitScope != null && unitScope.fPackage.compoundName != CharOperation.NO_CHAR_CHAR)
 							return; // ignore types from the default package from outside it
 				} else {
 					completionName = typeName;
@@ -328,12 +341,12 @@ public final class CompletionEngine
 			relevance);
 	}
 
-	private void complete(AstNode astNode, Binding qualifiedBinding, Scope scope) {
+	private void complete(AstNode astNode, AstNode astNodeParent, Binding qualifiedBinding, Scope scope) {
 
 		setSourceRange(astNode.sourceStart, astNode.sourceEnd);
 		
-		if(parser.assistNodeParent != null) {
-			computeExpectedTypes(parser.assistNodeParent, scope);
+		if(astNodeParent != null) {
+			computeExpectedTypes(astNodeParent, scope);
 		}
 
 		// defaults... some nodes will change these
@@ -656,19 +669,18 @@ public final class CompletionEngine
 	}
 	
 	public void complete(IType type, char[] snippet, int position, char[][] localVariableTypeNames, char[][] localVariableNames, int[] localVariableModifiers, boolean isStatic){	
-		TypeConverter converter = new TypeConverter();
-		
+
 		IType topLevelType = type;
 		while(topLevelType.getDeclaringType() != null) {
 			topLevelType = topLevelType.getDeclaringType();
 		}
 		
-		CompilationResult compilationResult = new CompilationResult((topLevelType.getElementName() + ".java").toCharArray(), 1, 1); //$NON-NLS-1$
+		CompilationResult compilationResult = new CompilationResult((topLevelType.getElementName() + ".java").toCharArray(), 1, 1, this.compilerOptions.maxProblemsPerUnit); //$NON-NLS-1$
 	
 		CompilationUnitDeclaration compilationUnit = new CompilationUnitDeclaration(problemReporter, compilationResult, 0);
 	
 		try {
-			TypeDeclaration typeDeclaration = converter.buildTypeDeclaration(type, compilationUnit, compilationResult, problemReporter);
+			TypeDeclaration typeDeclaration = TypeConverter.buildTypeDeclaration(type, compilationUnit, compilationResult, problemReporter);
 		
 			if(typeDeclaration != null) {	
 				// build AST from snippet
@@ -699,7 +711,7 @@ public final class CompletionEngine
 						//					completionNodeFound = true;
 						if (e.astNode != null) {
 							// if null then we found a problem in the completion node
-							complete(e.astNode, e.qualifiedBinding, e.scope);
+							complete(e.astNode, parser.assistNodeParent, e.qualifiedBinding, e.scope);
 						}
 					}
 				}
@@ -728,8 +740,7 @@ public final class CompletionEngine
 		char[] fakeSource = CharOperation.concat(prefix.toString().toCharArray(), snippet, "}}".toCharArray());//$NON-NLS-1$ 
 		offset = prefix.length();
 		
-		String encoding = (String) JavaCore.getOptions().get(CompilerOptions.OPTION_Encoding);
-		if ("".equals(encoding)) encoding = null; //$NON-NLS-1$
+		String encoding = this.compilerOptions.defaultEncoding;
 		BasicCompilationUnit fakeUnit = new BasicCompilationUnit(
 			fakeSource, 
 			null,
@@ -738,7 +749,7 @@ public final class CompletionEngine
 			
 		actualCompletionPosition = prefix.length() + position - 1;
 			
-		CompilationResult fakeResult = new CompilationResult(fakeUnit, 1, 1);
+		CompilationResult fakeResult = new CompilationResult(fakeUnit, 1, 1, this.compilerOptions.maxProblemsPerUnit);
 		CompilationUnitDeclaration fakeAST = parser.dietParse(fakeUnit, fakeResult, actualCompletionPosition);
 		
 		parseMethod(fakeAST, actualCompletionPosition);
@@ -774,7 +785,7 @@ public final class CompletionEngine
 			actualCompletionPosition = completionPosition - 1;
 			this.offset = offset;
 			// for now until we can change the UI.
-			CompilationResult result = new CompilationResult(sourceUnit, 1, 1);
+			CompilationResult result = new CompilationResult(sourceUnit, 1, 1, this.compilerOptions.maxProblemsPerUnit);
 			CompilationUnitDeclaration parsedUnit = parser.dietParse(sourceUnit, result, actualCompletionPosition);
 
 			//		boolean completionNodeFound = false;
@@ -822,9 +833,13 @@ public final class CompletionEngine
 							if(DEBUG) {
 								System.out.print("COMPLETION - Completion node : "); //$NON-NLS-1$
 								System.out.println(e.astNode.toString());
+								if(parser.assistNodeParent != null) {
+									System.out.print("COMPLETION - Parent Node : ");  //$NON-NLS-1$
+									System.out.println(parser.assistNodeParent);
+								}
 							}
 							// if null then we found a problem in the completion node
-							complete(e.astNode, e.qualifiedBinding, e.scope);
+							complete(e.astNode, parser.assistNodeParent, e.qualifiedBinding, e.scope);
 						}
 					}
 				}
@@ -858,7 +873,7 @@ public final class CompletionEngine
 		int argsLength = arguments.length;
 		TypeBinding[] argTypes = new TypeBinding[argsLength];
 		for (int a = argsLength; --a >= 0;)
-			argTypes[a] = arguments[a].resolveType(scope);
+			argTypes[a] = arguments[a].resolvedType;
 		return argTypes;
 	}
 	
@@ -869,7 +884,7 @@ public final class CompletionEngine
 		InvocationSite invocationSite) {
 
 		if (currentType.isInterface()) {
-			char[] completion = TypeConstants.NoChar;
+			char[] completion = CharOperation.NO_CHAR;
 			// nothing to insert - do not want to replace the existing selector & arguments
 			if (source == null
 				|| source.length <= endPosition
@@ -879,9 +894,9 @@ public final class CompletionEngine
 			requestor.acceptAnonymousType(
 				currentType.qualifiedPackageName(),
 				currentType.qualifiedSourceName(),
-				TypeConstants.NoCharChar,
-				TypeConstants.NoCharChar,
-				TypeConstants.NoCharChar,
+				CharOperation.NO_CHAR_CHAR,
+				CharOperation.NO_CHAR_CHAR,
+				CharOperation.NO_CHAR_CHAR,
 				completion,
 				IConstants.AccPublic,
 				endPosition - offset,
@@ -910,11 +925,11 @@ public final class CompletionEngine
 			relevance += computeRelevanceForExpectingType(scope.getJavaLangClass());
 				
 			requestor.acceptField(
-				NoChar,
-				NoChar,
+				CharOperation.NO_CHAR,
+				CharOperation.NO_CHAR,
 				classField,
-				NoChar,
-				NoChar,
+				CharOperation.NO_CHAR,
+				CharOperation.NO_CHAR,
 				classField,
 				CompilerModifiers.AccStatic | CompilerModifiers.AccPublic,
 				startPosition - offset,
@@ -949,7 +964,7 @@ public final class CompletionEngine
 						continue next;
 					for (int a = minArgLength; --a >= 0;)
 						if (argTypes[a] != null) // can be null if it could not be resolved properly
-							if (!scope.areTypesCompatible(argTypes[a], constructor.parameters[a]))
+							if (!Scope.areTypesCompatible(argTypes[a], constructor.parameters[a]))
 								continue next;
 	
 					char[][] parameterPackageNames = new char[paramLength][];
@@ -961,7 +976,7 @@ public final class CompletionEngine
 					}
 					char[][] parameterNames = findMethodParameterNames(constructor,parameterTypeNames);
 					
-					char[] completion = TypeConstants.NoChar;
+					char[] completion = CharOperation.NO_CHAR;
 					// nothing to insert - do not want to replace the existing selector & arguments
 					if (source == null
 						|| source.length <= endPosition
@@ -988,8 +1003,8 @@ public final class CompletionEngine
 							parameterPackageNames,
 							parameterTypeNames,
 							parameterNames,
-							TypeConstants.NoChar,
-							TypeConstants.NoChar,
+							CharOperation.NO_CHAR,
+							CharOperation.NO_CHAR,
 							completion,
 							constructor.modifiers,
 							endPosition - offset,
@@ -1045,6 +1060,9 @@ public final class CompletionEngine
 						continue next;
 					if (otherField.declaringClass.isInterface())
 						if (field.declaringClass.implementsInterface(otherField.declaringClass, true))
+							continue next;
+					if (field.declaringClass.isInterface())
+						if (otherField.declaringClass.implementsInterface(field.declaringClass, true))
 							continue next;
 					prefixRequired = true;
 				}
@@ -1215,11 +1233,11 @@ public final class CompletionEngine
 				relevance += computeRelevanceForExpectingType(BaseTypes.IntBinding);
 				
 				requestor.acceptField(
-					NoChar,
-					NoChar,
+					CharOperation.NO_CHAR,
+					CharOperation.NO_CHAR,
 					lengthField,
-					NoChar,
-					NoChar,
+					CharOperation.NO_CHAR,
+					CharOperation.NO_CHAR,
 					lengthField,
 					CompilerModifiers.AccPublic,
 					startPosition - offset,
@@ -1333,9 +1351,13 @@ public final class CompletionEngine
 						continue next;
 
 					if (otherType.enclosingType().isInterface())
-
 						if (memberType.enclosingType()
 							.implementsInterface(otherType.enclosingType(), true))
+							continue next;
+
+					if (memberType.enclosingType().isInterface())
+						if (otherType.enclosingType()
+							.implementsInterface(memberType.enclosingType(), true))
 							continue next;
 				}
 			}
@@ -1663,7 +1685,7 @@ public final class CompletionEngine
 
 			for (int a = minArgLength; --a >= 0;){
 				if (argTypes[a] != null){ // can be null if it could not be resolved properly
-					if (!scope.areTypesCompatible(argTypes[a], method.parameters[a])) {
+					if (!Scope.areTypesCompatible(argTypes[a], method.parameters[a])) {
 						continue next;
 					}
 				}
@@ -1711,7 +1733,7 @@ public final class CompletionEngine
 			}
 			char[][] parameterNames = findMethodParameterNames(method,parameterTypeNames);
 
-			char[] completion = TypeConstants.NoChar;
+			char[] completion = CharOperation.NO_CHAR;
 			
 			int previousStartPosition = startPosition;
 			
@@ -1788,8 +1810,13 @@ public final class CompletionEngine
 	}
 	private int computeRelevanceForExpectingType(TypeBinding proposalType){
 		if(expectedTypes != null && proposalType != null) {
-			for (int i = 0; i < expectedTypes.length; i++) {
-				if(Scope.areTypesCompatible(proposalType, expectedTypes[i])) {
+			for (int i = 0; i <= expectedTypesCount; i++) {
+				if((expectedTypesFilter & SUBTYPE) != 0
+					&& Scope.areTypesCompatible(proposalType, expectedTypes[i])) {
+						return R_EXPECTED_TYPE;
+				}
+				if((expectedTypesFilter & SUPERTYPE) != 0
+					&& Scope.areTypesCompatible(expectedTypes[i], proposalType)) {
 					return R_EXPECTED_TYPE;
 				}
 			}
@@ -1798,7 +1825,7 @@ public final class CompletionEngine
 	}
 	private int computeRelevanceForExpectingType(char[] packageName, char[] typeName){
 		if(expectedTypes != null) {
-			for (int i = 0; i < expectedTypes.length; i++) {
+			for (int i = 0; i <= expectedTypesCount; i++) {
 				if(CharOperation.equals(expectedTypes[i].qualifiedPackageName(), packageName) &&
 					CharOperation.equals(expectedTypes[i].qualifiedSourceName(), typeName)) {
 					return R_EXPECTED_TYPE;
@@ -2097,7 +2124,7 @@ public final class CompletionEngine
 		int length = parameterTypeNames.length;
 
 		if (length == 0){
-			return TypeConstants.NoCharChar;
+			return CharOperation.NO_CHAR_CHAR;
 		}
 		// look into the corresponding unit if it is available
 		if (bindingType instanceof SourceTypeBinding){
@@ -2347,8 +2374,7 @@ public final class CompletionEngine
 						for (int f = 0; f < localsFound.size; f++) {
 							LocalVariableBinding otherLocal =
 								(LocalVariableBinding) localsFound.elementAt(f);
-							if (CharOperation.equals(otherLocal.name, local.name, false /* ignore case */
-								))
+							if (CharOperation.equals(otherLocal.name, local.name, true))
 								continue next;
 						}
 						localsFound.add(local);
@@ -2359,7 +2385,9 @@ public final class CompletionEngine
 						
 						requestor.acceptLocalVariable(
 							local.name,
-							NoChar,
+							local.type == null 
+								? CharOperation.NO_CHAR
+								: local.type.qualifiedPackageName(),
 							local.type == null
 								? local.declaration.type.toString().toCharArray()
 								: local.type.qualifiedSourceName(),
@@ -2522,9 +2550,9 @@ public final class CompletionEngine
 	private void findVariableNames(char[] name, TypeReference type , char[][] excludeNames){
 
 		if(type != null &&
-			type.binding != null &&
-			type.binding.problemId() == Binding.NoError){
-			TypeBinding tb = type.binding;
+			type.resolvedType != null &&
+			type.resolvedType.problemId() == Binding.NoError){
+			TypeBinding tb = type.resolvedType;
 			findVariableName(
 				name,
 				tb.leafComponentType().qualifiedPackageName(),
@@ -2579,28 +2607,229 @@ public final class CompletionEngine
 		return name;
 	}
 	private void computeExpectedTypes(AstNode parent, Scope scope){
-		int expectedTypeCount = 0;
-		expectedTypes = new TypeBinding[1];
 		
+		// default filter
+		expectedTypesFilter = SUBTYPE;
+		
+		// find types from parent
 		if(parent instanceof AbstractVariableDeclaration) {
-			TypeBinding binding = ((AbstractVariableDeclaration)parent).type.binding;
+			TypeBinding binding = ((AbstractVariableDeclaration)parent).type.resolvedType;
 			if(binding != null) {
-				expectedTypes[expectedTypeCount++] = binding;
+				addExpectedType(binding);
 			}
 		} else if(parent instanceof Assignment) {
-			TypeBinding binding = ((Assignment)parent).lhsType;
+			TypeBinding binding = ((Assignment)parent).resolvedType;
 			if(binding != null) {
-				expectedTypes[expectedTypeCount++] = binding;
+				addExpectedType(binding);
 			}
 		} else if(parent instanceof ReturnStatement) {
 			MethodBinding methodBinding = ((AbstractMethodDeclaration) scope.methodScope().referenceContext).binding;
 			TypeBinding binding = methodBinding  == null ? null : methodBinding.returnType;
 			if(binding != null) {
-				expectedTypes[expectedTypeCount++] = binding;
+				addExpectedType(binding);
+			}
+		} else if(parent instanceof CastExpression) {
+			Expression e = ((CastExpression)parent).type;
+			TypeBinding binding = e.resolvedType;
+			if(binding != null){
+				addExpectedType(binding);
+				expectedTypesFilter = SUBTYPE | SUPERTYPE;
+			}
+		} else if(parent instanceof MessageSend) {
+			MessageSend messageSend = (MessageSend) parent;
+			
+			ReferenceBinding binding = (ReferenceBinding)messageSend.receiverType;
+			boolean isStatic = messageSend.receiver.isTypeReference();
+			
+			while(binding != null) {	
+				computeExpectedTypesForMessageSend(
+					binding,
+					messageSend.selector,
+					messageSend.arguments,
+					(ReferenceBinding)messageSend.receiverType,
+					scope,
+					messageSend,
+					isStatic);
+				computeExpectedTypesForMessageSendForInterface(
+					binding,
+					messageSend.selector,
+					messageSend.arguments,
+					(ReferenceBinding)messageSend.receiverType,
+					scope,
+					messageSend,
+					isStatic);
+				binding = binding.superclass();
+			}
+		} else if(parent instanceof AllocationExpression) {
+			AllocationExpression allocationExpression = (AllocationExpression) parent;
+			
+			ReferenceBinding binding = (ReferenceBinding)allocationExpression.type.resolvedType;
+
+			if(binding != null) {	
+				computeExpectedTypesForAllocationExpression(
+					binding,
+					allocationExpression.arguments,
+					scope,
+					allocationExpression);
 			}
 		}
 		
-		System.arraycopy(expectedTypes, 0, expectedTypes = new TypeBinding[expectedTypeCount], 0, expectedTypeCount);
+		if(expectedTypesCount + 1 != expectedTypes.length) {
+			System.arraycopy(expectedTypes, 0, expectedTypes = new TypeBinding[expectedTypesCount + 1], 0, expectedTypesCount + 1);
+		}
+	}
+	
+	private void computeExpectedTypesForAllocationExpression(
+		ReferenceBinding binding,
+		Expression[] arguments,
+		Scope scope,
+		InvocationSite invocationSite) {
+			
+		MethodBinding[] methods = binding.availableMethods();
+		nextMethod : for (int i = 0; i < methods.length; i++) {
+			MethodBinding method = methods[i];
+			
+			if (!method.isConstructor()) continue nextMethod;
+			
+			if (method.isSynthetic()) continue nextMethod;
+			
+			if (options.checkVisibility && !method.canBeSeenBy(invocationSite, scope)) continue nextMethod;
+			
+			TypeBinding[] parameters = method.parameters;
+			if(parameters.length < arguments.length)
+				continue nextMethod;
+				
+			int length = arguments.length - 1;
+			
+			for (int j = 0; j < length; j++) {
+				Expression argument = arguments[j];
+				TypeBinding argType = argument.resolvedType;
+				if(argType != null && !Scope.areTypesCompatible(argType, parameters[j]))
+					continue nextMethod;
+			}
+			
+			TypeBinding expectedType = method.parameters[arguments.length - 1];
+			if(expectedType != null) {
+				addExpectedType(expectedType);
+			}
+		}
+	}
+	
+	private void computeExpectedTypesForMessageSendForInterface(
+		ReferenceBinding binding,
+		char[] selector,
+		Expression[] arguments,
+		ReferenceBinding receiverType,
+		Scope scope,
+		InvocationSite invocationSite,
+		boolean isStatic) {
+
+		ReferenceBinding[] itsInterfaces = binding.superInterfaces();
+		if (itsInterfaces != NoSuperInterfaces) {
+			ReferenceBinding[][] interfacesToVisit = new ReferenceBinding[5][];
+			int lastPosition = 0;
+			interfacesToVisit[lastPosition] = itsInterfaces;
+			
+			for (int i = 0; i <= lastPosition; i++) {
+				ReferenceBinding[] interfaces = interfacesToVisit[i];
+
+				for (int j = 0, length = interfaces.length; j < length; j++) {
+					ReferenceBinding currentType = interfaces[j];
+
+					if ((currentType.tagBits & TagBits.InterfaceVisited) == 0) {
+						// if interface as not already been visited
+						currentType.tagBits |= TagBits.InterfaceVisited;
+	
+						computeExpectedTypesForMessageSend(
+							currentType,
+							selector,
+							arguments,
+							receiverType,
+							scope,
+							invocationSite,
+							isStatic);
+
+						itsInterfaces = currentType.superInterfaces();
+						if (itsInterfaces != NoSuperInterfaces) {
+
+							if (++lastPosition == interfacesToVisit.length)
+								System.arraycopy(
+									interfacesToVisit,
+									0,
+									interfacesToVisit = new ReferenceBinding[lastPosition * 2][],
+									0,
+									lastPosition);
+							interfacesToVisit[lastPosition] = itsInterfaces;
+						}
+					}
+				}
+			}
+			
+			// bit reinitialization
+			for (int i = 0; i <= lastPosition; i++) {
+				ReferenceBinding[] interfaces = interfacesToVisit[i];
+
+				for (int j = 0, length = interfaces.length; j < length; j++){
+					interfaces[j].tagBits &= ~TagBits.InterfaceVisited;
+				}
+			}
+		}
+	}
+	
+	private void computeExpectedTypesForMessageSend(
+		ReferenceBinding binding,
+		char[] selector,
+		Expression[] arguments,
+		ReferenceBinding receiverType,
+		Scope scope,
+		InvocationSite invocationSite,
+		boolean isStatic) {
+			
+		MethodBinding[] methods = binding.availableMethods();
+		nextMethod : for (int i = 0; i < methods.length; i++) {
+			MethodBinding method = methods[i];
+			
+			if (method.isSynthetic()) continue nextMethod;
+
+			if (method.isDefaultAbstract())	continue nextMethod;
+
+			if (method.isConstructor()) continue nextMethod;
+
+			if (isStatic && !method.isStatic()) continue nextMethod;
+			
+			if (options.checkVisibility && !method.canBeSeenBy(receiverType, invocationSite, scope)) continue nextMethod;
+			
+			if(!CharOperation.equals(method.selector, selector)) continue nextMethod;
+			
+			TypeBinding[] parameters = method.parameters;
+			if(parameters.length < arguments.length)
+				continue nextMethod;
+				
+			int length = arguments.length - 1;
+			
+			for (int j = 0; j < length; j++) {
+				Expression argument = arguments[j];
+				TypeBinding argType = argument.resolvedType;
+				if(argType != null && !Scope.areTypesCompatible(argType, parameters[j]))
+					continue nextMethod;
+			}
+				
+			TypeBinding expectedType = method.parameters[arguments.length - 1];
+			if(expectedType != null) {
+				addExpectedType(expectedType);
+			}
+		}
+	}
+	private void addExpectedType(TypeBinding type){
+		try {
+			this.expectedTypes[++this.expectedTypesCount] = type;
+		} catch (IndexOutOfBoundsException e) {
+			int oldLength = this.expectedTypes.length;
+			TypeBinding oldTypes[] = this.expectedTypes;
+			this.expectedTypes = new TypeBinding[oldLength * 2];
+			System.arraycopy(oldTypes, 0, this.expectedTypes, 0, oldLength);
+			this.expectedTypes[this.expectedTypesCount] = type;
+		}
 	}
 	private char[][] computeNames(char[] sourceName, boolean forArray){
 		char[][] names = new char[5][];

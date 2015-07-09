@@ -1,15 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
-import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
-import org.eclipse.jdt.internal.compiler.problem.*;
 
 public class TryStatement extends Statement {
 	
@@ -56,10 +60,10 @@ public class TryStatement extends Statement {
 			currentScope.methodScope().recordInitializationStates(flowInfo);
 
 		if (anyExceptionVariable != null) {
-			anyExceptionVariable.used = true;
+			anyExceptionVariable.useFlag = LocalVariableBinding.USED;
 		}
 		if (returnAddressVariable != null) {
-			returnAddressVariable.used = true;
+			returnAddressVariable.useFlag = LocalVariableBinding.USED;
 		}
 		InsideSubRoutineFlowContext insideSubContext;
 		FinallyFlowContext finallyContext;
@@ -386,23 +390,26 @@ public class TryStatement extends Statement {
 	public void resolve(BlockScope upperScope) {
 
 		// special scope for secret locals optimization.	
-		scope = new BlockScope(upperScope);
+		this.scope = new BlockScope(upperScope);
 
 		BlockScope tryScope = new BlockScope(scope);
 		BlockScope finallyScope = null;
+		
 		if (finallyBlock != null
 			&& finallyBlock.statements != null) {
+
+			finallyScope = new BlockScope(scope, false); // don't add it yet to parent scope
+
 			// provision for returning and forcing the finally block to run
 			MethodScope methodScope = scope.methodScope();
 
-			returnAddressVariable =
-				new LocalVariableBinding(SecretReturnName, upperScope.getJavaLangObject(), AccDefault, false);
 			// the type does not matter as long as its not a normal base type
-			methodScope.addLocalVariable(returnAddressVariable);
-			returnAddressVariable.constant = NotAConstant; // not inlinable
-			subRoutineStartLabel = new Label();
+			this.returnAddressVariable =
+				new LocalVariableBinding(SecretReturnName, upperScope.getJavaLangObject(), AccDefault, false);
+			finallyScope.addLocalVariable(returnAddressVariable);
+			this.returnAddressVariable.constant = NotAConstant; // not inlinable
+			this.subRoutineStartLabel = new Label();
 
-			finallyScope = new BlockScope(scope);
 			this.anyExceptionVariable =
 				new LocalVariableBinding(SecretAnyHandlerName, scope.getJavaLangThrowable(), AccDefault, false);
 			finallyScope.addLocalVariable(this.anyExceptionVariable);
@@ -426,17 +433,21 @@ public class TryStatement extends Statement {
 				}
 			}
 			finallyBlock.resolveUsing(finallyScope);
-			// force the finally scope to have variable positions shifted after its try scope.
-			finallyScope.shiftScope = tryScope;
+			// force the finally scope to have variable positions shifted after its try scope and catch ones
+			finallyScope.shiftScopes = new BlockScope[catchArguments == null ? 1 : catchArguments.length+1];
+			finallyScope.shiftScopes[0] = tryScope;
 		}
-		tryBlock.resolveUsing(tryScope);
+		this.tryBlock.resolveUsing(tryScope);
 
 		// arguments type are checked against JavaLangThrowable in resolveForCatch(..)
-		if (catchBlocks != null) {
-			int length = catchArguments.length;
+		if (this.catchBlocks != null) {
+			int length = this.catchArguments.length;
 			TypeBinding[] argumentTypes = new TypeBinding[length];
 			for (int i = 0; i < length; i++) {
 				BlockScope catchScope = new BlockScope(scope);
+				if (finallyScope != null){
+					finallyScope.shiftScopes[i+1] = catchScope;
+				}
 				// side effect on catchScope in resolveForCatch(..)
 				if ((argumentTypes[i] = catchArguments[i].resolveForCatch(catchScope)) == null)
 					return;
@@ -445,18 +456,25 @@ public class TryStatement extends Statement {
 
 			// Verify that the catch clause are ordered in the right way:
 			// more specialized first.
-			caughtExceptionTypes = new ReferenceBinding[length];
+			this.caughtExceptionTypes = new ReferenceBinding[length];
 			for (int i = 0; i < length; i++) {
 				caughtExceptionTypes[i] = (ReferenceBinding) argumentTypes[i];
 				for (int j = 0; j < i; j++) {
-					if (scope.areTypesCompatible(caughtExceptionTypes[i], argumentTypes[j])) {
+					if (Scope.areTypesCompatible(caughtExceptionTypes[i], argumentTypes[j])) {
 						scope.problemReporter().wrongSequenceOfExceptionTypesError(this, i, j);
-						return;
+						// cannot return - since may still proceed if unreachable code is ignored (21203)
 					}
 				}
 			}
 		} else {
 			caughtExceptionTypes = new ReferenceBinding[0];
+		}
+		
+		if (finallyScope != null){
+			// add finallyScope as last subscope, so it can be shifted behind try/catch subscopes.
+			// the shifting is necessary to achieve no overlay in between the finally scope and its
+			// sibling in term of local variable positions.
+			this.scope.addSubscope(finallyScope);
 		}
 	}
 

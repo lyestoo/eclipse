@@ -1,9 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2000, 2001, 2002 International Business Machines Corp. and others.
+ * All rights reserved. This program and the accompanying materials 
+ * are made available under the terms of the Common Public License v0.5 
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/cpl-v05.html
+ * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ ******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-/*
- * (c) Copyright IBM Corp. 2000, 2001.
- * All Rights Reserved.
- */
 import org.eclipse.jdt.internal.compiler.IAbstractSyntaxTreeVisitor;
 import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
@@ -137,7 +143,7 @@ public void manageSyntheticAccessIfNecessary(BlockScope currentScope){
 		// depth is set for both implicit and explicit access (see MethodBinding#canBeSeenBy)		
 		if (currentScope.enclosingSourceType() != binding.declaringClass){
 		
-			syntheticAccessor = ((SourceTypeBinding)binding.declaringClass).addSyntheticMethod(binding);
+			syntheticAccessor = ((SourceTypeBinding)binding.declaringClass).addSyntheticMethod(binding, isSuperAccess());
 			currentScope.problemReporter().needToEmulateMethodAccess(binding, this);
 			return;
 		}
@@ -146,7 +152,7 @@ public void manageSyntheticAccessIfNecessary(BlockScope currentScope){
 
 		// qualified super need emulation always
 		SourceTypeBinding destinationType = (SourceTypeBinding)(((QualifiedSuperReference)receiver).currentCompatibleType);
-		syntheticAccessor = destinationType.addSyntheticMethod(binding);
+		syntheticAccessor = destinationType.addSyntheticMethod(binding, isSuperAccess());
 		currentScope.problemReporter().needToEmulateMethodAccess(binding, this);
 		return;
 
@@ -158,7 +164,7 @@ public void manageSyntheticAccessIfNecessary(BlockScope currentScope){
 					!= (enclosingSourceType = currentScope.enclosingSourceType()).getPackage()){
 
 			SourceTypeBinding currentCompatibleType = (SourceTypeBinding)enclosingSourceType.enclosingTypeAt((bits & DepthMASK) >> DepthSHIFT);
-			syntheticAccessor = currentCompatibleType.addSyntheticMethod(binding);
+			syntheticAccessor = currentCompatibleType.addSyntheticMethod(binding, isSuperAccess());
 			currentScope.problemReporter().needToEmulateMethodAccess(binding, this);
 			return;
 		}
@@ -197,7 +203,6 @@ public TypeBinding resolveType(BlockScope scope) {
 			}
 		}
 		if (argHasError){
-			MethodBinding closestMethod = null;
 			if(receiverType instanceof ReferenceBinding) {
 				// record any selector match, for clients who may still need hint about possible method match
 				this.codegenBinding = this.binding = scope.findMethod((ReferenceBinding)receiverType, selector, new TypeBinding[]{}, this);
@@ -236,11 +241,18 @@ public TypeBinding resolveType(BlockScope scope) {
 	}
 	if (!binding.isStatic()) {
 		// the "receiver" must not be a type, i.e. a NameReference that the TC has bound to a Type
-		if (receiver instanceof NameReference) {
-			if ((((NameReference) receiver).bits & BindingIds.TYPE) != 0) {
-				scope.problemReporter().mustUseAStaticMethod(this, binding);
-				return null;
-			}
+		if (receiver instanceof NameReference 
+				&& (((NameReference) receiver).bits & BindingIds.TYPE) != 0) {
+			scope.problemReporter().mustUseAStaticMethod(this, binding);
+			return this.resolvedType = binding.returnType;
+		}
+	} else {
+		// static message invoked through receiver? legal but unoptimal (optional warning).
+		if (!(receiver == ThisReference.ThisImplicit
+				|| receiver.isSuper()
+				|| (receiver instanceof NameReference 
+					&& (((NameReference) receiver).bits & BindingIds.TYPE) != 0))) {
+			scope.problemReporter().unnecessaryReceiverForStaticMethod(this, binding);
 		}
 	}
 	if (arguments != null)
@@ -251,14 +263,14 @@ public TypeBinding resolveType(BlockScope scope) {
 	if (binding.isAbstract()) {
 		if (receiver.isSuper()) {
 			scope.problemReporter().cannotDireclyInvokeAbstractMethod(this, binding);
-			return null;
+			return this.resolvedType = binding.returnType;
 		}
 		// abstract private methods cannot occur nor abstract static............
 	}
 	if (isMethodUseDeprecated(binding, scope))
 		scope.problemReporter().deprecatedMethod(binding, this);
 
-	return binding.returnType;
+	return this.resolvedType = binding.returnType;
 }
 public void setActualReceiverType(ReferenceBinding receiverType) {
 	this.qualifyingType = receiverType;

@@ -91,6 +91,7 @@ public class FieldDeclaration extends BodyDeclaration {
 	 */
 	ASTNode clone(AST target) {
 		FieldDeclaration result = new FieldDeclaration(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setJavadoc(
 			(Javadoc) ASTNode.copySubtree(target,(ASTNode) getJavadoc()));
 		result.setModifiers(getModifiers());
@@ -168,7 +169,9 @@ public class FieldDeclaration extends BodyDeclaration {
 	public Type getType() {
 		if (baseType == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setType(getAST().newPrimitiveType(PrimitiveType.INT));
+			getAST().setModificationCount(count);
 		}
 		return baseType;
 	}
@@ -177,8 +180,11 @@ public class FieldDeclaration extends BodyDeclaration {
 	 * Sets the base type declared in this field declaration to the given type.
 	 * 
 	 * @param type the new base type
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * </ul>
 	 */ 
 	public void setType(Type type) {
 		if (type == null) {

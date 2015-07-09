@@ -29,19 +29,19 @@ public class Assignment extends Expression {
 	/**
  	 * Assignment operators (typesafe enumeration).
 	 * <pre>
-	 * AssignmentOperator:
-	 *    <b><code>=</code></b> <code>ASSIGN</code>
-	 *    <b><code>+=</code></b> <code>PLUS_ASSIGN</code>
-	 *    <b><code>-=</code></b> <code>MINUS_ASSIGN</code>
-	 *    <b><code>*=</code></b> <code>TIMES_ASSIGN</code>
-	 *    <b><code>/=</code></b> <code>DIVIDE_ASSIGN</code>
-	 *    <b><code>&amp;=</code></b> <code>BIT_AND_ASSIGN</code>
-	 *    <b><code>|=</code></b> <code>BIT_OR_ASSIGN</code>
-	 *    <b><code>^=</code></b> <code>BIT_XOR_ASSIGN</code>
-	 *    <b><code>%=</code></b> <code>REMAINDER_ASSIGN</code>
-	 *    <b><code>&lt;&lt;=</code></b> <code>LEFT_SHIFT_ASSIGN</code>
-	 *    <b><code>&gt;&gt;=</code></b> <code>RIGHT_SHIFT_SIGNED_ASSIGN</code>
-	 *    <b><code>&gt;&gt;&gt;=</code></b> <code>RIGHT_SHIFT_UNSIGNED_ASSIGN</code>
+	 * AssignmentOperator:<code>
+	 *    <b>=</b> ASSIGN
+	 *    <b>+=</b> PLUS_ASSIGN
+	 *    <b>-=</b> MINUS_ASSIGN
+	 *    <b>*=</b> TIMES_ASSIGN
+	 *    <b>/=</b> DIVIDE_ASSIGN
+	 *    <b>&amp;=</b> BIT_AND_ASSIGN
+	 *    <b>|=</b> BIT_OR_ASSIGN
+	 *    <b>^=</b> BIT_XOR_ASSIGN
+	 *    <b>%=</b> REMAINDER_ASSIGN
+	 *    <b>&lt;&lt;=</b> LEFT_SHIFT_ASSIGN
+	 *    <b>&gt;&gt;=</b> RIGHT_SHIFT_SIGNED_ASSIGN
+	 *    <b>&gt;&gt;&gt;=</b> RIGHT_SHIFT_UNSIGNED_ASSIGN</code>
 	 * </pre>
 	 */
 	public static class Operator {
@@ -94,10 +94,10 @@ public class Assignment extends Expression {
 		/** &lt;&lt;== operator. */
 		public static final Operator LEFT_SHIFT_ASSIGN =
 			new Operator("<<=");//$NON-NLS-1$
-		/** &gt;&gt;== operator. */
+		/** &gt;&gt;= operator. */
 		public static final Operator RIGHT_SHIFT_SIGNED_ASSIGN =
 			new Operator(">>=");//$NON-NLS-1$
-		/** &gt;&gt;&gt;== operator. */
+		/** &gt;&gt;&gt;= operator. */
 		public static final Operator RIGHT_SHIFT_UNSIGNED_ASSIGN =
 			new Operator(">>>=");//$NON-NLS-1$
 		
@@ -184,6 +184,7 @@ public class Assignment extends Expression {
 	 */
 	ASTNode clone(AST target) {
 		Assignment result = new Assignment(target);
+		result.setSourceRange(this.getStartPosition(), this.getLength());
 		result.setOperator(getOperator());
 		result.setLeftHandSide((Expression) getLeftHandSide().clone(target));
 		result.setRightHandSide((Expression) getRightHandSide().clone(target));
@@ -242,7 +243,9 @@ public class Assignment extends Expression {
 	public Expression getLeftHandSide() {
 		if (leftHandSide  == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setLeftHandSide(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return leftHandSide;
 	}
@@ -251,9 +254,12 @@ public class Assignment extends Expression {
 	 * Sets the left hand side of this assignment expression.
 	 * 
 	 * @param expression the left hand side node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setLeftHandSide(Expression expression) {
 		if (expression == null) {
@@ -272,7 +278,9 @@ public class Assignment extends Expression {
 	public Expression getRightHandSide() {
 		if (rightHandSide  == null) {
 			// lazy initialize - use setter to ensure parent link set too
+			long count = getAST().modificationCount();
 			setRightHandSide(new SimpleName(getAST()));
+			getAST().setModificationCount(count);
 		}
 		return rightHandSide;
 	}
@@ -281,9 +289,12 @@ public class Assignment extends Expression {
 	 * Sets the right hand side of this assignment expression.
 	 * 
 	 * @param expression the right hand side node
-	 * @exception IllegalArgumentException if the node belongs to a different AST
-	 * @exception IllegalArgumentException if the node already has a parent
-	 * @exception IllegalArgumentException if a cycle in would be created
+	 * @exception IllegalArgumentException if:
+	 * <ul>
+	 * <li>the node belongs to a different AST</li>
+	 * <li>the node already has a parent</li>
+	 * <li>a cycle in would be created</li>
+	 * </ul>
 	 */ 
 	public void setRightHandSide(Expression expression) {
 		if (expression == null) {
